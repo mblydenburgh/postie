@@ -1,49 +1,77 @@
+use std::error::Error;
+use tokio::runtime;
+use api::{ HttpMethod, HttpRequest, submit_request };
 use eframe::{
-    egui::{CentralPanel, SidePanel},
+    egui::{CentralPanel, ComboBox, SidePanel},
     epi::App,
     run_native, NativeOptions,
 };
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Serialize, Deserialize)]
 pub enum ActiveWindow {
     REQUEST,
-    ENVIRONMENT
+    ENVIRONMENT,
 }
 #[derive(Serialize, Deserialize)]
 pub enum RequestWindowMode {
     PARAMS,
     HEADERS,
-    BODY
+    BODY,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct GuiConfig {
     pub active_window: ActiveWindow,
-    pub request_window_mode: RequestWindowMode
+    pub request_window_mode: RequestWindowMode,
+    pub selected_http_method: HttpMethod,
+    pub url: String,
+    pub response: Option<Value>
 }
 impl Default for GuiConfig {
     fn default() -> Self {
         Self {
             active_window: ActiveWindow::REQUEST,
-            request_window_mode: RequestWindowMode::BODY
+            request_window_mode: RequestWindowMode::BODY,
+            selected_http_method: HttpMethod::GET,
+            url: String::from("https://localhost:3000"),
+            response: None
         }
     }
 }
 
 pub struct Gui {
-    pub config: GuiConfig
+    pub config: GuiConfig,
+    pub rt: runtime::Runtime
 }
 impl Default for Gui {
     fn default() -> Self {
         Self {
-            config: GuiConfig::default()
+            config: GuiConfig::default(),
+            rt: runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .unwrap(),
         }
     }
 }
+impl Gui {
+    async fn submit(input: HttpRequest) -> Result<Value,Box<dyn Error>> {
+       submit_request(input).await 
+    }
+    fn spawn_submit(&mut self, input: HttpRequest) {
+        self.rt.spawn(async move {
+            match Gui::submit(input).await {
+                Ok(res) => println!("Result: {}", res),
+                Err(err) => println!("Error: {}", err)
+            }
+        });
+    }
+}
+
 impl App for Gui {
     fn update(&mut self, ctx: &eframe::egui::CtxRef, frame: &mut eframe::epi::Frame<'_>) {
-        let mut url = String::from("");
         SidePanel::left("nav_panel").show(ctx, |ui| {
             if ui.button("Request").clicked() {
                 self.config.active_window = ActiveWindow::REQUEST;
@@ -52,23 +80,40 @@ impl App for Gui {
                 self.config.active_window = ActiveWindow::ENVIRONMENT;
             }
         });
+        SidePanel::left("content_panel").show(ctx, |ui| match self.config.active_window {
+            ActiveWindow::REQUEST => {
+                ui.label("Collections");
+            }
+            ActiveWindow::ENVIRONMENT => {
+                ui.label("Environments");
+            }
+        });
         CentralPanel::default().show(ctx, |ui| {
-            SidePanel::left("content_panel").show(ctx, |ui| {
-                match self.config.active_window {
-                    ActiveWindow::REQUEST => {
-                        ui.label("Collections");
-                    }
-                    ActiveWindow::ENVIRONMENT => {
-                        ui.label("Environments");
-                    }
-                }
-            });
             ui.heading("Welcome to Postie!");
             ui.horizontal(|ui| {
+                ComboBox::from_label("")
+                    .selected_text(format!("{:?}", self.config.selected_http_method))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.config.selected_http_method, HttpMethod::GET, "GET");
+                        ui.selectable_value(&mut self.config.selected_http_method, HttpMethod::POST, "POST");
+                        ui.selectable_value(&mut self.config.selected_http_method, HttpMethod::PUT, "PUT");
+                        ui.selectable_value(&mut self.config.selected_http_method, HttpMethod::DELETE, "DELETE");
+                        ui.selectable_value(&mut self.config.selected_http_method, HttpMethod::PATCH, "PATCH");
+                        ui.selectable_value(&mut self.config.selected_http_method, HttpMethod::OPTIONS, "OPTIONS");
+                        ui.selectable_value(&mut self.config.selected_http_method, HttpMethod::HEAD, "HEAD");
+                    });
                 ui.label("URL:");
-                let url_updated = ui.text_edit_singleline(&mut url);
-                if url_updated.changed() {
-                    println!("{}", url)
+                ui.text_edit_singleline(&mut self.config.url);
+                if ui.button("Submit").clicked() {
+                    let request = HttpRequest {
+                        name: None,
+                        headers: None,
+                        body: None,
+                        method: self.config.selected_http_method.clone(),
+                        url: self.config.url.clone()
+                    };
+                    
+                    Gui::spawn_submit(self, request)
                 }
             });
             ui.horizontal(|ui| {
@@ -78,12 +123,9 @@ impl App for Gui {
             });
         });
         match self.config.request_window_mode {
-            RequestWindowMode::BODY => {
-            }
-            RequestWindowMode::PARAMS => {
-            }
-            RequestWindowMode::HEADERS => {
-            }
+            RequestWindowMode::BODY => {}
+            RequestWindowMode::PARAMS => {}
+            RequestWindowMode::HEADERS => {}
         }
     }
 

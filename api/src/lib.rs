@@ -1,5 +1,6 @@
 use std::error::Error;
 
+use serde::{Serialize, Deserialize};
 use serde_json::Value;
 
 enum InputAction {
@@ -8,32 +9,34 @@ enum InputAction {
     MAKE_REQUEST,
 }
 
-enum HttpMethod {
+#[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
+pub enum HttpMethod {
     GET,
     POST,
     PUT,
     PATCH,
     DELETE,
-    HEAD,
     OPTIONS,
+    HEAD
 }
 
+#[derive(Debug)]
 pub struct HttpRequest {
-    name: String,
-    method: HttpMethod,
-    url: String,
-    headers: Vec<(String, String)>,
-    body: Option<String>,
+    pub name: Option<String>,
+    pub method: HttpMethod,
+    pub url: String,
+    pub headers: Option<Vec<(String, String)>>,
+    pub body: Option<String>,
 }
 
 pub struct RequestCollection {
-    name: String,
-    requests: Vec<HttpRequest>,
+    pub name: String,
+    pub requests: Vec<HttpRequest>,
 }
 
 pub struct Environment {
-    name: String,
-    variables: Vec<(String, String)>,
+    pub name: String,
+    pub variables: Vec<(String, String)>,
 }
 
 pub struct PostieApi {
@@ -60,3 +63,15 @@ impl PostieApi {
         }))
     }
 }
+    pub fn save_environment(input: Environment) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+    pub fn save_collection(input: RequestCollection) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+    pub async fn submit_request(input: HttpRequest) -> Result<Value, Box<dyn Error>> {
+        print!("Submitting request: {:?}", input);
+        Ok(serde_json::json!({
+            "foo": "bar"
+        }))
+    }
