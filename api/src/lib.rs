@@ -1,7 +1,8 @@
 use std::error::Error;
 
-use serde::{Serialize, Deserialize};
-use serde_json::Value;
+use reqwest::{Client, IntoUrl};
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 
 enum InputAction {
     SAVE_COLLECTION,
@@ -17,7 +18,7 @@ pub enum HttpMethod {
     PATCH,
     DELETE,
     OPTIONS,
-    HEAD
+    HEAD,
 }
 
 #[derive(Debug)]
@@ -63,15 +64,27 @@ impl PostieApi {
         }))
     }
 }
-    pub fn save_environment(input: Environment) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
-    pub fn save_collection(input: RequestCollection) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
-    pub async fn submit_request(input: HttpRequest) -> Result<Value, Box<dyn Error>> {
-        print!("Submitting request: {:?}", input);
-        Ok(serde_json::json!({
-            "foo": "bar"
-        }))
-    }
+pub fn save_environment(input: Environment) -> Result<(), Box<dyn Error>> {
+    Ok(())
+}
+pub fn save_collection(input: RequestCollection) -> Result<(), Box<dyn Error>> {
+    Ok(())
+}
+pub async fn submit_request(input: HttpRequest) -> Result<Value, Box<dyn Error>> {
+    println!("making client");
+    let client = Client::new();
+    println!("Submitting request: {:?}", input);
+    let res = match input.method {
+        HttpMethod::GET => client.get(input.url).send().await?,
+        HttpMethod::POST => todo!(),
+        HttpMethod::PUT => todo!(),
+        HttpMethod::PATCH => todo!(),
+        HttpMethod::DELETE => todo!(),
+        HttpMethod::OPTIONS => todo!(),
+        HttpMethod::HEAD => todo!(),
+    };
+
+    let res_str = res.text().await?;
+    let res_json = serde_json::from_str(&res_str).unwrap();
+    Ok(res_json)
+}

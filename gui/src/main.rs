@@ -1,6 +1,4 @@
-use std::error::Error;
-use tokio::runtime;
-use api::{ HttpMethod, HttpRequest, submit_request };
+use api::{submit_request, HttpMethod, HttpRequest};
 use eframe::{
     egui::{CentralPanel, ComboBox, SidePanel},
     epi::App,
@@ -8,6 +6,8 @@ use eframe::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::error::Error;
+use tokio::runtime;
 
 #[derive(Serialize, Deserialize)]
 pub enum ActiveWindow {
@@ -27,7 +27,7 @@ pub struct GuiConfig {
     pub request_window_mode: RequestWindowMode,
     pub selected_http_method: HttpMethod,
     pub url: String,
-    pub response: Option<Value>
+    pub response: Option<Value>,
 }
 impl Default for GuiConfig {
     fn default() -> Self {
@@ -36,14 +36,14 @@ impl Default for GuiConfig {
             request_window_mode: RequestWindowMode::BODY,
             selected_http_method: HttpMethod::GET,
             url: String::from("https://localhost:3000"),
-            response: None
+            response: None,
         }
     }
 }
 
 pub struct Gui {
     pub config: GuiConfig,
-    pub rt: runtime::Runtime
+    pub rt: runtime::Runtime,
 }
 impl Default for Gui {
     fn default() -> Self {
@@ -57,14 +57,14 @@ impl Default for Gui {
     }
 }
 impl Gui {
-    async fn submit(input: HttpRequest) -> Result<Value,Box<dyn Error>> {
-       submit_request(input).await 
+    async fn submit(input: HttpRequest) -> Result<Value, Box<dyn Error>> {
+        submit_request(input).await
     }
     fn spawn_submit(&mut self, input: HttpRequest) {
         self.rt.spawn(async move {
             match Gui::submit(input).await {
                 Ok(res) => println!("Result: {}", res),
-                Err(err) => println!("Error: {}", err)
+                Err(err) => println!("Error: {}", err),
             }
         });
     }
@@ -94,13 +94,41 @@ impl App for Gui {
                 ComboBox::from_label("")
                     .selected_text(format!("{:?}", self.config.selected_http_method))
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.config.selected_http_method, HttpMethod::GET, "GET");
-                        ui.selectable_value(&mut self.config.selected_http_method, HttpMethod::POST, "POST");
-                        ui.selectable_value(&mut self.config.selected_http_method, HttpMethod::PUT, "PUT");
-                        ui.selectable_value(&mut self.config.selected_http_method, HttpMethod::DELETE, "DELETE");
-                        ui.selectable_value(&mut self.config.selected_http_method, HttpMethod::PATCH, "PATCH");
-                        ui.selectable_value(&mut self.config.selected_http_method, HttpMethod::OPTIONS, "OPTIONS");
-                        ui.selectable_value(&mut self.config.selected_http_method, HttpMethod::HEAD, "HEAD");
+                        ui.selectable_value(
+                            &mut self.config.selected_http_method,
+                            HttpMethod::GET,
+                            "GET",
+                        );
+                        ui.selectable_value(
+                            &mut self.config.selected_http_method,
+                            HttpMethod::POST,
+                            "POST",
+                        );
+                        ui.selectable_value(
+                            &mut self.config.selected_http_method,
+                            HttpMethod::PUT,
+                            "PUT",
+                        );
+                        ui.selectable_value(
+                            &mut self.config.selected_http_method,
+                            HttpMethod::DELETE,
+                            "DELETE",
+                        );
+                        ui.selectable_value(
+                            &mut self.config.selected_http_method,
+                            HttpMethod::PATCH,
+                            "PATCH",
+                        );
+                        ui.selectable_value(
+                            &mut self.config.selected_http_method,
+                            HttpMethod::OPTIONS,
+                            "OPTIONS",
+                        );
+                        ui.selectable_value(
+                            &mut self.config.selected_http_method,
+                            HttpMethod::HEAD,
+                            "HEAD",
+                        );
                     });
                 ui.label("URL:");
                 ui.text_edit_singleline(&mut self.config.url);
@@ -110,9 +138,9 @@ impl App for Gui {
                         headers: None,
                         body: None,
                         method: self.config.selected_http_method.clone(),
-                        url: self.config.url.clone()
+                        url: self.config.url.clone(),
                     };
-                    
+
                     Gui::spawn_submit(self, request)
                 }
             });
