@@ -57,16 +57,12 @@ impl Default for Gui {
     }
 }
 impl Gui {
-    async fn submit(input: HttpRequest) -> Result<Value, Box<dyn Error>> {
-        submit_request(input).await
-    }
-    fn spawn_submit(&mut self, input: HttpRequest) {
-        self.rt.spawn(async move {
-            match Gui::submit(input).await {
-                Ok(res) => println!("Result: {}", res),
-                Err(err) => println!("Error: {}", err),
-            }
+    fn spawn_submit(&mut self, input: HttpRequest) -> Result<Value, Box<dyn Error>> {
+        let result = self.rt.block_on(async {
+            let api_response = submit_request(input).await;
+            api_response
         });
+        Ok(result.unwrap())
     }
 }
 
@@ -141,7 +137,10 @@ impl App for Gui {
                         url: self.config.url.clone(),
                     };
 
-                    Gui::spawn_submit(self, request)
+                    let response = Gui::spawn_submit(self, request);
+                    if response.is_ok() {
+                        self.config.response = Some(response.unwrap());
+                    }
                 }
             });
             ui.horizontal(|ui| {
@@ -151,7 +150,13 @@ impl App for Gui {
             });
         });
         match self.config.request_window_mode {
-            RequestWindowMode::BODY => {}
+            RequestWindowMode::BODY => {
+                if self.config.response.is_some() {
+                   CentralPanel::default().show(ctx, |ui| {
+                       ui.label(self.config.response.as_ref().unwrap().to_string());
+                   });
+                }
+            }
             RequestWindowMode::PARAMS => {}
             RequestWindowMode::HEADERS => {}
         }
