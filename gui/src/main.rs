@@ -1,6 +1,6 @@
 use api::{submit_request, HttpMethod, HttpRequest};
 use eframe::{
-    egui::{CentralPanel, ComboBox, SidePanel},
+    egui::{CentralPanel, ComboBox, SidePanel, TopBottomPanel},
     epi::App,
     run_native, NativeOptions,
 };
@@ -84,7 +84,7 @@ impl App for Gui {
                 ui.label("Environments");
             }
         });
-        CentralPanel::default().show(ctx, |ui| {
+        TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.heading("Welcome to Postie!");
             ui.horizontal(|ui| {
                 ComboBox::from_label("")
