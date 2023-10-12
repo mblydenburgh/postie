@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 api= { path = "../api/" }
 egui = "0.23.0"
-eframe = "0.14.0"
+eframe = "0.23.0"
 log = "0.4"
 serde = { version = "1.0.188", features = ["derive"] }
 serde_json = "1.0.107"
