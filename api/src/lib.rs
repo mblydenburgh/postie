@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use reqwest::{Client, IntoUrl};
+use reqwest::{Client, IntoUrl, header::HeaderValue};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -84,7 +84,16 @@ pub async fn submit_request(input: HttpRequest) -> Result<Value, Box<dyn Error>>
         HttpMethod::HEAD => todo!(),
     };
 
+    let res_type = res.headers().get("content-type").unwrap().to_str().unwrap();
+
+    if !res_type.starts_with("application/json") {
+        // I couldn't figure out how to safely throw an error so I'm just returning this for now
+        println!("expected application/json, got {}", res_type);
+        return Ok(json!({"msg": "not JSON!"}));
+    }
+
     let res_str = res.text().await?;
-    let res_json = serde_json::from_str(&res_str).unwrap();
+
+    let res_json = serde_json::from_str(&res_str).unwrap_or_default();
     Ok(res_json)
 }
