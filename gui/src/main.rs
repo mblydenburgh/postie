@@ -1,8 +1,9 @@
 use api::{submit_request, HttpMethod, HttpRequest};
 use eframe::{
+    App,
+    NativeOptions,
     egui::{CentralPanel, ComboBox, SidePanel, TopBottomPanel},
-    epi::App,
-    run_native, NativeOptions,
+    run_native,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -68,7 +69,7 @@ impl Gui {
 }
 
 impl App for Gui {
-    fn update(&mut self, ctx: &eframe::egui::CtxRef, frame: &mut eframe::epi::Frame<'_>) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         SidePanel::left("nav_panel").show(ctx, |ui| {
             if ui.button("Request").clicked() {
                 self.config.active_window = ActiveWindow::REQUEST;
@@ -168,14 +169,10 @@ impl App for Gui {
             RequestWindowMode::HEADERS => {}
         }
     }
-
-    fn name(&self) -> &str {
-        "Postie"
-    }
 }
 
 fn main() {
     let app = Gui::default();
     let native_options = NativeOptions::default();
-    run_native(Box::new(app), native_options)
+    let _ = eframe::run_native("Postie", native_options, Box::new(|_cc| Box::new(app)));
 }
