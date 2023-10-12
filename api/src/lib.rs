@@ -93,7 +93,6 @@ pub async fn submit_request(input: HttpRequest) -> Result<Value, Box<dyn Error>>
     }
 
     let res_str = res.text().await?;
-
     let res_json = serde_json::from_str(&res_str).unwrap_or_default();
     Ok(res_json)
 }
