@@ -13,6 +13,7 @@ use tokio::runtime;
 pub enum ActiveWindow {
     REQUEST,
     ENVIRONMENT,
+    HISTORY,
 }
 #[derive(Serialize, Deserialize)]
 pub enum RequestWindowMode {
@@ -75,6 +76,9 @@ impl App for Gui {
             if ui.button("Environment").clicked() {
                 self.config.active_window = ActiveWindow::ENVIRONMENT;
             }
+            if ui.button("History").clicked() {
+                self.config.active_window = ActiveWindow::HISTORY;
+            }
         });
         SidePanel::left("content_panel").show(ctx, |ui| match self.config.active_window {
             ActiveWindow::REQUEST => {
@@ -82,6 +86,9 @@ impl App for Gui {
             }
             ActiveWindow::ENVIRONMENT => {
                 ui.label("Environments");
+            }
+            ActiveWindow::HISTORY => {
+                ui.label("History");
             }
         });
         TopBottomPanel::top("top_panel").show(ctx, |ui| {
