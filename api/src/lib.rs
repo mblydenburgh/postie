@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use reqwest::{Client, IntoUrl};
+use reqwest::{Client, IntoUrl, Method};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -70,19 +70,29 @@ pub fn save_environment(input: Environment) -> Result<(), Box<dyn Error>> {
 pub fn save_collection(input: RequestCollection) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
+
 pub async fn submit_request(input: HttpRequest) -> Result<Value, Box<dyn Error>> {
     println!("making client");
     let client = Client::new();
     println!("Submitting request: {:?}", input);
-    let res = match input.method {
-        HttpMethod::GET => client.get(input.url).send().await?,
-        HttpMethod::POST => todo!(),
-        HttpMethod::PUT => todo!(),
-        HttpMethod::PATCH => todo!(),
-        HttpMethod::DELETE => todo!(),
-        HttpMethod::OPTIONS => todo!(),
-        HttpMethod::HEAD => todo!(),
+
+    let method = match input.method {
+        HttpMethod::GET => Method::GET,
+        HttpMethod::POST => Method::POST,
+        HttpMethod::PUT => Method::PUT,
+        HttpMethod::PATCH => Method::PATCH,
+        HttpMethod::DELETE => Method::DELETE,
+        HttpMethod::HEAD => Method::HEAD,
+        HttpMethod::OPTIONS => Method::OPTIONS,
     };
+
+    let mut req = client.request(method, input.url);
+
+    if input.body.is_some() {
+        req = req.body(input.body.unwrap_or_default());
+    }
+    
+    let res = req.send().await?;
 
     let res_type = res.headers().get("content-type").unwrap().to_str().unwrap();
 
