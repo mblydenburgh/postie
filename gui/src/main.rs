@@ -1,14 +1,14 @@
-use api::{submit_request, HttpMethod, HttpRequest};
+use api::{HttpMethod, HttpRequest, PostieApi};
 use eframe::{
-    App,
-    NativeOptions,
-    egui::{CentralPanel, ComboBox, SidePanel, TopBottomPanel},
-    run_native,
+    egui::{CentralPanel, ComboBox, ScrollArea, SidePanel, TextEdit, TopBottomPanel},
+    App, NativeOptions,
 };
+use egui::TextStyle;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::error::Error;
 use tokio::runtime;
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]
 pub enum ActiveWindow {
@@ -29,6 +29,7 @@ pub struct GuiConfig {
     pub request_window_mode: RequestWindowMode,
     pub selected_http_method: HttpMethod,
     pub url: String,
+    pub body_str: String,
     pub response: Option<Value>,
 }
 impl Default for GuiConfig {
@@ -37,7 +38,8 @@ impl Default for GuiConfig {
             active_window: ActiveWindow::REQUEST,
             request_window_mode: RequestWindowMode::BODY,
             selected_http_method: HttpMethod::GET,
-            url: String::from("https://localhost:3000"),
+            url: String::from("https://httpbin.org/json"),
+            body_str: String::from("{ \"foo\": \"bar\" }"),
             response: None,
         }
     }
@@ -61,7 +63,7 @@ impl Default for Gui {
 impl Gui {
     fn spawn_submit(&mut self, input: HttpRequest) -> Result<Value, Box<dyn Error>> {
         let result = self.rt.block_on(async {
-            let api_response = submit_request(input).await;
+            let api_response = PostieApi::make_request(input).await;
             api_response
         });
         Ok(result.unwrap())
@@ -137,10 +139,19 @@ impl App for Gui {
                 ui.label("URL:");
                 ui.text_edit_singleline(&mut self.config.url);
                 if ui.button("Submit").clicked() {
+                    let body = if self.config.selected_http_method != HttpMethod::GET {
+                        Some(serde_json::from_str(&self.config.body_str).expect("Body is invalid json"))
+                    } else {
+                        None
+                    };
                     let request = HttpRequest {
+                        id: Uuid::new_v4(),
                         name: None,
-                        headers: None,
-                        body: None,
+                        headers: Some(vec![(
+                            String::from("Content-Type"),
+                            String::from("application/json"),
+                        )]),
+                        body,
                         method: self.config.selected_http_method.clone(),
                         url: self.config.url.clone(),
                     };
@@ -152,21 +163,49 @@ impl App for Gui {
                 }
             });
             ui.horizontal(|ui| {
-                if ui.button("Params").clicked() {}
-                if ui.button("Headers").clicked() {}
-                if ui.button("Body").clicked() {}
+                if ui.button("Params").clicked() {
+                    self.config.request_window_mode = RequestWindowMode::PARAMS;
+                }
+                if ui.button("Headers").clicked() {
+                    self.config.request_window_mode = RequestWindowMode::HEADERS;
+                }
+                if ui.button("Body").clicked() {
+                    self.config.request_window_mode = RequestWindowMode::BODY;
+                }
             });
         });
         match self.config.request_window_mode {
             RequestWindowMode::BODY => {
+                TopBottomPanel::top("request_panel")
+                    .resizable(true)
+                    .min_height(250.0)
+                    .show(ctx, |ui| {
+                        ScrollArea::vertical().show(ui, |ui| {
+                            ui.add(
+                                TextEdit::multiline(&mut self.config.body_str)
+                                    .code_editor()
+                                    .desired_rows(20)
+                                    .lock_focus(true)
+                                    .font(TextStyle::Monospace),
+                            );
+                        });
+                    });
                 if self.config.response.is_some() {
-                   CentralPanel::default().show(ctx, |ui| {
-                       ui.label(self.config.response.as_ref().unwrap().to_string());
-                   });
+                    CentralPanel::default().show(ctx, |ui| {
+                        ui.label(self.config.response.as_ref().unwrap().to_string());
+                    });
                 }
             }
-            RequestWindowMode::PARAMS => {}
-            RequestWindowMode::HEADERS => {}
+            RequestWindowMode::PARAMS => {
+                CentralPanel::default().show(ctx, |ui| {
+                    ui.label("params");
+                });
+            }
+            RequestWindowMode::HEADERS => {
+                CentralPanel::default().show(ctx, |ui| {
+                    ui.label("headers");
+                });
+            }
         }
     }
 }
