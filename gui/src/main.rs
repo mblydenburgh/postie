@@ -151,13 +151,16 @@ impl App for Gui {
                     } else {
                         None
                     };
+                    let submitted_headers = self.config.headers
+                        .borrow_mut()
+                        .iter()
+                        .filter(|h| h.0 == true)
+                        .map(|h| (h.1.to_owned(), h.2.to_owned()))
+                        .collect();
                     let request = HttpRequest {
                         id: Uuid::new_v4(),
                         name: None,
-                        headers: Some(vec![(
-                            String::from("Content-Type"),
-                            String::from("application/json"),
-                        )]),
+                        headers: Some(submitted_headers),
                         body,
                         method: self.config.selected_http_method.clone(),
                         url: self.config.url.clone(),
@@ -210,7 +213,7 @@ impl App for Gui {
             }
             RequestWindowMode::HEADERS => {
                 CentralPanel::default().show(ctx, |ui| {
-                   let mut table = TableBuilder::new(ui)
+                   let table = TableBuilder::new(ui)
                        .striped(true)
                        .resizable(true)
                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
