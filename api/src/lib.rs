@@ -1,6 +1,6 @@
-use std::error::Error;
+use std::{error::Error, borrow::BorrowMut};
 
-use reqwest::{Client, Method};
+use reqwest::{Client, Method, header::{HeaderMap, HeaderValue, HeaderName}};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -67,9 +67,17 @@ impl PostieApi {
             HttpMethod::OPTIONS => Method::OPTIONS,
         };
 
+        let mut headers = HeaderMap::new();
+        if let Some(h) = input.headers {
+            for (key, value) in h {
+                let header_name = HeaderName::from_bytes(&key.as_bytes()).unwrap();
+                let header_value = HeaderValue::from_str(&value).unwrap();
+                headers.insert(header_name, header_value);
+            };
+        };
         let mut req = client
             .request(method, input.url)
-            .header(reqwest::header::CONTENT_TYPE, "application/json");
+            .headers(headers);
         if input.body.is_some() {
             req = req.json(&input.body.unwrap_or_default());
         }
