@@ -4,9 +4,10 @@ use eframe::{
     App, NativeOptions,
 };
 use egui::TextStyle;
+use egui_extras::{Column, TableBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::error::Error;
+use std::{error::Error, cell::RefCell, rc::Rc};
 use tokio::runtime;
 use uuid::Uuid;
 
@@ -30,6 +31,7 @@ pub struct GuiConfig {
     pub selected_http_method: HttpMethod,
     pub url: String,
     pub body_str: String,
+    pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
     pub response: Option<Value>,
 }
 impl Default for GuiConfig {
@@ -40,6 +42,11 @@ impl Default for GuiConfig {
             selected_http_method: HttpMethod::GET,
             url: String::from("https://httpbin.org/json"),
             body_str: String::from("{ \"foo\": \"bar\" }"),
+            headers: Rc::new(RefCell::new(vec![
+                (true, String::from("Content-Type"), String::from("application/json")),
+                (true, String::from("User-Agent"), String::from("postie")),
+                (true, String::from("Cache-Control"), String::from("no-cache"))
+            ])),
             response: None,
         }
     }
@@ -203,10 +210,51 @@ impl App for Gui {
             }
             RequestWindowMode::HEADERS => {
                 CentralPanel::default().show(ctx, |ui| {
-                    ui.label("headers");
+                   let mut table = TableBuilder::new(ui)
+                       .striped(true)
+                       .resizable(true)
+                       .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                       .column(Column::auto())
+                       .column(Column::auto())
+                       .column(Column::auto());
+                    table.header(20.0, |mut header| {
+                        header.col(|ui| {
+                            ui.strong("Enabled");
+                        });
+                        header.col(|ui| {
+                            ui.strong("Key");
+                        });
+                        header.col(|ui| {
+                            ui.strong("Value");
+                        });
+                    })
+                    .body(|mut body| {
+                        for header in self.config.headers.borrow_mut().clone().iter_mut() {
+                            body.row(30.0, |mut row| {
+                                row.col(|ui| {
+                                    ui.checkbox(&mut header.0, "");
+                                });
+                                row.col(|ui| {
+                                    ui.text_edit_singleline(&mut header.1);
+                                });
+                                row.col(|ui| {
+                                    ui.text_edit_singleline(&mut header.2);
+                                });
+                            });
+                        }
+                        body.row(30.0, |mut row| {
+                            row.col(|ui| {
+                                if ui.button("Add").clicked() {
+                                    self.config.headers.borrow_mut().push(
+                                        (true, String::from(""), String::from(""))
+                                    );
+                                };
+                            });
+                        });
+                    });
                 });
             }
-        }
+        };
     }
 }
 
