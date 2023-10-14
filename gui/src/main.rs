@@ -229,16 +229,17 @@ impl App for Gui {
                         });
                     })
                     .body(|mut body| {
-                        for header in self.config.headers.borrow_mut().clone().iter_mut() {
+                        for header in self.config.headers.borrow_mut().iter_mut() {
                             body.row(30.0, |mut row| {
+                                let (enabled, key, value) = header;
                                 row.col(|ui| {
-                                    ui.checkbox(&mut header.0, "");
+                                    ui.checkbox(enabled, "");
                                 });
                                 row.col(|ui| {
-                                    ui.text_edit_singleline(&mut header.1);
+                                    ui.text_edit_singleline(key);
                                 });
                                 row.col(|ui| {
-                                    ui.text_edit_singleline(&mut header.2);
+                                    ui.text_edit_singleline(value);
                                 });
                             });
                         }
