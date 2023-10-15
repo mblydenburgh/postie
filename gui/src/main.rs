@@ -17,6 +17,7 @@ pub enum ActiveWindow {
     ENVIRONMENT,
     HISTORY,
 }
+#[derive(Serialize, Deserialize)]
 pub enum ImportMode {
     COLLECTION,
     ENVIRONMENT
@@ -38,6 +39,7 @@ pub struct GuiConfig {
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
     pub response: Option<Value>,
     pub import_window_open: bool,
+    pub import_mode: ImportMode,
     pub import_file_path: String
 }
 impl Default for GuiConfig {
@@ -63,7 +65,8 @@ impl Default for GuiConfig {
             ])),
             response: None,
             import_window_open: false,
-            import_file_path: String::from("")
+            import_file_path: String::from(""),
+            import_mode: ImportMode::COLLECTION
         }
     }
 }
@@ -119,13 +122,15 @@ impl App for Gui {
                     });
                     ui.menu_button("Import", |ui| {
                         if ui.button("Collection").clicked() {
-                            self.config.import_window_open = true
+                            self.config.import_window_open = true;
+                            self.config.import_mode = ImportMode::COLLECTION;
                         };
                         if ui.button("Environment").clicked() {};
                     });
                     ui.menu_button("Export", |ui| {
                         if ui.button("Collection").clicked() {
-                            self.config.import_window_open = true
+                            self.config.import_window_open = true;
+                            self.config.import_mode = ImportMode::ENVIRONMENT;
                         };
                         if ui.button("Environment").clicked() {};
                     });
@@ -330,7 +335,10 @@ impl App for Gui {
                         if ui.button("Import").clicked() {
                             self.rt.block_on(async {
                                 let path = self.config.import_file_path.to_owned();
-                                let _ = PostieApi::import_collection(&path).await;
+                                let _ = match self.config.import_mode {
+                                    ImportMode::COLLECTION => PostieApi::import_collection(&path).await,
+                                    ImportMode::ENVIRONMENT => todo!(),
+                                };
                             });
                         };
                     });
