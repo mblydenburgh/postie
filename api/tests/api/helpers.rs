@@ -43,13 +43,13 @@ impl TestApp {
                     }
                 }
             ],
-            auth: {
-                type: "bearer",
-                bearer: [
+            "auth": {
+                "type": "bearer",
+                "bearer": [
                     {
-                        key: "bearer",
-                        value: "asdfadfa",
-                        type: "string"
+                        "key": "bearer",
+                        "value": "some-token",
+                        "type": "string"
                     }
                     
                 ]

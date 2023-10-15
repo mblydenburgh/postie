@@ -69,10 +69,10 @@ pub struct AuthValue {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(untagged)]
 pub enum AuthValueUnion {
     String(String),
-    Object(HashMap<String, String>),
-    Any(serde_json::Value),
+    Object (serde_json::Value)
 }
 
 #[derive(Debug, Deserialize, Serialize)]
