@@ -1,5 +1,8 @@
-use std::error::Error;
+pub mod domain;
 
+use std::{error::Error, fs};
+
+use domain::collection::Collection;
 use reqwest::{Client, Method};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -47,6 +50,10 @@ impl PostieApi {
             environment: None,
             collection: None,
         }
+    }
+    pub fn parse_collection(path: &str) -> Collection {
+        let collection_file = fs::read_to_string(path).expect("Collection file not found");
+        serde_json::from_str(&collection_file).expect("Failed to parse collection")
     }
     pub fn save_environment(input: Environment) -> Result<(), Box<dyn Error>> {
         Ok(())
