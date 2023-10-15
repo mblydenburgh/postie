@@ -7,7 +7,7 @@ use egui::TextStyle;
 use egui_extras::{Column, TableBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{error::Error, cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashSet, error::Error, rc::Rc};
 use tokio::runtime;
 use uuid::Uuid;
 
@@ -43,9 +43,17 @@ impl Default for GuiConfig {
             url: String::from("https://httpbin.org/json"),
             body_str: String::from("{ \"foo\": \"bar\" }"),
             headers: Rc::new(RefCell::new(vec![
-                (true, String::from("Content-Type"), String::from("application/json")),
+                (
+                    true,
+                    String::from("Content-Type"),
+                    String::from("application/json"),
+                ),
                 (true, String::from("User-Agent"), String::from("postie")),
-                (true, String::from("Cache-Control"), String::from("no-cache"))
+                (
+                    true,
+                    String::from("Cache-Control"),
+                    String::from("no-cache"),
+                ),
             ])),
             response: None,
         }
@@ -74,6 +82,17 @@ impl Gui {
             api_response
         });
         Ok(result.unwrap())
+    }
+    fn remove_duplicate_headers(headers: Vec<(String, String)>) -> Vec<(String, String)> {
+        let mut unique_keys = HashSet::new();
+        let mut result = Vec::new();
+        for (key, value) in headers {
+            if !unique_keys.contains(&key) {
+                unique_keys.insert(key.clone());
+                result.push((key.clone(), value.clone()));
+            }
+        }
+        result
     }
 }
 
@@ -147,11 +166,16 @@ impl App for Gui {
                 ui.text_edit_singleline(&mut self.config.url);
                 if ui.button("Submit").clicked() {
                     let body = if self.config.selected_http_method != HttpMethod::GET {
-                        Some(serde_json::from_str(&self.config.body_str).expect("Body is invalid json"))
+                        Some(
+                            serde_json::from_str(&self.config.body_str)
+                                .expect("Body is invalid json"),
+                        )
                     } else {
                         None
                     };
-                    let submitted_headers = self.config.headers
+                    let submitted_headers = self
+                        .config
+                        .headers
                         .borrow_mut()
                         .iter()
                         .filter(|h| h.0 == true)
@@ -160,7 +184,7 @@ impl App for Gui {
                     let request = HttpRequest {
                         id: Uuid::new_v4(),
                         name: None,
-                        headers: Some(submitted_headers),
+                        headers: Some(Gui::remove_duplicate_headers(submitted_headers)),
                         body,
                         method: self.config.selected_http_method.clone(),
                         url: self.config.url.clone(),
@@ -213,49 +237,52 @@ impl App for Gui {
             }
             RequestWindowMode::HEADERS => {
                 CentralPanel::default().show(ctx, |ui| {
-                   let table = TableBuilder::new(ui)
-                       .striped(true)
-                       .resizable(true)
-                       .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                       .column(Column::auto())
-                       .column(Column::auto())
-                       .column(Column::auto());
-                    table.header(20.0, |mut header| {
-                        header.col(|ui| {
-                            ui.strong("Enabled");
-                        });
-                        header.col(|ui| {
-                            ui.strong("Key");
-                        });
-                        header.col(|ui| {
-                            ui.strong("Value");
-                        });
-                    })
-                    .body(|mut body| {
-                        for header in self.config.headers.borrow_mut().iter_mut() {
+                    let table = TableBuilder::new(ui)
+                        .striped(true)
+                        .resizable(true)
+                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                        .column(Column::auto())
+                        .column(Column::auto())
+                        .column(Column::auto());
+                    table
+                        .header(20.0, |mut header| {
+                            header.col(|ui| {
+                                ui.strong("Enabled");
+                            });
+                            header.col(|ui| {
+                                ui.strong("Key");
+                            });
+                            header.col(|ui| {
+                                ui.strong("Value");
+                            });
+                        })
+                        .body(|mut body| {
+                            for header in self.config.headers.borrow_mut().iter_mut() {
+                                body.row(30.0, |mut row| {
+                                    let (enabled, key, value) = header;
+                                    row.col(|ui| {
+                                        ui.checkbox(enabled, "");
+                                    });
+                                    row.col(|ui| {
+                                        ui.text_edit_singleline(key);
+                                    });
+                                    row.col(|ui| {
+                                        ui.text_edit_singleline(value);
+                                    });
+                                });
+                            }
                             body.row(30.0, |mut row| {
-                                let (enabled, key, value) = header;
                                 row.col(|ui| {
-                                    ui.checkbox(enabled, "");
+                                    if ui.button("Add").clicked() {
+                                        self.config.headers.borrow_mut().push((
+                                            true,
+                                            String::from(""),
+                                            String::from(""),
+                                        ));
+                                    };
                                 });
-                                row.col(|ui| {
-                                    ui.text_edit_singleline(key);
-                                });
-                                row.col(|ui| {
-                                    ui.text_edit_singleline(value);
-                                });
-                            });
-                        }
-                        body.row(30.0, |mut row| {
-                            row.col(|ui| {
-                                if ui.button("Add").clicked() {
-                                    self.config.headers.borrow_mut().push(
-                                        (true, String::from(""), String::from(""))
-                                    );
-                                };
                             });
                         });
-                    });
                 });
             }
         };
