@@ -72,7 +72,7 @@ pub struct AuthValue {
 #[serde(untagged)]
 pub enum AuthValueUnion {
     String(String),
-    Object (serde_json::Value)
+    Object(serde_json::Value),
 }
 
 #[derive(Debug, Deserialize, Serialize)]

@@ -55,10 +55,18 @@ impl PostieApi {
         }
     }
     pub fn parse_collection(collection_json: &str) -> Collection {
+        println!("Parsing collection from json");
         serde_json::from_str(&collection_json).expect("Failed to parse collection")
     }
     pub fn read_file(path: &str) -> Result<String, Box<dyn Error>> {
+        println!("Reading file: {}", path);
         Ok(fs::read_to_string(path)?)
+    }
+    pub async fn import_collection(path: &str) -> Result<(), Box<dyn Error>> {
+        let file_str = Self::read_file(path)?;
+        let _collection = Self::parse_collection(&file_str);
+        println!("Successfully parsed postman collection!");
+        Ok(())
     }
     pub fn save_environment(input: Environment) -> Result<(), Box<dyn Error>> {
         Ok(())

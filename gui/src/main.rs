@@ -17,6 +17,10 @@ pub enum ActiveWindow {
     ENVIRONMENT,
     HISTORY,
 }
+pub enum ImportMode {
+    COLLECTION,
+    ENVIRONMENT
+}
 #[derive(Serialize, Deserialize)]
 pub enum RequestWindowMode {
     PARAMS,
@@ -33,6 +37,8 @@ pub struct GuiConfig {
     pub body_str: String,
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
     pub response: Option<Value>,
+    pub import_window_open: bool,
+    pub import_file_path: String
 }
 impl Default for GuiConfig {
     fn default() -> Self {
@@ -56,6 +62,8 @@ impl Default for GuiConfig {
                 ),
             ])),
             response: None,
+            import_window_open: false,
+            import_file_path: String::from("")
         }
     }
 }
@@ -98,6 +106,32 @@ impl Gui {
 
 impl App for Gui {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        TopBottomPanel::top("menu_panel").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.menu_button("Menu", |ui| {
+                    ui.menu_button("New", |ui| {
+                        if ui.button("Collection").clicked() {
+                            ui.close_menu();
+                        };
+                        if ui.button("Evnironment").clicked() {
+                            ui.close_menu();
+                        };
+                    });
+                    ui.menu_button("Import", |ui| {
+                        if ui.button("Collection").clicked() {
+                            self.config.import_window_open = true
+                        };
+                        if ui.button("Environment").clicked() {};
+                    });
+                    ui.menu_button("Export", |ui| {
+                        if ui.button("Collection").clicked() {
+                            self.config.import_window_open = true
+                        };
+                        if ui.button("Environment").clicked() {};
+                    });
+                });
+            });
+        });
         SidePanel::left("nav_panel").show(ctx, |ui| {
             if ui.button("Request").clicked() {
                 self.config.active_window = ActiveWindow::REQUEST;
@@ -286,6 +320,22 @@ impl App for Gui {
                 });
             }
         };
+        if self.config.import_window_open == true {
+            egui::Window::new("Import Modal")
+                .open(&mut self.config.import_window_open)
+                .show(ctx, |ui| {
+                    ui.label("Please copy and paste the file path to import");
+                    ui.horizontal(|ui| {
+                        ui.text_edit_singleline(&mut self.config.import_file_path);
+                        if ui.button("Import").clicked() {
+                            self.rt.block_on(async {
+                                let path = self.config.import_file_path.to_owned();
+                                let _ = PostieApi::import_collection(&path).await;
+                            });
+                        };
+                    });
+                });
+        }
     }
 }
 
