@@ -1,0 +1,972 @@
+{
+	"info": {
+		"_postman_id": "ca583cc6-98af-47fe-ab56-d4ef19b583b2",
+		"name": "qp-external-partner",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "/agent",
+			"item": [
+				{
+					"name": "GET /",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Troux-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/agent",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"agent"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET /:id",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/agent/794a7cfb-6f1b-4103-a96a-cc14683570ea",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"agent",
+								"794a7cfb-6f1b-4103-a96a-cc14683570ea"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST /",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"partnerId\": \"00ce24e1-9381-415a-8130-7746bb8883c9\",\n    \"brokerNumber\": \"testBrokerNumber1\",\n    \"salesRepNumber\": \"testSalesRepNumber1\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{HOST_URL}}/agent",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"agent"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PUT /:id",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"brokerNumber\": \"testBrokerNumber2\",\n    \"salesRepNumber\": \"testSalesRepNumber2\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{HOST_URL}}/agent/f4f758b4-c76d-4c6e-8a1f-a6867c6ca0e4",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"agent",
+								"f4f758b4-c76d-4c6e-8a1f-a6867c6ca0e4"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "DELETE /:id",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/agent/1",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"agent",
+								"1"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "/migrator",
+			"item": [
+				{
+					"name": "GET / migrate",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Troux-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							},
+							{
+								"key": "Resourceproperties",
+								"value": "migrate",
+								"type": "default"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/migrator",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"migrator"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET / Undo",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Troux-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							},
+							{
+								"key": "Resourceproperties",
+								"value": "undo",
+								"type": "default"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/migrator",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"migrator"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "/attribution",
+			"item": [
+				{
+					"name": "GET /",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/attribution",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"attribution"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET /:id",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/attribution/002b20d5-9780-492d-bf45-cdec31bc8800",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"attribution",
+								"002b20d5-9780-492d-bf45-cdec31bc8800"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST /",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\n    \"webId\": \"testWebId\",\n\n    \"displayName\": \"testDisplayName\",\n\n    \"organizationId\": \"testOrganizationId\",\n\n    \"distributionChannel\": \"testDistributionChanne\",\n\n    \"subDistributionCode\": \"testSubDistributionCode\",\n\n    \"partnerId\": \"00ce24e1-9381-415a-8130-7746bb8883c9\",\n\n    \"aimCode\": \"4353\",\n\n    \"payeeId\": \"de30faf6\",\n\n    \"id\": \"d1dc0e4f-93f3-41ea-8e51-d6a7f205b6be\"\n\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{HOST_URL}}/attribution",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"attribution"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PUT /:id",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"webId\": \"updatedTestWebId2\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{HOST_URL}}/attribution/002b20d5-9780-492d-bf45-cdec31bc8800",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"attribution",
+								"002b20d5-9780-492d-bf45-cdec31bc8800"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "DELETE /:id",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/attribution/1d1df218-5f95-49d8-8389-767ae4856da2",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"attribution",
+								"1d1df218-5f95-49d8-8389-767ae4856da2"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "/partner",
+			"item": [
+				{
+					"name": "GET /",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/partner",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"partner"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET /:id",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/partner/00ce24e1-9381-415a-8130-7746bb8883c9",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"partner",
+								"00ce24e1-9381-415a-8130-7746bb8883c9"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST /",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"custLoginId\": \"LEADCLOUD77\",\n    \"departmentNumber\": \"10000\",\n    \"libertyOfficeDepartmentOID\": \"0412\",\n    \"officeNumber\": \"0412\",\n    \"thirdPartyHousehold\": \"LEADCLOUD\"\n}\n",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{HOST_URL}}/partner",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"partner"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PUT /:id",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"custLoginId\": \"LEADCLOUD77updated\",\n    \"departmentNumber\": \"10000\",\n    \"libertyOfficeDepartmentOID\": \"0490\",\n    \"officeNumber\": \"0490\",\n    \"thirdPartyHousehold\": \"LEADCLOUD\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{HOST_URL}}/partner/00ce24e1-9381-415a-8130-7746bb8883c9",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"partner",
+								"00ce24e1-9381-415a-8130-7746bb8883c9"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "DELETE /:id",
+					"request": {
+						"auth": {
+							"type": "oauth2",
+							"oauth2": [
+								{
+									"key": "audience",
+									"value": {
+										"434de492-a447-4852-9326-19d8df076489": "{{AUDIENCE}}"
+									},
+									"type": "any"
+								},
+								{
+									"key": "clientId",
+									"value": "{{CLIENT_ID}}",
+									"type": "string"
+								},
+								{
+									"key": "scope",
+									"value": "{{SCOPE}}",
+									"type": "string"
+								},
+								{
+									"key": "clientSecret",
+									"value": "{{CLIENT_SECRET}}",
+									"type": "string"
+								},
+								{
+									"key": "accessTokenUrl",
+									"value": "{{TOKEN_URL}}",
+									"type": "string"
+								},
+								{
+									"key": "grant_type",
+									"value": "client_credentials",
+									"type": "string"
+								},
+								{
+									"key": "tokenName",
+									"value": "QP API Gateway Token",
+									"type": "string"
+								},
+								{
+									"key": "addTokenTo",
+									"value": "header",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/partner/6ffd93d7-7bc0-43b9-9f43-dd3f6eaa38b3",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"partner",
+								"6ffd93d7-7bc0-43b9-9f43-dd3f6eaa38b3"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "/configuration",
+			"item": [
+				{
+					"name": "GET /",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/configuration",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"configuration"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET /:id",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/configuration/58198df4-f442-49fd-9c8c-3763f46fc109",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"configuration",
+								"58198df4-f442-49fd-9c8c-3763f46fc109"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST /",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"partnerId\": \"00ce24e1-9381-415a-8130-7746bb8883c9\",\n    \"displayName\": \"testConfig1\",\n    \"brandCode\": \"testBrandedCode\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{HOST_URL}}/configuration",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"configuration"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PUT /:id",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"partnerId\": \"edc6d0db-5519-43f4-93c6-7fa0aba4b851\",\n    \"displayName\": \"updatedName2\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{HOST_URL}}/configuration/de30faf6-f2c7-4b5c-b61d-a752ed0aacbd",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"configuration",
+								"de30faf6-f2c7-4b5c-b61d-a752ed0aacbd"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "DELETE /:id",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/configuration/e8d82f86-5e36-41ca-8685-6b25d544f17f",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"configuration",
+								"e8d82f86-5e36-41ca-8685-6b25d544f17f"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "/externalPartner",
+			"item": [
+				{
+					"name": "POST /",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"custLoginId\": \"LEADCLOUD44\",\n    \"agentId\": \"b5490acb-29ad-4748-bd37-1efe341d3acc\",\n    \"attributionId\": \"49b8d991-6d12-4969-8934-7ad8c05ff6a4\",\n    \"entityType\": \"Test\",\n    \"partnerId\": \"ec8bde7e-fb8d-435f-9d5c-299209bab312\"\n}\n",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{HOST_URL}}/externalPartner",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"externalPartner"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET /webId&custLoginId",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/externalPartner?webId=0000021250&custLoginId=LEADCLOUD36",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"externalPartner"
+							],
+							"query": [
+								{
+									"key": "webId",
+									"value": "0000021250"
+								},
+								{
+									"key": "custLoginId",
+									"value": "LEADCLOUD36"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET /",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/externalPartner",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"externalPartner"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET /:id",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/externalPartner/00513c7b-d9cf-4317-9d07-2fba48e43268",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"externalPartner",
+								"00513c7b-d9cf-4317-9d07-2fba48e43268"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "DELETE /:id",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/externalPartner/000101fe-d85e-4a48-ba99-305a304e36f5",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"externalPartner",
+								"000101fe-d85e-4a48-ba99-305a304e36f5"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PUT /:id",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"custLoginId\": \"LEADCLOUD43Updated\",\n    \"agentId\": \"b5490acb-29ad-4748-bd37-1efe341d3acc\",\n    \"attributionId\": \"49b8d991-6d12-4969-8934-7ad8c05ff6a4\",\n    \"entityType\": \"Test\",\n    \"partnerId\": \"ec8bde7e-fb8d-435f-9d5c-299209bab312\"\n}\n",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{HOST_URL}}/externalPartner/004e9823-e978-4fbb-9003-7756fe7fbd39",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"externalPartner",
+								"004e9823-e978-4fbb-9003-7756fe7fbd39"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "/spec",
+			"item": [
+				{
+					"name": "/",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/spec",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"spec"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "oauth2",
+		"oauth2": [
+			{
+				"key": "audience",
+				"value": {
+					"434de492-a447-4852-9326-19d8df076489": "{{AUDIENCE}}"
+				},
+				"type": "any"
+			},
+			{
+				"key": "tokenName",
+				"value": "QP API Gateway Token",
+				"type": "string"
+			},
+			{
+				"key": "challengeAlgorithm",
+				"value": "S256",
+				"type": "string"
+			},
+			{
+				"key": "scope",
+				"value": "{{SCOPE}}",
+				"type": "string"
+			},
+			{
+				"key": "grant_type",
+				"value": "client_credentials",
+				"type": "string"
+			},
+			{
+				"key": "clientSecret",
+				"value": "{{CLIENT_SECRET}}",
+				"type": "string"
+			},
+			{
+				"key": "clientId",
+				"value": "{{CLIENT_ID}}",
+				"type": "string"
+			},
+			{
+				"key": "addTokenTo",
+				"value": "header",
+				"type": "string"
+			},
+			{
+				"key": "client_authentication",
+				"value": "header",
+				"type": "string"
+			},
+			{
+				"key": "accessTokenUrl",
+				"value": "{{TOKEN_URL}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"value": "",
+			"type": "string",
+			"disabled": true
+		},
+		{
+			"value": "",
+			"type": "string",
+			"disabled": true
+		}
+	]
+}

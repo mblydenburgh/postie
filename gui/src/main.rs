@@ -140,7 +140,10 @@ impl App for Gui {
                 ui.text_edit_singleline(&mut self.config.url);
                 if ui.button("Submit").clicked() {
                     let body = if self.config.selected_http_method != HttpMethod::GET {
-                        Some(serde_json::from_str(&self.config.body_str).expect("Body is invalid json"))
+                        Some(
+                            serde_json::from_str(&self.config.body_str)
+                                .expect("Body is invalid json"),
+                        )
                     } else {
                         None
                     };
