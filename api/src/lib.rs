@@ -51,9 +51,11 @@ impl PostieApi {
             collection: None,
         }
     }
-    pub fn parse_collection(path: &str) -> Collection {
-        let collection_file = fs::read_to_string(path).expect("Collection file not found");
-        serde_json::from_str(&collection_file).expect("Failed to parse collection")
+    pub fn parse_collection(collection_json: &str) -> Collection {
+        serde_json::from_str(&collection_json).expect("Failed to parse collection")
+    }
+    pub fn read_file(path: &str) -> Result<String, Box<dyn Error>> {
+        Ok(fs::read_to_string(path)?)
     }
     pub fn save_environment(input: Environment) -> Result<(), Box<dyn Error>> {
         Ok(())
