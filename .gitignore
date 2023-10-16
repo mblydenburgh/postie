@@ -1,4 +1,6 @@
 /target
 
+.env
+
 # db files created by sqlite vscode plugin
 postie.sqlite-*
