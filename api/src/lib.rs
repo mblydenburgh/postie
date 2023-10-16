@@ -6,12 +6,6 @@ use uuid::Uuid;
 use serde_json::{Value, json};
 use sqlx::{Connection, SqliteConnection};
 
-enum InputAction {
-    SAVE_COLLECTION,
-    SAVE_ENVIRONMENT,
-    MAKE_REQUEST,
-}
-
 #[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
 pub enum HttpMethod {
     GET,
@@ -97,7 +91,7 @@ impl PostieApi {
 
 pub async fn initialize_db() -> Result<SqliteConnection, Box<dyn Error>> {
     println!("acquiring sqlite connection");
-    let connection = SqliteConnection::connect("sqlite:todos.db").await?;
+    let connection = SqliteConnection::connect("sqlite:postie.sqlite").await?;
     println!("{:?} sqlite connection established", connection);
 
     Ok(connection)
