@@ -6,3 +6,15 @@ Mainly started due to a need at work, where Postman cloud accounts are not allow
 - A basic extent means: making requests, saving request history, and being able to 
 save collections and environments.
 - Have full interoperability with existing Postman file formats.
+
+## Database Utils
+
+This project uses the rust `sqlx` and `sqlx-cli` packages to manage a SQLite database connection.
+
+To generate a new database file, run the following commands:
+
+* `sqlx db create` - creates the database file, located at `postie.sqlite`
+
+* `sqlx migrate run` - runs all pending migrations
+
+You can then use any SQLite editor to open the `postie.sqlite` file to run queries.

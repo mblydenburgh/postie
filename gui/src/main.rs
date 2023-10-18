@@ -1,4 +1,4 @@
-use api::{HttpMethod, HttpRequest, PostieApi};
+use api::{HttpMethod, HttpRequest, PostieApi, initialize_db};
 use eframe::{
     egui::{CentralPanel, ComboBox, ScrollArea, SidePanel, TextEdit, TopBottomPanel},
     App, NativeOptions,
@@ -289,7 +289,10 @@ impl App for Gui {
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
+    let _con = initialize_db().await;
+    println!("{:?}", _con);
     let app = Gui::default();
     let native_options = NativeOptions::default();
     let _ = eframe::run_native("Postie", native_options, Box::new(|_cc| Box::new(app)));

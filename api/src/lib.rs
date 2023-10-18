@@ -5,8 +5,9 @@ use reqwest::{
     Client, Method,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
 use uuid::Uuid;
+use serde_json::{Value, json};
+use sqlx::{Connection, SqliteConnection};
 
 #[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
 pub enum HttpMethod {
@@ -95,4 +96,12 @@ impl PostieApi {
         let res_json = serde_json::from_str(&res_str).unwrap_or_default();
         Ok(res_json)
     }
+}
+
+pub async fn initialize_db() -> Result<SqliteConnection, Box<dyn Error>> {
+    println!("acquiring sqlite connection");
+    let connection = SqliteConnection::connect("sqlite:postie.sqlite").await?;
+    println!("{:?} sqlite connection established", connection);
+
+    Ok(connection)
 }
