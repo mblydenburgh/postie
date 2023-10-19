@@ -1,7 +1,4 @@
-use api::{
-    domain::collection::{CollectionItemOrFolder, CollectionRequestHeader},
-    PostieApi,
-};
+use api::{domain::collection::CollectionItemOrFolder, PostieApi};
 
 use crate::helpers::spawn_test_app;
 

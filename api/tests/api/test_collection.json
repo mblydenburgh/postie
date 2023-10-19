@@ -145,7 +145,7 @@
 					"response": []
 				}
 			]
-		},
+		}
 	],
 	"auth": {
 		"type": "oauth2",
