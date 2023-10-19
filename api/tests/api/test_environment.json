@@ -1,0 +1,15 @@
+{
+	"id": "3ab687f6-4d2d-4d15-b129-962721cd5c5a",
+	"name": "Local - QP External Partner",
+	"values": [
+		{
+			"key": "HOST_URL",
+			"value": "http://localhost:3000/external-partner/v1",
+			"type": "default",
+			"enabled": true
+		}
+	],
+	"_postman_variable_scope": "environment",
+	"_postman_exported_at": "2022-12-12T15:58:45.925Z",
+	"_postman_exported_using": "Postman/10.5.8"
+}

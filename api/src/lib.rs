@@ -3,6 +3,7 @@ pub mod domain;
 use std::{error::Error, fs};
 
 use domain::collection::Collection;
+use domain::environment::EnvironmentFile;
 use reqwest::{
     header::{HeaderMap, HeaderName, HeaderValue},
     Client, Method,
@@ -59,6 +60,10 @@ impl PostieApi {
         println!("Parsing collection from json");
         serde_json::from_str(&collection_json).expect("Failed to parse collection")
     }
+    pub fn parse_environment(environment_json: &str) -> EnvironmentFile {
+        println!("Parsing environment from json");
+        serde_json::from_str(&environment_json).expect("Failed to parse environment")
+    }
     pub fn read_file(path: &str) -> Result<String, Box<dyn Error>> {
         println!("Reading file: {}", path);
         Ok(fs::read_to_string(path)?)
@@ -67,6 +72,12 @@ impl PostieApi {
         let file_str = Self::read_file(path)?;
         let _collection = Self::parse_collection(&file_str);
         println!("Successfully parsed postman collection!");
+        Ok(())
+    }
+    pub async fn import_environment(path: &str) -> Result<(), Box<dyn Error>> {
+        let file_str = Self::read_file(path)?;
+        let _collection = Self::parse_environment(&file_str);
+        println!("Successfully parsed postman environment!");
         Ok(())
     }
     pub fn save_environment(input: Environment) -> Result<(), Box<dyn Error>> {

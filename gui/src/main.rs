@@ -125,14 +125,18 @@ impl App for Gui {
                             self.config.import_window_open = true;
                             self.config.import_mode = ImportMode::COLLECTION;
                         };
-                        if ui.button("Environment").clicked() {};
-                    });
-                    ui.menu_button("Export", |ui| {
-                        if ui.button("Collection").clicked() {
+                        if ui.button("Environment").clicked() {
                             self.config.import_window_open = true;
                             self.config.import_mode = ImportMode::ENVIRONMENT;
                         };
-                        if ui.button("Environment").clicked() {};
+                    });
+                    ui.menu_button("Export", |ui| {
+                        if ui.button("Collection").clicked() {
+                            ui.close_menu();
+                        };
+                        if ui.button("Environment").clicked() {
+                            ui.close_menu();
+                        };
                     });
                 });
             });
@@ -338,8 +342,10 @@ impl App for Gui {
                                 let _ = match self.config.import_mode {
                                     ImportMode::COLLECTION => {
                                         PostieApi::import_collection(&path).await
+                                    },
+                                    ImportMode::ENVIRONMENT => {
+                                        PostieApi::import_environment(&path).await
                                     }
-                                    ImportMode::ENVIRONMENT => todo!(),
                                 };
                             });
                         };

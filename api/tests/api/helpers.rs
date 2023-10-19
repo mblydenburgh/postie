@@ -17,6 +17,10 @@ impl TestApp {
     pub fn load_test_collection(&self) -> &str {
         include_str!("test_collection.json")
     }
+
+    pub fn load_test_environment(&self) -> &str {
+        include_str!("test_environment.json")
+    }
 }
 
 pub fn spawn_test_app() -> TestApp {
