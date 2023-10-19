@@ -8,9 +8,9 @@ use reqwest::{
     Client, Method,
 };
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use sqlx::{Connection, SqliteConnection};
+use uuid::Uuid;
 
 #[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
 pub enum HttpMethod {

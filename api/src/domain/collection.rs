@@ -1,11 +1,9 @@
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Collection {
     pub info: CollectionInfo,
-    pub item: Vec<CollectionItem>,
+    pub item: Vec<CollectionItemOrFolder>,
     pub auth: Option<CollectionAuth>,
 }
 
@@ -13,6 +11,19 @@ pub struct Collection {
 pub struct CollectionInfo {
     pub name: String,
     pub description: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum CollectionItemOrFolder {
+    Item(CollectionItem),
+    Folder(CollectionFolder),
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CollectionFolder {
+    pub name: String,
+    pub item: Vec<CollectionItemOrFolder>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -80,4 +91,29 @@ pub struct CollectionRequestHeader {
     pub key: String,
     pub value: String,
     pub r#type: String,
+}
+
+// Custom impl for Deserialize to determine wheth parsed thing is a request or sub folder
+impl<'de> Deserialize<'de> for CollectionItemOrFolder {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value: serde_json::Value = Deserialize::deserialize(deserializer)?;
+
+        // Check json structure to determine what enum variant it is
+        if let Some(obj) = value.as_object() {
+            if obj.contains_key("request") {
+                let item: CollectionItem = Deserialize::deserialize(value).unwrap();
+                Ok(CollectionItemOrFolder::Item(item))
+            } else {
+                let item: CollectionFolder = Deserialize::deserialize(value).unwrap();
+                Ok(CollectionItemOrFolder::Folder(item))
+            }
+        } else {
+            Err(serde::de::Error::custom(
+                "Parsed json doesnt match CollectionItemOrFolder",
+            ))
+        }
+    }
 }

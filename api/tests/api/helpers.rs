@@ -18,43 +18,244 @@ impl TestApp {
     pub fn load_test_collection(&self) -> &str {
         r#"
         {
-            "info": {
-                "name": "Test Collection",
-                "description": "A collection for unit testing"
-            },
-            "item": [
-                {
-                    "name": "Request 1",
-                    "request": {
-                        "method": "GET",
-                        "url": {
-                            "raw": "http://localhost:3000"
-                        }
-                    }
-                },
-                {
-                    "name": "Request 2",
-                    "request": {
-                        "method": "GET",
-                        "url": {
-                            "raw": "http://localhost:3000",
-                            "path": ["foo"]
-                        }
-                    }
-                }
-            ],
-            "auth": {
-                "type": "bearer",
-                "bearer": [
-                    {
-                        "key": "bearer",
-                        "value": "some-token",
-                        "type": "string"
-                    }
-                    
-                ]
-            }
-        }
+	"info": {
+		"_postman_id": "ca583cc6-98af-47fe-ab56-d4ef19b583b2",
+		"name": "qp-external-partner",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "/agent",
+			"item": [
+				{
+					"name": "GET /",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Troux-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/agent",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"agent"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET /:id",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/agent/794a7cfb-6f1b-4103-a96a-cc14683570ea",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"agent",
+								"794a7cfb-6f1b-4103-a96a-cc14683570ea"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST /",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"partnerId\": \"00ce24e1-9381-415a-8130-7746bb8883c9\",\n    \"brokerNumber\": \"testBrokerNumber1\",\n    \"salesRepNumber\": \"testSalesRepNumber1\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{HOST_URL}}/agent",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"agent"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PUT /:id",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"brokerNumber\": \"testBrokerNumber2\",\n    \"salesRepNumber\": \"testSalesRepNumber2\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{HOST_URL}}/agent/f4f758b4-c76d-4c6e-8a1f-a6867c6ca0e4",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"agent",
+								"f4f758b4-c76d-4c6e-8a1f-a6867c6ca0e4"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "DELETE /:id",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "X-TROUX-ID",
+								"value": "{{TROUX_ID}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{HOST_URL}}/agent/1",
+							"host": [
+								"{{HOST_URL}}"
+							],
+							"path": [
+								"agent",
+								"1"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "oauth2",
+		"oauth2": [
+			{
+				"key": "audience",
+				"value": {
+					"434de492-a447-4852-9326-19d8df076489": "{{AUDIENCE}}"
+				},
+				"type": "any"
+			},
+			{
+				"key": "tokenName",
+				"value": "QP API Gateway Token",
+				"type": "string"
+			},
+			{
+				"key": "challengeAlgorithm",
+				"value": "S256",
+				"type": "string"
+			},
+			{
+				"key": "scope",
+				"value": "{{SCOPE}}",
+				"type": "string"
+			},
+			{
+				"key": "grant_type",
+				"value": "client_credentials",
+				"type": "string"
+			},
+			{
+				"key": "clientSecret",
+				"value": "{{CLIENT_SECRET}}",
+				"type": "string"
+			},
+			{
+				"key": "clientId",
+				"value": "{{CLIENT_ID}}",
+				"type": "string"
+			},
+			{
+				"key": "addTokenTo",
+				"value": "header",
+				"type": "string"
+			},
+			{
+				"key": "client_authentication",
+				"value": "header",
+				"type": "string"
+			},
+			{
+				"key": "accessTokenUrl",
+				"value": "{{TOKEN_URL}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"value": "",
+			"type": "string",
+			"disabled": true
+		},
+		{
+			"value": "",
+			"type": "string",
+			"disabled": true
+		}
+	]
+}
         "#
     }
 }

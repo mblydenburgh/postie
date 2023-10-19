@@ -1,4 +1,4 @@
-use api::{HttpMethod, HttpRequest, PostieApi, initialize_db};
+use api::{initialize_db, HttpMethod, HttpRequest, PostieApi};
 use eframe::{
     egui::{CentralPanel, ComboBox, ScrollArea, SidePanel, TextEdit, TopBottomPanel},
     App, NativeOptions,
@@ -20,7 +20,7 @@ pub enum ActiveWindow {
 #[derive(Serialize, Deserialize)]
 pub enum ImportMode {
     COLLECTION,
-    ENVIRONMENT
+    ENVIRONMENT,
 }
 #[derive(Serialize, Deserialize)]
 pub enum RequestWindowMode {
@@ -40,7 +40,7 @@ pub struct GuiConfig {
     pub response: Option<Value>,
     pub import_window_open: bool,
     pub import_mode: ImportMode,
-    pub import_file_path: String
+    pub import_file_path: String,
 }
 impl Default for GuiConfig {
     fn default() -> Self {
@@ -66,7 +66,7 @@ impl Default for GuiConfig {
             response: None,
             import_window_open: false,
             import_file_path: String::from(""),
-            import_mode: ImportMode::COLLECTION
+            import_mode: ImportMode::COLLECTION,
         }
     }
 }
@@ -336,7 +336,9 @@ impl App for Gui {
                             self.rt.block_on(async {
                                 let path = self.config.import_file_path.to_owned();
                                 let _ = match self.config.import_mode {
-                                    ImportMode::COLLECTION => PostieApi::import_collection(&path).await,
+                                    ImportMode::COLLECTION => {
+                                        PostieApi::import_collection(&path).await
+                                    }
                                     ImportMode::ENVIRONMENT => todo!(),
                                 };
                             });
