@@ -355,10 +355,7 @@ impl App for Gui {
     }
 }
 
-#[tokio::main]
-async fn main() {
-    let _con = initialize_db().await;
-    println!("{:?}", _con);
+fn main() {
     let app = Gui::default();
     let native_options = NativeOptions::default();
     let _ = eframe::run_native("Postie", native_options, Box::new(|_cc| Box::new(app)));
