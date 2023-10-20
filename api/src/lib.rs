@@ -68,14 +68,14 @@ impl PostieApi {
         println!("Reading file: {}", path);
         Ok(fs::read_to_string(path)?)
     }
-    pub async fn import_collection(path: &str) -> Result<(), Box<dyn Error>> {
-        let file_str = Self::read_file(path)?;
+    pub async fn import_collection(path: &str) -> Result<(), Box<dyn Error + Send>> {
+        let file_str = Self::read_file(path).unwrap();
         let _collection = Self::parse_collection(&file_str);
         println!("Successfully parsed postman collection!");
         Ok(())
     }
-    pub async fn import_environment(path: &str) -> Result<(), Box<dyn Error>> {
-        let file_str = Self::read_file(path)?;
+    pub async fn import_environment(path: &str) -> Result<(), Box<dyn Error + Send>> {
+        let file_str = Self::read_file(path).unwrap();
         let _collection = Self::parse_environment(&file_str);
         println!("Successfully parsed postman environment!");
         Ok(())

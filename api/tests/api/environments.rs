@@ -18,6 +18,5 @@ fn can_parse_environment_files() {
         assert_eq!(first_val.value, "http://localhost:3000/external-partner/v1");
         assert_eq!(first_val.r#type, "default");
         assert_eq!(first_val.enabled, true);
-    } 
-    
+    }
 }
