@@ -7,13 +7,7 @@ use egui::TextStyle;
 use egui_extras::{Column, TableBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{
-    cell::RefCell,
-    collections::HashSet,
-    error::Error,
-    rc::Rc,
-    sync::Arc,
-};
+use std::{cell::RefCell, collections::HashSet, error::Error, rc::Rc, sync::Arc};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -43,7 +37,6 @@ pub struct GuiConfig {
     pub url: String,
     pub body_str: String,
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
-    pub response: Option<Value>,
     pub import_window_open: bool,
     pub import_mode: ImportMode,
     pub import_file_path: String,
@@ -69,7 +62,6 @@ impl Default for GuiConfig {
                     String::from("no-cache"),
                 ),
             ])),
-            response: None,
             import_window_open: false,
             import_file_path: String::from(""),
             import_mode: ImportMode::COLLECTION,
@@ -99,12 +91,11 @@ impl Gui {
             match Gui::submit(input).await {
                 Ok(res) => {
                     println!("Res: {}", res);
-                    let mut mutex_lock = result_for_worker.try_write().unwrap();
-                    *mutex_lock = Some(res);
+                    let mut result_write_guard = result_for_worker.try_write().unwrap();
+                    *result_write_guard = Some(res);
                 }
                 Err(err) => {
                     println!("Error with request: {:?}", err);
-                    panic!("oof");
                 }
             };
         });
@@ -354,8 +345,6 @@ impl App for Gui {
                         });
                     });
             }
-        } else {
-            println!("couldnt get lock 3");
         }
     }
 }
