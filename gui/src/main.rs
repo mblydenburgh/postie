@@ -6,13 +6,13 @@ use eframe::{
 use egui::TextStyle;
 use egui_extras::{Column, TableBuilder};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::Value;
 use std::{
     cell::RefCell,
     collections::HashSet,
     error::Error,
     rc::Rc,
-    sync::{Arc, Mutex}
+    sync::Arc,
 };
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -79,13 +79,13 @@ impl Default for GuiConfig {
 
 pub struct Gui {
     pub config: Arc<RwLock<GuiConfig>>,
-    pub response : Arc<RwLock<Option<Value>>>
+    pub response: Arc<RwLock<Option<Value>>>,
 }
 impl Default for Gui {
     fn default() -> Self {
         Self {
             config: Arc::new(RwLock::new(GuiConfig::default())),
-            response: Arc::new(RwLock::new(None))
+            response: Arc::new(RwLock::new(None)),
         }
     }
 }
@@ -101,11 +101,11 @@ impl Gui {
                     println!("Res: {}", res);
                     let mut mutex_lock = result_for_worker.try_write().unwrap();
                     *mutex_lock = Some(res);
-                },
+                }
                 Err(err) => {
                     println!("Error with request: {:?}", err);
                     panic!("oof");
-                },
+                }
             };
         });
         Ok(())
@@ -262,7 +262,14 @@ impl App for Gui {
                         });
                     if self.response.try_read().unwrap().is_some() {
                         CentralPanel::default().show(ctx, |ui| {
-                            ui.label(self.response.try_read().unwrap().as_ref().unwrap().to_string());
+                            ui.label(
+                                self.response
+                                    .try_read()
+                                    .unwrap()
+                                    .as_ref()
+                                    .unwrap()
+                                    .to_string(),
+                            );
                         });
                     }
                 }
