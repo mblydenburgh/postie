@@ -6,15 +6,15 @@ use eframe::{
 use egui::TextStyle;
 use egui_extras::{Column, TableBuilder};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::{
     cell::RefCell,
     collections::HashSet,
     error::Error,
     rc::Rc,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}
 };
-use tokio::runtime;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]
@@ -78,26 +78,37 @@ impl Default for GuiConfig {
 }
 
 pub struct Gui {
-    pub config: Arc<Mutex<GuiConfig>>,
+    pub config: Arc<RwLock<GuiConfig>>,
+    pub response : Arc<RwLock<Option<Value>>>
 }
 impl Default for Gui {
     fn default() -> Self {
         Self {
-            config: Arc::new(Mutex::new(GuiConfig::default())),
+            config: Arc::new(RwLock::new(GuiConfig::default())),
+            response: Arc::new(RwLock::new(None))
         }
     }
 }
 impl Gui {
-    fn spawn_submit(input: HttpRequest) -> Result<Value, Box<dyn Error>> {
-        let (tx, mut rx) = tokio::sync::oneshot::channel();
+    async fn submit(input: HttpRequest) -> Result<Value, Box<dyn Error>> {
+        PostieApi::make_request(input).await
+    }
+    fn spawn_submit(&self, input: HttpRequest) -> Result<(), Box<dyn Error>> {
+        let result_for_worker = self.response.clone();
         tokio::spawn(async move {
-            let api_response = PostieApi::make_request(input).await.unwrap();
-            tx.send(api_response)
+            match Gui::submit(input).await {
+                Ok(res) => {
+                    println!("Res: {}", res);
+                    let mut mutex_lock = result_for_worker.try_write().unwrap();
+                    *mutex_lock = Some(res);
+                },
+                Err(err) => {
+                    println!("Error with request: {:?}", err);
+                    panic!("oof");
+                },
+            };
         });
-        match rx.try_recv() {
-            Ok(res) => Ok(res),
-            Err(_) => todo!(),
-        }
+        Ok(())
     }
     fn remove_duplicate_headers(headers: Vec<(String, String)>) -> Vec<(String, String)> {
         let mut unique_keys = HashSet::new();
@@ -127,13 +138,13 @@ impl App for Gui {
                     });
                     ui.menu_button("Import", |ui| {
                         if ui.button("Collection").clicked() {
-                            if let Ok(mut config) = self.config.try_lock() {
+                            if let Ok(mut config) = self.config.try_write() {
                                 (*config).import_window_open = true;
                                 (*config).import_mode = ImportMode::COLLECTION;
                             }
                         };
                         if ui.button("Environment").clicked() {
-                            if let Ok(mut config) = self.config.try_lock() {
+                            if let Ok(mut config) = self.config.try_write() {
                                 (*config).import_window_open = true;
                                 (*config).import_mode = ImportMode::ENVIRONMENT;
                             }
@@ -151,7 +162,7 @@ impl App for Gui {
             });
         });
         SidePanel::left("nav_panel").show(ctx, |ui| {
-            if let Ok(mut config) = self.config.try_lock() {
+            if let Ok(mut config) = self.config.try_write() {
                 if ui.button("Request").clicked() {
                     (*config).active_window = ActiveWindow::REQUEST;
                 }
@@ -163,7 +174,7 @@ impl App for Gui {
                 }
             }
         });
-        if let Ok(mut config) = self.config.try_lock() {
+        if let Ok(mut config) = self.config.try_write() {
             let active_window = &config.active_window;
             SidePanel::left("content_panel").show(ctx, |ui| match active_window {
                 ActiveWindow::REQUEST => {
@@ -179,66 +190,57 @@ impl App for Gui {
             TopBottomPanel::top("top_panel").show(ctx, |ui| {
                 ui.heading("Welcome to Postie!");
                 ui.horizontal(|ui| {
-                    if let Ok(config) = self.config.try_lock() {
-                        let mut method = &config.selected_http_method;
-                        ComboBox::from_label("")
-                            .selected_text(format!("{:?}", method))
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut method, &HttpMethod::GET, "GET");
-                                ui.selectable_value(&mut method, &HttpMethod::POST, "POST");
-                                ui.selectable_value(&mut method, &HttpMethod::PUT, "PUT");
-                                ui.selectable_value(&mut method, &HttpMethod::DELETE, "DELETE");
-                                ui.selectable_value(&mut method, &HttpMethod::PATCH, "PATCH");
-                                ui.selectable_value(&mut method, &HttpMethod::OPTIONS, "OPTIONS");
-                                ui.selectable_value(&mut method, &HttpMethod::HEAD, "HEAD");
-                            });
-                    }
+                    let mut method = &config.selected_http_method;
+                    ComboBox::from_label("")
+                        .selected_text(format!("{:?}", method))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut method, &HttpMethod::GET, "GET");
+                            ui.selectable_value(&mut method, &HttpMethod::POST, "POST");
+                            ui.selectable_value(&mut method, &HttpMethod::PUT, "PUT");
+                            ui.selectable_value(&mut method, &HttpMethod::DELETE, "DELETE");
+                            ui.selectable_value(&mut method, &HttpMethod::PATCH, "PATCH");
+                            ui.selectable_value(&mut method, &HttpMethod::OPTIONS, "OPTIONS");
+                            ui.selectable_value(&mut method, &HttpMethod::HEAD, "HEAD");
+                        });
                     ui.label("URL:");
-                    if let Ok(mut config) = self.config.try_lock() {
-                        ui.text_edit_singleline(&mut config.url);
-                        if ui.button("Submit").clicked() {
-                            let body = if config.selected_http_method != HttpMethod::GET {
-                                Some(
-                                    serde_json::from_str(&config.body_str)
-                                        .expect("Body is invalid json"),
-                                )
-                            } else {
-                                None
-                            };
-                            let submitted_headers = config
-                                .headers
-                                .borrow_mut()
-                                .iter()
-                                .filter(|h| h.0 == true)
-                                .map(|h| (h.1.to_owned(), h.2.to_owned()))
-                                .collect();
-                            let request = HttpRequest {
-                                id: Uuid::new_v4(),
-                                name: None,
-                                headers: Some(Gui::remove_duplicate_headers(submitted_headers)),
-                                body,
-                                method: config.selected_http_method.clone(),
-                                url: config.url.clone(),
-                            };
+                    ui.text_edit_singleline(&mut config.url);
+                    if ui.button("Submit").clicked() {
+                        let body = if config.selected_http_method != HttpMethod::GET {
+                            Some(
+                                serde_json::from_str(&config.body_str)
+                                    .expect("Body is invalid json"),
+                            )
+                        } else {
+                            None
+                        };
+                        let submitted_headers = config
+                            .headers
+                            .borrow_mut()
+                            .iter()
+                            .filter(|h| h.0 == true)
+                            .map(|h| (h.1.to_owned(), h.2.to_owned()))
+                            .collect();
+                        let request = HttpRequest {
+                            id: Uuid::new_v4(),
+                            name: None,
+                            headers: Some(Gui::remove_duplicate_headers(submitted_headers)),
+                            body,
+                            method: config.selected_http_method.clone(),
+                            url: config.url.clone(),
+                        };
 
-                            let response = Gui::spawn_submit(request);
-                            if response.is_ok() {
-                                config.response = Some(response.unwrap());
-                            }
-                        }
+                        let _ = Gui::spawn_submit(self, request);
                     }
                 });
                 ui.horizontal(|ui| {
-                    if let Ok(mut config) = self.config.try_lock() {
-                        if ui.button("Params").clicked() {
-                            (*config).request_window_mode = RequestWindowMode::PARAMS;
-                        }
-                        if ui.button("Headers").clicked() {
-                            (*config).request_window_mode = RequestWindowMode::HEADERS;
-                        }
-                        if ui.button("Body").clicked() {
-                            (*config).request_window_mode = RequestWindowMode::BODY;
-                        }
+                    if ui.button("Params").clicked() {
+                        (*config).request_window_mode = RequestWindowMode::PARAMS;
+                    }
+                    if ui.button("Headers").clicked() {
+                        (*config).request_window_mode = RequestWindowMode::HEADERS;
+                    }
+                    if ui.button("Body").clicked() {
+                        (*config).request_window_mode = RequestWindowMode::BODY;
                     }
                 });
             });
@@ -258,9 +260,9 @@ impl App for Gui {
                                 );
                             });
                         });
-                    if config.response.is_some() {
+                    if self.response.try_read().unwrap().is_some() {
                         CentralPanel::default().show(ctx, |ui| {
-                            ui.label(config.response.as_ref().unwrap().to_string());
+                            ui.label(self.response.try_read().unwrap().as_ref().unwrap().to_string());
                         });
                     }
                 }
@@ -345,6 +347,8 @@ impl App for Gui {
                         });
                     });
             }
+        } else {
+            println!("couldnt get lock 3");
         }
     }
 }
