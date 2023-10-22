@@ -1,5 +1,5 @@
 use api::{
-    domain::environment::{EnvironmentFile, EnvironmentValue},
+    domain::environment::{EnvironmentFile, EnvironmentValue, self},
     initialize_db, HttpMethod, HttpRequest, PostieApi,
 };
 use eframe::{
@@ -30,6 +30,7 @@ pub enum RequestWindowMode {
     PARAMS,
     HEADERS,
     BODY,
+    ENVIRONMENT,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -62,7 +63,7 @@ pub struct Gui {
     pub config: Arc<RwLock<GuiConfig>>,
     pub response: Arc<RwLock<Option<Value>>>,
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
-    pub environment: Option<api::domain::environment::EnvironmentFile>,
+    pub environment: Rc<RefCell<Option<api::domain::environment::EnvironmentFile>>>,
 }
 impl Default for Gui {
     fn default() -> Self {
@@ -82,7 +83,7 @@ impl Default for Gui {
                     String::from("no-cache"),
                 ),
             ])),
-            environment: Some(EnvironmentFile {
+            environment: Rc::new(RefCell::new(Some(EnvironmentFile {
                 id: String::from("id"),
                 name: String::from("some environment"),
                 values: Some(vec![EnvironmentValue {
@@ -91,7 +92,7 @@ impl Default for Gui {
                     r#type: String::from("default"),
                     enabled: true,
                 }]),
-            }),
+            }))),
         }
     }
 }
@@ -128,7 +129,7 @@ impl Gui {
     }
     fn substitute_variables_in_url(&self, raw_url: String) -> String {
         println!("substituting env vars");
-        if let Some(environment) = &self.environment {
+        if let Some(environment) = &self.environment.borrow().clone() {
             if let Some(values) = environment.clone().values {
                 let url = values.iter().fold(raw_url, |acc, env_value| {
                     acc.replace(&format!("{{{{{}}}}}", env_value.key), &env_value.value)
@@ -258,6 +259,9 @@ impl App for Gui {
                     }
                 });
                 ui.horizontal(|ui| {
+                    if ui.button("Environment").clicked() {
+                        (*config).request_window_mode = RequestWindowMode::ENVIRONMENT;
+                    }
                     if ui.button("Params").clicked() {
                         (*config).request_window_mode = RequestWindowMode::PARAMS;
                     }
@@ -347,6 +351,73 @@ impl App for Gui {
                                                 String::from(""),
                                                 String::from(""),
                                             ));
+                                        };
+                                    });
+                                });
+                            });
+                    });
+                }
+                RequestWindowMode::ENVIRONMENT => {
+                    CentralPanel::default().show(ctx, |ui| {
+                        let table = TableBuilder::new(ui)
+                            .striped(true)
+                            .resizable(true)
+                            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                            .column(Column::auto())
+                            .column(Column::auto())
+                            .column(Column::auto())
+                            .column(Column::auto());
+                        table
+                            .header(20.0, |mut header| {
+                                header.col(|ui| {
+                                    ui.strong("Enabled");
+                                });
+                                header.col(|ui| {
+                                    ui.strong("Key");
+                                });
+                                header.col(|ui| {
+                                    ui.strong("Type");
+                                });
+                                header.col(|ui| {
+                                    ui.strong("Value");
+                                });
+                            })
+                            .body(|mut body| {
+                                if let Some(environemnt) = self.environment.borrow_mut().clone() {
+                                    if let Some(values) = environemnt.values {
+                                        for mut value in values {
+                                            body.row(30.0, |mut row| {
+                                                row.col(|ui| {
+                                                    ui.checkbox(&mut value.enabled, "");
+                                                });
+                                                row.col(|ui| {
+                                                    ui.text_edit_singleline(&mut value.key);
+                                                });
+                                                row.col(|ui| {
+                                                    ui.text_edit_singleline(&mut value.r#type);
+                                                });
+                                                row.col(|ui| {
+                                                    ui.text_edit_singleline(&mut value.value);
+                                                });
+                                            });
+                                        }
+                                    }
+                                }
+                                body.row(30.0, |mut row| {
+                                    row.col(|ui| {
+                                        if ui.button("Add").clicked() {
+                                            if let Some(environemnt) =
+                                                self.environment.borrow_mut().clone()
+                                            {
+                                                if let Some(mut values) = environemnt.values {
+                                                    values.push(EnvironmentValue {
+                                                        key: String::from(""),
+                                                        value: String::from(""),
+                                                        r#type: String::from("default"),
+                                                        enabled: true,
+                                                    });
+                                                }
+                                            }
                                         };
                                     });
                                 });
