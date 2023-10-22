@@ -1,4 +1,7 @@
-use api::{initialize_db, HttpMethod, HttpRequest, PostieApi};
+use api::{
+    domain::environment::{EnvironmentFile, EnvironmentValue},
+    initialize_db, HttpMethod, HttpRequest, PostieApi,
+};
 use eframe::{
     egui::{CentralPanel, ComboBox, ScrollArea, SidePanel, TextEdit, TopBottomPanel},
     App, NativeOptions,
@@ -36,7 +39,6 @@ pub struct GuiConfig {
     pub selected_http_method: HttpMethod,
     pub url: String,
     pub body_str: String,
-    pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
     pub import_window_open: bool,
     pub import_mode: ImportMode,
     pub import_file_path: String,
@@ -49,6 +51,24 @@ impl Default for GuiConfig {
             selected_http_method: HttpMethod::GET,
             url: String::from("https://httpbin.org/json"),
             body_str: String::from("{ \"foo\": \"bar\" }"),
+            import_window_open: false,
+            import_file_path: String::from(""),
+            import_mode: ImportMode::COLLECTION,
+        }
+    }
+}
+
+pub struct Gui {
+    pub config: Arc<RwLock<GuiConfig>>,
+    pub response: Arc<RwLock<Option<Value>>>,
+    pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
+    pub environment: Option<api::domain::environment::EnvironmentFile>,
+}
+impl Default for Gui {
+    fn default() -> Self {
+        Self {
+            config: Arc::new(RwLock::new(GuiConfig::default())),
+            response: Arc::new(RwLock::new(None)),
             headers: Rc::new(RefCell::new(vec![
                 (
                     true,
@@ -62,22 +82,16 @@ impl Default for GuiConfig {
                     String::from("no-cache"),
                 ),
             ])),
-            import_window_open: false,
-            import_file_path: String::from(""),
-            import_mode: ImportMode::COLLECTION,
-        }
-    }
-}
-
-pub struct Gui {
-    pub config: Arc<RwLock<GuiConfig>>,
-    pub response: Arc<RwLock<Option<Value>>>,
-}
-impl Default for Gui {
-    fn default() -> Self {
-        Self {
-            config: Arc::new(RwLock::new(GuiConfig::default())),
-            response: Arc::new(RwLock::new(None)),
+            environment: Some(EnvironmentFile {
+                id: String::from("id"),
+                name: String::from("some environment"),
+                values: Some(vec![EnvironmentValue {
+                    key: String::from("HOST_URL"),
+                    value: String::from("https://httpbin.org"),
+                    r#type: String::from("default"),
+                    enabled: true,
+                }]),
+            }),
         }
     }
 }
@@ -111,6 +125,24 @@ impl Gui {
             }
         }
         result
+    }
+    fn substitute_variables_in_url(&self, raw_url: String) -> String {
+        println!("substituting env vars");
+        if let Some(environment) = &self.environment {
+            if let Some(values) = environment.clone().values {
+                let url = values.iter().fold(raw_url, |acc, env_value| {
+                    acc.replace(&format!("{{{{{}}}}}", env_value.key), &env_value.value)
+                });
+                println!("substituted url url: {}", url);
+                url
+            } else {
+                println!("env doesnt have values, returning original");
+                raw_url
+            }
+        } else {
+            println!("no environemnt, returning original");
+            raw_url
+        }
     }
 }
 
@@ -204,7 +236,9 @@ impl App for Gui {
                         } else {
                             None
                         };
-                        let submitted_headers = config
+                        let url =
+                            self.substitute_variables_in_url(String::from(config.url.clone()));
+                        let submitted_headers = self
                             .headers
                             .borrow_mut()
                             .iter()
@@ -217,7 +251,7 @@ impl App for Gui {
                             headers: Some(Gui::remove_duplicate_headers(submitted_headers)),
                             body,
                             method: config.selected_http_method.clone(),
-                            url: config.url.clone(),
+                            url,
                         };
 
                         let _ = Gui::spawn_submit(self, request);
@@ -291,7 +325,7 @@ impl App for Gui {
                                 });
                             })
                             .body(|mut body| {
-                                for header in config.headers.borrow_mut().iter_mut() {
+                                for header in self.headers.borrow_mut().iter_mut() {
                                     body.row(30.0, |mut row| {
                                         let (enabled, key, value) = header;
                                         row.col(|ui| {
@@ -308,7 +342,7 @@ impl App for Gui {
                                 body.row(30.0, |mut row| {
                                     row.col(|ui| {
                                         if ui.button("Add").clicked() {
-                                            config.headers.borrow_mut().push((
+                                            self.headers.borrow_mut().push((
                                                 true,
                                                 String::from(""),
                                                 String::from(""),
