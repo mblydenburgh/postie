@@ -6,11 +6,11 @@ use domain::collection::Collection;
 use domain::environment::EnvironmentFile;
 use reqwest::{
     header::{HeaderMap, HeaderName, HeaderValue},
-    Client, Method,
+    Client, Method, Response,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use sqlx::{Connection, SqliteConnection};
+use sqlx::{Connection, SqliteConnection, Executor};
 use uuid::Uuid;
 
 #[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
@@ -122,6 +122,10 @@ impl PostieApi {
 
         let res_str = res.text().await?;
         let res_json = serde_json::from_str(&res_str).unwrap_or_default();
+
+        let mut db = PostieDb::new().await;
+        let _ = db.save_request_history().await;
+
         Ok(res_json)
     }
 }
@@ -132,4 +136,19 @@ pub async fn initialize_db() -> Result<SqliteConnection, Box<dyn Error>> {
     println!("{:?} sqlite connection established", connection);
 
     Ok(connection)
+}
+
+pub struct PostieDb {
+    pub connection: SqliteConnection
+}
+
+impl PostieDb {
+    pub async fn new() -> Self {
+        PostieDb { connection: initialize_db().await.ok().unwrap() }
+    }
+
+    pub async fn save_request_history(&mut self) {
+        let res = sqlx::query!("SELECT * FROM request_history").fetch_all(&mut self.connection).await;
+        println!("db query result is: {:?}", res);
+    }
 }
