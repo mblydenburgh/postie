@@ -1,4 +1,4 @@
-use api::{HttpMethod, HttpRequest, PostieApi, initialize_db};
+use api::{initialize_db, HttpMethod, HttpRequest, PostieApi};
 use eframe::{
     egui::{CentralPanel, ComboBox, ScrollArea, SidePanel, TextEdit, TopBottomPanel},
     App, NativeOptions,
@@ -7,8 +7,8 @@ use egui::TextStyle;
 use egui_extras::{Column, TableBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{cell::RefCell, collections::HashSet, error::Error, rc::Rc};
-use tokio::runtime;
+use std::{cell::RefCell, collections::HashSet, error::Error, rc::Rc, sync::Arc};
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]
@@ -16,6 +16,11 @@ pub enum ActiveWindow {
     REQUEST,
     ENVIRONMENT,
     HISTORY,
+}
+#[derive(Serialize, Deserialize)]
+pub enum ImportMode {
+    COLLECTION,
+    ENVIRONMENT,
 }
 #[derive(Serialize, Deserialize)]
 pub enum RequestWindowMode {
@@ -32,7 +37,9 @@ pub struct GuiConfig {
     pub url: String,
     pub body_str: String,
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
-    pub response: Option<Value>,
+    pub import_window_open: bool,
+    pub import_mode: ImportMode,
+    pub import_file_path: String,
 }
 impl Default for GuiConfig {
     fn default() -> Self {
@@ -55,33 +62,44 @@ impl Default for GuiConfig {
                     String::from("no-cache"),
                 ),
             ])),
-            response: None,
+            import_window_open: false,
+            import_file_path: String::from(""),
+            import_mode: ImportMode::COLLECTION,
         }
     }
 }
 
 pub struct Gui {
-    pub config: GuiConfig,
-    pub rt: runtime::Runtime,
+    pub config: Arc<RwLock<GuiConfig>>,
+    pub response: Arc<RwLock<Option<Value>>>,
 }
 impl Default for Gui {
     fn default() -> Self {
         Self {
-            config: GuiConfig::default(),
-            rt: runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .unwrap(),
+            config: Arc::new(RwLock::new(GuiConfig::default())),
+            response: Arc::new(RwLock::new(None)),
         }
     }
 }
 impl Gui {
-    fn spawn_submit(&mut self, input: HttpRequest) -> Result<Value, Box<dyn Error>> {
-        let result = self.rt.block_on(async {
-            let api_response = PostieApi::make_request(input).await;
-            api_response
+    async fn submit(input: HttpRequest) -> Result<Value, Box<dyn Error>> {
+        PostieApi::make_request(input).await
+    }
+    fn spawn_submit(&self, input: HttpRequest) -> Result<(), Box<dyn Error>> {
+        let result_for_worker = self.response.clone();
+        tokio::spawn(async move {
+            match Gui::submit(input).await {
+                Ok(res) => {
+                    println!("Res: {}", res);
+                    let mut result_write_guard = result_for_worker.try_write().unwrap();
+                    *result_write_guard = Some(res);
+                }
+                Err(err) => {
+                    println!("Error with request: {:?}", err);
+                }
+            };
         });
-        Ok(result.unwrap())
+        Ok(())
     }
     fn remove_duplicate_headers(headers: Vec<(String, String)>) -> Vec<(String, String)> {
         let mut unique_keys = HashSet::new();
@@ -97,195 +115,237 @@ impl Gui {
 }
 
 impl App for Gui {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        SidePanel::left("nav_panel").show(ctx, |ui| {
-            if ui.button("Request").clicked() {
-                self.config.active_window = ActiveWindow::REQUEST;
-            }
-            if ui.button("Environment").clicked() {
-                self.config.active_window = ActiveWindow::ENVIRONMENT;
-            }
-            if ui.button("History").clicked() {
-                self.config.active_window = ActiveWindow::HISTORY;
-            }
-        });
-        SidePanel::left("content_panel").show(ctx, |ui| match self.config.active_window {
-            ActiveWindow::REQUEST => {
-                ui.label("Collections");
-            }
-            ActiveWindow::ENVIRONMENT => {
-                ui.label("Environments");
-            }
-            ActiveWindow::HISTORY => {
-                ui.label("History");
-            }
-        });
-        TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            ui.heading("Welcome to Postie!");
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        TopBottomPanel::top("menu_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ComboBox::from_label("")
-                    .selected_text(format!("{:?}", self.config.selected_http_method))
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(
-                            &mut self.config.selected_http_method,
-                            HttpMethod::GET,
-                            "GET",
-                        );
-                        ui.selectable_value(
-                            &mut self.config.selected_http_method,
-                            HttpMethod::POST,
-                            "POST",
-                        );
-                        ui.selectable_value(
-                            &mut self.config.selected_http_method,
-                            HttpMethod::PUT,
-                            "PUT",
-                        );
-                        ui.selectable_value(
-                            &mut self.config.selected_http_method,
-                            HttpMethod::DELETE,
-                            "DELETE",
-                        );
-                        ui.selectable_value(
-                            &mut self.config.selected_http_method,
-                            HttpMethod::PATCH,
-                            "PATCH",
-                        );
-                        ui.selectable_value(
-                            &mut self.config.selected_http_method,
-                            HttpMethod::OPTIONS,
-                            "OPTIONS",
-                        );
-                        ui.selectable_value(
-                            &mut self.config.selected_http_method,
-                            HttpMethod::HEAD,
-                            "HEAD",
-                        );
+                ui.menu_button("Menu", |ui| {
+                    ui.menu_button("New", |ui| {
+                        if ui.button("Collection").clicked() {
+                            ui.close_menu();
+                        };
+                        if ui.button("Evnironment").clicked() {
+                            ui.close_menu();
+                        };
                     });
-                ui.label("URL:");
-                ui.text_edit_singleline(&mut self.config.url);
-                if ui.button("Submit").clicked() {
-                    let body = if self.config.selected_http_method != HttpMethod::GET {
-                        Some(
-                            serde_json::from_str(&self.config.body_str)
-                                .expect("Body is invalid json"),
-                        )
-                    } else {
-                        None
-                    };
-                    let submitted_headers = self
-                        .config
-                        .headers
-                        .borrow_mut()
-                        .iter()
-                        .filter(|h| h.0 == true)
-                        .map(|h| (h.1.to_owned(), h.2.to_owned()))
-                        .collect();
-                    let request = HttpRequest {
-                        id: Uuid::new_v4(),
-                        name: None,
-                        headers: Some(Gui::remove_duplicate_headers(submitted_headers)),
-                        body,
-                        method: self.config.selected_http_method.clone(),
-                        url: self.config.url.clone(),
-                    };
-
-                    let response = Gui::spawn_submit(self, request);
-                    if response.is_ok() {
-                        self.config.response = Some(response.unwrap());
-                    }
-                }
-            });
-            ui.horizontal(|ui| {
-                if ui.button("Params").clicked() {
-                    self.config.request_window_mode = RequestWindowMode::PARAMS;
-                }
-                if ui.button("Headers").clicked() {
-                    self.config.request_window_mode = RequestWindowMode::HEADERS;
-                }
-                if ui.button("Body").clicked() {
-                    self.config.request_window_mode = RequestWindowMode::BODY;
-                }
+                    ui.menu_button("Import", |ui| {
+                        if ui.button("Collection").clicked() {
+                            if let Ok(mut config) = self.config.try_write() {
+                                (*config).import_window_open = true;
+                                (*config).import_mode = ImportMode::COLLECTION;
+                            }
+                        };
+                        if ui.button("Environment").clicked() {
+                            if let Ok(mut config) = self.config.try_write() {
+                                (*config).import_window_open = true;
+                                (*config).import_mode = ImportMode::ENVIRONMENT;
+                            }
+                        };
+                    });
+                    ui.menu_button("Export", |ui| {
+                        if ui.button("Collection").clicked() {
+                            ui.close_menu();
+                        };
+                        if ui.button("Environment").clicked() {
+                            ui.close_menu();
+                        };
+                    });
+                });
             });
         });
-        match self.config.request_window_mode {
-            RequestWindowMode::BODY => {
-                TopBottomPanel::top("request_panel")
-                    .resizable(true)
-                    .min_height(250.0)
-                    .show(ctx, |ui| {
-                        ScrollArea::vertical().show(ui, |ui| {
-                            ui.add(
-                                TextEdit::multiline(&mut self.config.body_str)
-                                    .code_editor()
-                                    .desired_rows(20)
-                                    .lock_focus(true)
-                                    .font(TextStyle::Monospace),
+        SidePanel::left("nav_panel").show(ctx, |ui| {
+            if let Ok(mut config) = self.config.try_write() {
+                if ui.button("Request").clicked() {
+                    (*config).active_window = ActiveWindow::REQUEST;
+                }
+                if ui.button("Environment").clicked() {
+                    (*config).active_window = ActiveWindow::ENVIRONMENT;
+                }
+                if ui.button("History").clicked() {
+                    (*config).active_window = ActiveWindow::HISTORY;
+                }
+            }
+        });
+        if let Ok(mut config) = self.config.try_write() {
+            let active_window = &config.active_window;
+            SidePanel::left("content_panel").show(ctx, |ui| match active_window {
+                ActiveWindow::REQUEST => {
+                    ui.label("Collections");
+                }
+                ActiveWindow::ENVIRONMENT => {
+                    ui.label("Environments");
+                }
+                ActiveWindow::HISTORY => {
+                    ui.label("History");
+                }
+            });
+            TopBottomPanel::top("top_panel").show(ctx, |ui| {
+                ui.heading("Welcome to Postie!");
+                ui.horizontal(|ui| {
+                    let mut method = &config.selected_http_method;
+                    ComboBox::from_label("")
+                        .selected_text(format!("{:?}", method))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut method, &HttpMethod::GET, "GET");
+                            ui.selectable_value(&mut method, &HttpMethod::POST, "POST");
+                            ui.selectable_value(&mut method, &HttpMethod::PUT, "PUT");
+                            ui.selectable_value(&mut method, &HttpMethod::DELETE, "DELETE");
+                            ui.selectable_value(&mut method, &HttpMethod::PATCH, "PATCH");
+                            ui.selectable_value(&mut method, &HttpMethod::OPTIONS, "OPTIONS");
+                            ui.selectable_value(&mut method, &HttpMethod::HEAD, "HEAD");
+                        });
+                    ui.label("URL:");
+                    ui.text_edit_singleline(&mut config.url);
+                    if ui.button("Submit").clicked() {
+                        let body = if config.selected_http_method != HttpMethod::GET {
+                            Some(
+                                serde_json::from_str(&config.body_str)
+                                    .expect("Body is invalid json"),
+                            )
+                        } else {
+                            None
+                        };
+                        let submitted_headers = config
+                            .headers
+                            .borrow_mut()
+                            .iter()
+                            .filter(|h| h.0 == true)
+                            .map(|h| (h.1.to_owned(), h.2.to_owned()))
+                            .collect();
+                        let request = HttpRequest {
+                            id: Uuid::new_v4(),
+                            name: None,
+                            headers: Some(Gui::remove_duplicate_headers(submitted_headers)),
+                            body,
+                            method: config.selected_http_method.clone(),
+                            url: config.url.clone(),
+                        };
+
+                        let _ = Gui::spawn_submit(self, request);
+                    }
+                });
+                ui.horizontal(|ui| {
+                    if ui.button("Params").clicked() {
+                        (*config).request_window_mode = RequestWindowMode::PARAMS;
+                    }
+                    if ui.button("Headers").clicked() {
+                        (*config).request_window_mode = RequestWindowMode::HEADERS;
+                    }
+                    if ui.button("Body").clicked() {
+                        (*config).request_window_mode = RequestWindowMode::BODY;
+                    }
+                });
+            });
+            match config.request_window_mode {
+                RequestWindowMode::BODY => {
+                    TopBottomPanel::top("request_panel")
+                        .resizable(true)
+                        .min_height(250.0)
+                        .show(ctx, |ui| {
+                            ScrollArea::vertical().show(ui, |ui| {
+                                ui.add(
+                                    TextEdit::multiline(&mut config.body_str)
+                                        .code_editor()
+                                        .desired_rows(20)
+                                        .lock_focus(true)
+                                        .font(TextStyle::Monospace),
+                                );
+                            });
+                        });
+                    if self.response.try_read().unwrap().is_some() {
+                        CentralPanel::default().show(ctx, |ui| {
+                            ui.label(
+                                self.response
+                                    .try_read()
+                                    .unwrap()
+                                    .as_ref()
+                                    .unwrap()
+                                    .to_string(),
                             );
                         });
-                    });
-                if self.config.response.is_some() {
+                    }
+                }
+                RequestWindowMode::PARAMS => {
                     CentralPanel::default().show(ctx, |ui| {
-                        ui.label(self.config.response.as_ref().unwrap().to_string());
+                        ui.label("params");
                     });
                 }
-            }
-            RequestWindowMode::PARAMS => {
-                CentralPanel::default().show(ctx, |ui| {
-                    ui.label("params");
-                });
-            }
-            RequestWindowMode::HEADERS => {
-                CentralPanel::default().show(ctx, |ui| {
-                    let table = TableBuilder::new(ui)
-                        .striped(true)
-                        .resizable(true)
-                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                        .column(Column::auto())
-                        .column(Column::auto())
-                        .column(Column::auto());
-                    table
-                        .header(20.0, |mut header| {
-                            header.col(|ui| {
-                                ui.strong("Enabled");
-                            });
-                            header.col(|ui| {
-                                ui.strong("Key");
-                            });
-                            header.col(|ui| {
-                                ui.strong("Value");
-                            });
-                        })
-                        .body(|mut body| {
-                            for header in self.config.headers.borrow_mut().iter_mut() {
+                RequestWindowMode::HEADERS => {
+                    CentralPanel::default().show(ctx, |ui| {
+                        let table = TableBuilder::new(ui)
+                            .striped(true)
+                            .resizable(true)
+                            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                            .column(Column::auto())
+                            .column(Column::auto())
+                            .column(Column::auto());
+                        table
+                            .header(20.0, |mut header| {
+                                header.col(|ui| {
+                                    ui.strong("Enabled");
+                                });
+                                header.col(|ui| {
+                                    ui.strong("Key");
+                                });
+                                header.col(|ui| {
+                                    ui.strong("Value");
+                                });
+                            })
+                            .body(|mut body| {
+                                for header in config.headers.borrow_mut().iter_mut() {
+                                    body.row(30.0, |mut row| {
+                                        let (enabled, key, value) = header;
+                                        row.col(|ui| {
+                                            ui.checkbox(enabled, "");
+                                        });
+                                        row.col(|ui| {
+                                            ui.text_edit_singleline(key);
+                                        });
+                                        row.col(|ui| {
+                                            ui.text_edit_singleline(value);
+                                        });
+                                    });
+                                }
                                 body.row(30.0, |mut row| {
-                                    let (enabled, key, value) = header;
                                     row.col(|ui| {
-                                        ui.checkbox(enabled, "");
+                                        if ui.button("Add").clicked() {
+                                            config.headers.borrow_mut().push((
+                                                true,
+                                                String::from(""),
+                                                String::from(""),
+                                            ));
+                                        };
                                     });
-                                    row.col(|ui| {
-                                        ui.text_edit_singleline(key);
-                                    });
-                                    row.col(|ui| {
-                                        ui.text_edit_singleline(value);
-                                    });
-                                });
-                            }
-                            body.row(30.0, |mut row| {
-                                row.col(|ui| {
-                                    if ui.button("Add").clicked() {
-                                        self.config.headers.borrow_mut().push((
-                                            true,
-                                            String::from(""),
-                                            String::from(""),
-                                        ));
-                                    };
                                 });
                             });
+                    });
+                }
+            };
+            if config.import_window_open == true {
+                egui::Window::new("Import Modal")
+                    .open(&mut config.import_window_open.clone())
+                    .show(ctx, |ui| {
+                        ui.label("Please copy and paste the file path to import");
+                        ui.horizontal(|ui| {
+                            ui.text_edit_singleline(&mut config.import_file_path.clone());
+                            if ui.button("Import").clicked() {
+                                let path = config.import_file_path.to_owned();
+                                let _ = match config.import_mode {
+                                    ImportMode::COLLECTION => {
+                                        tokio::spawn(async move {
+                                            PostieApi::import_collection(&path).await
+                                        });
+                                    }
+                                    ImportMode::ENVIRONMENT => {
+                                        tokio::spawn(async move {
+                                            PostieApi::import_environment(&path).await
+                                        });
+                                    }
+                                };
+                            };
                         });
-                });
+                    });
             }
-        };
+        }
     }
 }
 
