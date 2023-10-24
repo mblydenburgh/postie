@@ -2,9 +2,9 @@ use api::{domain::collection::CollectionItemOrFolder, PostieApi};
 
 use crate::helpers::spawn_test_app;
 
-#[test]
-fn can_parse_collection_with_all_fields() {
-    let app = spawn_test_app();
+#[tokio::test]
+async fn can_parse_collection_with_all_fields() {
+    let app = spawn_test_app().await;
     let test_collection = app.load_test_collection();
     let parsed = PostieApi::parse_collection(&test_collection);
     assert_eq!(parsed.info.name, "qp-external-partner");

@@ -1,5 +1,5 @@
 use api::{
-    domain::environment::{EnvironmentFile, EnvironmentValue, self},
+    domain::environment::{EnvironmentFile, EnvironmentValue},
     initialize_db, HttpMethod, HttpRequest, PostieApi,
 };
 use eframe::{
@@ -60,6 +60,7 @@ impl Default for GuiConfig {
 }
 
 pub struct Gui {
+    pub api: PostieApi,
     pub config: Arc<RwLock<GuiConfig>>,
     pub response: Arc<RwLock<Option<Value>>>,
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
@@ -68,6 +69,7 @@ pub struct Gui {
 impl Default for Gui {
     fn default() -> Self {
         Self {
+            api: PostieApi::new(),
             config: Arc::new(RwLock::new(GuiConfig::default())),
             response: Arc::new(RwLock::new(None)),
             headers: Rc::new(RefCell::new(vec![
@@ -97,13 +99,16 @@ impl Default for Gui {
     }
 }
 impl Gui {
-    async fn submit(input: HttpRequest) -> Result<Value, Box<dyn Error>> {
-        PostieApi::make_request(input).await
+    async fn submit(client: &PostieApi, input: HttpRequest) -> Result<Value, Box<dyn Error>> {
+        PostieApi::make_request(client, input).await
     }
     fn spawn_submit(&self, input: HttpRequest) -> Result<(), Box<dyn Error>> {
+        // TODO figure out how to imple Send for Gui so it can be passed to another thread.
+        // currently getting an error. Workaround is to just clone the PostieApi
         let result_for_worker = self.response.clone();
+        let client_clone = self.api.clone();
         tokio::spawn(async move {
-            match Gui::submit(input).await {
+            match Gui::submit(&client_clone, input).await {
                 Ok(res) => {
                     println!("Res: {}", res);
                     let mut result_write_guard = result_for_worker.try_write().unwrap();
@@ -126,24 +131,6 @@ impl Gui {
             }
         }
         result
-    }
-    fn substitute_variables_in_url(&self, raw_url: String) -> String {
-        println!("substituting env vars");
-        if let Some(environment) = &self.environment.borrow().clone() {
-            if let Some(values) = environment.clone().values {
-                let url = values.iter().fold(raw_url, |acc, env_value| {
-                    acc.replace(&format!("{{{{{}}}}}", env_value.key), &env_value.value)
-                });
-                println!("substituted url url: {}", url);
-                url
-            } else {
-                println!("env doesnt have values, returning original");
-                raw_url
-            }
-        } else {
-            println!("no environemnt, returning original");
-            raw_url
-        }
     }
 }
 
@@ -237,8 +224,6 @@ impl App for Gui {
                         } else {
                             None
                         };
-                        let url =
-                            self.substitute_variables_in_url(String::from(config.url.clone()));
                         let submitted_headers = self
                             .headers
                             .borrow_mut()
@@ -252,7 +237,8 @@ impl App for Gui {
                             headers: Some(Gui::remove_duplicate_headers(submitted_headers)),
                             body,
                             method: config.selected_http_method.clone(),
-                            url,
+                            url: config.url.clone(),
+                            environment: self.environment.borrow().clone(),
                         };
 
                         let _ = Gui::spawn_submit(self, request);

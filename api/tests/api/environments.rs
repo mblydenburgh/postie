@@ -2,9 +2,9 @@ use api::PostieApi;
 
 use crate::helpers::spawn_test_app;
 
-#[test]
-fn can_parse_environment_files() {
-    let app = spawn_test_app();
+#[tokio::test]
+async fn can_parse_environment_files() {
+    let app = spawn_test_app().await;
     let test_environment = app.load_test_environment();
     let parsed = PostieApi::parse_environment(test_environment);
 

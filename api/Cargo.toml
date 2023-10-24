@@ -11,3 +11,8 @@ serde = "1.0.188"
 serde_json = "1.0.107"
 uuid = { version = "1.4.1", features = ["v4", "fast-rng"] }
 sqlx = { version = "0.7", features = [ "runtime-tokio", "sqlite" ] }
+tokio = { version = "1", features = ["full"] }
+url = "2.2"
+
+[dev-dependencies]
+wiremock = "0.5"

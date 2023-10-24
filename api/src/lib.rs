@@ -6,7 +6,7 @@ use domain::collection::Collection;
 use domain::environment::EnvironmentFile;
 use reqwest::{
     header::{HeaderMap, HeaderName, HeaderValue},
-    Client, Method,
+    Method,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -32,6 +32,7 @@ pub struct HttpRequest {
     pub url: String,
     pub headers: Option<Vec<(String, String)>>,
     pub body: Option<Value>,
+    pub environment: Option<EnvironmentFile>,
 }
 
 pub struct RequestCollection {
@@ -44,16 +45,19 @@ pub struct Environment {
     pub variables: Vec<(String, String)>,
 }
 
+#[derive(Clone)]
 pub struct PostieApi {
-    pub environment: Option<String>,
+    pub client: reqwest::Client,
     pub collection: Option<String>,
+    pub environment: Option<String>,
 }
 
 impl PostieApi {
     pub fn new() -> Self {
         PostieApi {
-            environment: None,
+            client: reqwest::Client::new(),
             collection: None,
+            environment: None,
         }
     }
     pub fn parse_collection(collection_json: &str) -> Collection {
@@ -80,14 +84,26 @@ impl PostieApi {
         println!("Successfully parsed postman environment!");
         Ok(())
     }
-    pub fn save_environment(input: Environment) -> Result<(), Box<dyn Error>> {
+    pub fn save_environment(_input: Environment) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
-    pub fn save_collection(input: RequestCollection) -> Result<(), Box<dyn Error>> {
+    pub fn save_collection(_input: RequestCollection) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
-    pub async fn make_request(input: HttpRequest) -> Result<Value, Box<dyn Error>> {
-        let client = Client::new();
+    pub fn substitute_variables_in_url(environment: &EnvironmentFile, raw_url: String) -> String {
+        println!("substituting env vars");
+        if let Some(values) = environment.clone().values {
+            let url = values.iter().fold(raw_url, |acc, env_value| {
+                acc.replace(&format!("{{{{{}}}}}", env_value.key), &env_value.value)
+            });
+            println!("substituted url url: {}", url);
+            url
+        } else {
+            println!("env doesnt have values, returning original");
+            raw_url
+        }
+    }
+    pub async fn make_request(&self, input: HttpRequest) -> Result<Value, Box<dyn Error>> {
         println!("Submitting request: {:?}", input);
         let method = match input.method {
             HttpMethod::GET => Method::GET,
@@ -107,7 +123,12 @@ impl PostieApi {
                 headers.insert(header_name, header_value);
             }
         };
-        let mut req = client.request(method, input.url).headers(headers);
+
+        let url = match input.environment {
+            Some(env) => Self::substitute_variables_in_url(&env, input.url.clone()),
+            None => input.url,
+        };
+        let mut req = self.client.request(method, url).headers(headers);
         if input.body.is_some() {
             req = req.json(&input.body.unwrap_or_default());
         }
