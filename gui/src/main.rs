@@ -50,7 +50,7 @@ impl Default for GuiConfig {
             active_window: ActiveWindow::REQUEST,
             request_window_mode: RequestWindowMode::BODY,
             selected_http_method: HttpMethod::GET,
-            url: String::from("https://httpbin.org/json"),
+            url: String::from("{{HOST_URL}}/json"),
             body_str: String::from("{ \"foo\": \"bar\" }"),
             import_window_open: false,
             import_file_path: String::from(""),
@@ -64,7 +64,8 @@ pub struct Gui {
     pub config: Arc<RwLock<GuiConfig>>,
     pub response: Arc<RwLock<Option<Value>>>,
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
-    pub environment: Rc<RefCell<Option<api::domain::environment::EnvironmentFile>>>,
+    pub environment: Rc<RefCell<api::domain::environment::EnvironmentFile>>,
+    pub env_vars: Rc<RefCell<Vec<(bool, String, String, String)>>>,
 }
 impl Default for Gui {
     fn default() -> Self {
@@ -85,16 +86,22 @@ impl Default for Gui {
                     String::from("no-cache"),
                 ),
             ])),
-            environment: Rc::new(RefCell::new(Some(EnvironmentFile {
+            environment: Rc::new(RefCell::new(EnvironmentFile {
                 id: String::from("id"),
-                name: String::from("some environment"),
+                name: String::from("Default"),
                 values: Some(vec![EnvironmentValue {
                     key: String::from("HOST_URL"),
                     value: String::from("https://httpbin.org"),
                     r#type: String::from("default"),
                     enabled: true,
                 }]),
-            }))),
+            })),
+            env_vars: Rc::new(RefCell::new(vec![(
+                true,
+                String::from("HOST_URL"),
+                String::from("https://httpbin.org"),
+                String::from("default"),
+            )])),
         }
     }
 }
@@ -362,48 +369,68 @@ impl App for Gui {
                                     ui.strong("Key");
                                 });
                                 header.col(|ui| {
-                                    ui.strong("Type");
+                                    ui.strong("Value");
                                 });
                                 header.col(|ui| {
-                                    ui.strong("Value");
+                                    ui.strong("Type");
                                 });
                             })
                             .body(|mut body| {
-                                if let Some(environemnt) = self.environment.borrow_mut().clone() {
-                                    if let Some(values) = environemnt.values {
-                                        for mut value in values {
-                                            body.row(30.0, |mut row| {
-                                                row.col(|ui| {
-                                                    ui.checkbox(&mut value.enabled, "");
-                                                });
-                                                row.col(|ui| {
-                                                    ui.text_edit_singleline(&mut value.key);
-                                                });
-                                                row.col(|ui| {
-                                                    ui.text_edit_singleline(&mut value.r#type);
-                                                });
-                                                row.col(|ui| {
-                                                    ui.text_edit_singleline(&mut value.value);
-                                                });
-                                            });
-                                        }
-                                    }
+                                for env_var in self.env_vars.borrow_mut().iter_mut() {
+                                    let (enabled, key, value, r#type) = env_var;
+                                    body.row(30.0, |mut row| {
+                                        row.col(|ui| {
+                                            ui.checkbox(enabled, "");
+                                        });
+                                        row.col(|ui| {
+                                            ui.text_edit_singleline(key);
+                                        });
+                                        row.col(|ui| {
+                                            ui.text_edit_singleline(value);
+                                        });
+                                        row.col(|ui| {
+                                            ui.text_edit_singleline(r#type);
+                                        });
+                                    });
                                 }
+                                //TODO - make inputs work with a struct. can only get things to
+                                //compile by cloning the .borrow_mut, but since that creates a new
+                                //space in memory, the updates to the input dont update the
+                                //original env var value. end effect is the text input doesnt
+                                //change value.
+                                //if let Some(values) = &self.environment.borrow_mut().values {
+                                //    for mut value in values {
+                                //        body.row(30.0, |mut row| {
+                                //            row.col(|ui| {
+                                //                ui.checkbox(value.enabled, "");
+                                //            });
+                                //            row.col(|ui| {
+                                //                ui.text_edit_singleline(&mut value.key);
+                                //            });
+                                //            row.col(|ui| {
+                                //                ui.text_edit_singleline(&mut value.r#type);
+                                //            });
+                                //            row.col(|ui| {
+                                //                ui.text_edit_singleline(&mut value.value);
+                                //            });
+                                //        });
+                                //    }
+                                //}
                                 body.row(30.0, |mut row| {
                                     row.col(|ui| {
                                         if ui.button("Add").clicked() {
-                                            if let Some(environemnt) =
-                                                self.environment.borrow_mut().clone()
-                                            {
-                                                if let Some(mut values) = environemnt.values {
-                                                    values.push(EnvironmentValue {
-                                                        key: String::from(""),
-                                                        value: String::from(""),
-                                                        r#type: String::from("default"),
-                                                        enabled: true,
-                                                    });
-                                                }
-                                            }
+                                            self.env_vars.borrow_mut().push((
+                                                true,
+                                                String::from(""),
+                                                String::from(""),
+                                                String::from("default"),
+                                            ));
+                                            //self.environment.borrow_mut().values.unwrap().push(EnvironmentValue {
+                                            //    key: String::from(""),
+                                            //    value: String::from(""),
+                                            //    r#type: String::from("default"),
+                                            //    enabled: true,
+                                            //});
                                         };
                                     });
                                 });

@@ -1,4 +1,7 @@
-use api::{domain::environment::{EnvironmentFile, EnvironmentValue}, PostieApi};
+use api::{
+    domain::environment::{EnvironmentFile, EnvironmentValue},
+    PostieApi,
+};
 use reqwest::Url;
 use wiremock::Match;
 
@@ -78,6 +81,6 @@ fn returns_base_url_if_env_vars_dont_exist() {
 //        .expect(1)
 //        .mount(&test_app.test_server)
 //        .await;
-//            
+//
 //    let _ = PostieApi::make_request(&test_app.app,input);
 //}

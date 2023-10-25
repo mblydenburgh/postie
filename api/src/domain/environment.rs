@@ -15,4 +15,4 @@ pub struct EnvironmentValue {
     pub enabled: bool,
 }
 
-unsafe impl Send for EnvironmentFile{}
+unsafe impl Send for EnvironmentFile {}

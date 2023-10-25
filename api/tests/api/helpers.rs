@@ -3,7 +3,7 @@ use wiremock::MockServer;
 
 pub struct TestApp {
     pub app: PostieApi,
-    pub test_server: MockServer
+    pub test_server: MockServer,
 }
 
 impl TestApp {

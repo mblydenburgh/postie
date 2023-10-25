@@ -32,7 +32,7 @@ pub struct HttpRequest {
     pub url: String,
     pub headers: Option<Vec<(String, String)>>,
     pub body: Option<Value>,
-    pub environment: Option<EnvironmentFile>,
+    pub environment: EnvironmentFile,
 }
 
 pub struct RequestCollection {
@@ -124,10 +124,7 @@ impl PostieApi {
             }
         };
 
-        let url = match input.environment {
-            Some(env) => Self::substitute_variables_in_url(&env, input.url.clone()),
-            None => input.url,
-        };
+        let url = Self::substitute_variables_in_url(&input.environment, input.url.clone());
         let mut req = self.client.request(method, url).headers(headers);
         if input.body.is_some() {
             req = req.json(&input.body.unwrap_or_default());
