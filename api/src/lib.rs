@@ -96,7 +96,7 @@ impl PostieApi {
             let url = values.iter().fold(raw_url, |acc, env_value| {
                 acc.replace(&format!("{{{{{}}}}}", env_value.key), &env_value.value)
             });
-            println!("substituted url url: {}", url);
+            println!("final url: {}", url);
             url
         } else {
             println!("env doesnt have values, returning original");

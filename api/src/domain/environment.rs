@@ -14,5 +14,3 @@ pub struct EnvironmentValue {
     pub r#type: String,
     pub enabled: bool,
 }
-
-unsafe impl Send for EnvironmentFile {}
