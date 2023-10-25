@@ -1,13 +1,19 @@
 use api::PostieApi;
+use wiremock::MockServer;
 
 pub struct TestApp {
     pub app: PostieApi,
+    pub test_server: MockServer,
 }
 
 impl TestApp {
-    pub fn new() -> Self {
+    pub async fn new() -> Self {
+        let mock_server = MockServer::start().await;
+        let mock_client = reqwest::Client::builder().build().unwrap();
         Self {
+            test_server: mock_server,
             app: PostieApi {
+                client: mock_client,
                 environment: None,
                 collection: Some("test_collection.json".to_string()),
             },
@@ -23,7 +29,7 @@ impl TestApp {
     }
 }
 
-pub fn spawn_test_app() -> TestApp {
+pub async fn spawn_test_app() -> TestApp {
     let app = TestApp::new();
-    app
+    app.await
 }

@@ -1,4 +1,7 @@
-use api::{initialize_db, HttpMethod, HttpRequest, PostieApi};
+use api::{
+    domain::environment::{EnvironmentFile, EnvironmentValue},
+    initialize_db, HttpMethod, HttpRequest, PostieApi,
+};
 use eframe::{
     egui::{CentralPanel, ComboBox, ScrollArea, SidePanel, TextEdit, TopBottomPanel},
     App, NativeOptions,
@@ -27,6 +30,7 @@ pub enum RequestWindowMode {
     PARAMS,
     HEADERS,
     BODY,
+    ENVIRONMENT,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -36,7 +40,6 @@ pub struct GuiConfig {
     pub selected_http_method: HttpMethod,
     pub url: String,
     pub body_str: String,
-    pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
     pub import_window_open: bool,
     pub import_mode: ImportMode,
     pub import_file_path: String,
@@ -47,8 +50,29 @@ impl Default for GuiConfig {
             active_window: ActiveWindow::REQUEST,
             request_window_mode: RequestWindowMode::BODY,
             selected_http_method: HttpMethod::GET,
-            url: String::from("https://httpbin.org/json"),
+            url: String::from("{{HOST_URL}}/json"),
             body_str: String::from("{ \"foo\": \"bar\" }"),
+            import_window_open: false,
+            import_file_path: String::from(""),
+            import_mode: ImportMode::COLLECTION,
+        }
+    }
+}
+
+pub struct Gui {
+    pub api: PostieApi,
+    pub config: Arc<RwLock<GuiConfig>>,
+    pub response: Arc<RwLock<Option<Value>>>,
+    pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
+    pub environment: Rc<RefCell<api::domain::environment::EnvironmentFile>>,
+    pub env_vars: Rc<RefCell<Vec<(bool, String, String, String)>>>,
+}
+impl Default for Gui {
+    fn default() -> Self {
+        Self {
+            api: PostieApi::new(),
+            config: Arc::new(RwLock::new(GuiConfig::default())),
+            response: Arc::new(RwLock::new(None)),
             headers: Rc::new(RefCell::new(vec![
                 (
                     true,
@@ -62,33 +86,36 @@ impl Default for GuiConfig {
                     String::from("no-cache"),
                 ),
             ])),
-            import_window_open: false,
-            import_file_path: String::from(""),
-            import_mode: ImportMode::COLLECTION,
-        }
-    }
-}
-
-pub struct Gui {
-    pub config: Arc<RwLock<GuiConfig>>,
-    pub response: Arc<RwLock<Option<Value>>>,
-}
-impl Default for Gui {
-    fn default() -> Self {
-        Self {
-            config: Arc::new(RwLock::new(GuiConfig::default())),
-            response: Arc::new(RwLock::new(None)),
+            environment: Rc::new(RefCell::new(EnvironmentFile {
+                id: String::from("id"),
+                name: String::from("Default"),
+                values: Some(vec![EnvironmentValue {
+                    key: String::from("HOST_URL"),
+                    value: String::from("https://httpbin.org"),
+                    r#type: String::from("default"),
+                    enabled: true,
+                }]),
+            })),
+            env_vars: Rc::new(RefCell::new(vec![(
+                true,
+                String::from("HOST_URL"),
+                String::from("https://httpbin.org"),
+                String::from("default"),
+            )])),
         }
     }
 }
 impl Gui {
-    async fn submit(input: HttpRequest) -> Result<Value, Box<dyn Error>> {
-        PostieApi::make_request(input).await
+    async fn submit(client: &PostieApi, input: HttpRequest) -> Result<Value, Box<dyn Error>> {
+        PostieApi::make_request(client, input).await
     }
     fn spawn_submit(&self, input: HttpRequest) -> Result<(), Box<dyn Error>> {
+        // TODO figure out how to imple Send for Gui so it can be passed to another thread.
+        // currently getting an error. Workaround is to just clone the PostieApi
         let result_for_worker = self.response.clone();
+        let client_clone = self.api.clone();
         tokio::spawn(async move {
-            match Gui::submit(input).await {
+            match Gui::submit(&client_clone, input).await {
                 Ok(res) => {
                     println!("Res: {}", res);
                     let mut result_write_guard = result_for_worker.try_write().unwrap();
@@ -204,7 +231,7 @@ impl App for Gui {
                         } else {
                             None
                         };
-                        let submitted_headers = config
+                        let submitted_headers = self
                             .headers
                             .borrow_mut()
                             .iter()
@@ -218,12 +245,16 @@ impl App for Gui {
                             body,
                             method: config.selected_http_method.clone(),
                             url: config.url.clone(),
+                            environment: self.environment.borrow().clone(),
                         };
 
                         let _ = Gui::spawn_submit(self, request);
                     }
                 });
                 ui.horizontal(|ui| {
+                    if ui.button("Environment").clicked() {
+                        (*config).request_window_mode = RequestWindowMode::ENVIRONMENT;
+                    }
                     if ui.button("Params").clicked() {
                         (*config).request_window_mode = RequestWindowMode::PARAMS;
                     }
@@ -291,7 +322,7 @@ impl App for Gui {
                                 });
                             })
                             .body(|mut body| {
-                                for header in config.headers.borrow_mut().iter_mut() {
+                                for header in self.headers.borrow_mut().iter_mut() {
                                     body.row(30.0, |mut row| {
                                         let (enabled, key, value) = header;
                                         row.col(|ui| {
@@ -308,11 +339,98 @@ impl App for Gui {
                                 body.row(30.0, |mut row| {
                                     row.col(|ui| {
                                         if ui.button("Add").clicked() {
-                                            config.headers.borrow_mut().push((
+                                            self.headers.borrow_mut().push((
                                                 true,
                                                 String::from(""),
                                                 String::from(""),
                                             ));
+                                        };
+                                    });
+                                });
+                            });
+                    });
+                }
+                RequestWindowMode::ENVIRONMENT => {
+                    CentralPanel::default().show(ctx, |ui| {
+                        let table = TableBuilder::new(ui)
+                            .striped(true)
+                            .resizable(true)
+                            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                            .column(Column::auto())
+                            .column(Column::auto())
+                            .column(Column::auto())
+                            .column(Column::auto());
+                        table
+                            .header(20.0, |mut header| {
+                                header.col(|ui| {
+                                    ui.strong("Enabled");
+                                });
+                                header.col(|ui| {
+                                    ui.strong("Key");
+                                });
+                                header.col(|ui| {
+                                    ui.strong("Value");
+                                });
+                                header.col(|ui| {
+                                    ui.strong("Type");
+                                });
+                            })
+                            .body(|mut body| {
+                                for env_var in self.env_vars.borrow_mut().iter_mut() {
+                                    let (enabled, key, value, r#type) = env_var;
+                                    body.row(30.0, |mut row| {
+                                        row.col(|ui| {
+                                            ui.checkbox(enabled, "");
+                                        });
+                                        row.col(|ui| {
+                                            ui.text_edit_singleline(key);
+                                        });
+                                        row.col(|ui| {
+                                            ui.text_edit_singleline(value);
+                                        });
+                                        row.col(|ui| {
+                                            ui.text_edit_singleline(r#type);
+                                        });
+                                    });
+                                }
+                                //TODO - make inputs work with a struct. can only get things to
+                                //compile by cloning the .borrow_mut, but since that creates a new
+                                //space in memory, the updates to the input dont update the
+                                //original env var value. end effect is the text input doesnt
+                                //change value.
+                                //if let Some(values) = &self.environment.borrow_mut().values {
+                                //    for mut value in values {
+                                //        body.row(30.0, |mut row| {
+                                //            row.col(|ui| {
+                                //                ui.checkbox(value.enabled, "");
+                                //            });
+                                //            row.col(|ui| {
+                                //                ui.text_edit_singleline(&mut value.key);
+                                //            });
+                                //            row.col(|ui| {
+                                //                ui.text_edit_singleline(&mut value.r#type);
+                                //            });
+                                //            row.col(|ui| {
+                                //                ui.text_edit_singleline(&mut value.value);
+                                //            });
+                                //        });
+                                //    }
+                                //}
+                                body.row(30.0, |mut row| {
+                                    row.col(|ui| {
+                                        if ui.button("Add").clicked() {
+                                            self.env_vars.borrow_mut().push((
+                                                true,
+                                                String::from(""),
+                                                String::from(""),
+                                                String::from("default"),
+                                            ));
+                                            //self.environment.borrow_mut().values.unwrap().push(EnvironmentValue {
+                                            //    key: String::from(""),
+                                            //    value: String::from(""),
+                                            //    r#type: String::from("default"),
+                                            //    enabled: true,
+                                            //});
                                         };
                                     });
                                 });
