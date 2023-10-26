@@ -124,7 +124,7 @@ impl PostieApi {
         let res_json = serde_json::from_str(&res_str).unwrap_or_default();
 
         let mut db = PostieDb::new().await;
-        let _ = db.save_request_history().await;
+        let _ = db.save_request_history(DBRequest { id: input.id.to_string(), body: "hi".to_string(), name: "my request".to_string(), method: "POST".to_string(), url: "https://google.com".to_string(), headers: json!({ "x-api-key": "foo" }).to_string() }).await?;
 
         Ok(res_json)
     }
@@ -142,13 +142,47 @@ pub struct PostieDb {
     pub connection: SqliteConnection
 }
 
+#[derive(Debug)]
+pub struct DBRequest {
+    id: String,
+    method: String,
+    url: String,
+    name: String,
+    headers: String,
+    body: String
+}
+
+struct DBResponse {
+    id: String,
+    status_code: u8,
+    name: String,
+    headers: String,
+    body: String
+}
+
+struct DBRequestHistoryItem {
+    id: String,
+    request_id: String,
+    response_id: String,
+    sent_at: String,
+    response_time: u32
+}
+
 impl PostieDb {
     pub async fn new() -> Self {
         PostieDb { connection: initialize_db().await.ok().unwrap() }
     }
 
-    pub async fn save_request_history(&mut self) {
-        let res = sqlx::query!("SELECT * FROM request_history").fetch_all(&mut self.connection).await;
-        println!("db query result is: {:?}", res);
+    pub async fn save_request_history(&mut self, request: DBRequest) -> Result<(), Box<dyn Error>> {
+        println!("got request: {:?}", request);
+        let mut transaction = self.connection.begin().await?;
+        // let res = sqlx::query!("SELECT * FROM request_history").fetch_all(&mut *transaction).await;
+
+        let _request = sqlx::query_as!(DBRequest, "INSERT INTO request (id, method, url, name, headers, body) VALUES ($1, $2, $3, $4, $5, $6)", request.id, request.method, request.url, request.name, request.headers, request.body).execute(&mut *transaction).await?;
+
+        transaction.commit().await?;
+        println!("transaction committed");
+
+        Ok(())
     }
 }
