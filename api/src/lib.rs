@@ -45,19 +45,21 @@ pub struct Environment {
     pub variables: Vec<(String, String)>,
 }
 
-#[derive(Clone)]
 pub struct PostieApi {
     pub client: reqwest::Client,
     pub collection: Option<String>,
     pub environment: Option<String>,
+    pub db_connection: SqliteConnection,
 }
 
 impl PostieApi {
-    pub fn new() -> Self {
+    pub async fn new() -> Self {
+        let db_connection = initialize_db().await.unwrap();
         PostieApi {
             client: reqwest::Client::new(),
             collection: None,
             environment: None,
+            db_connection,
         }
     }
     pub fn parse_collection(collection_json: &str) -> Collection {
@@ -79,9 +81,27 @@ impl PostieApi {
         Ok(())
     }
     pub async fn import_environment(path: &str) -> Result<(), Box<dyn Error + Send>> {
+        let mut api = PostieApi::new().await;
         let file_str = Self::read_file(path).unwrap();
-        let _collection = Self::parse_environment(&file_str);
+        let environment = Self::parse_environment(&file_str);
         println!("Successfully parsed postman environment!");
+        let value_json = match environment.values {
+            None => json!("[]"),
+            Some(values) => Value::String(serde_json::to_string(&values).unwrap()),
+        };
+        sqlx::query!(
+            r#"
+            INSERT INTO environment (id, name, variables)
+            VALUES ($1, $2, $3)
+            "#,
+            environment.id,
+            environment.name,
+            value_json
+        )
+        .execute(&mut api.db_connection)
+        .await
+        .unwrap();
+        println!("Saved environment to database");
         Ok(())
     }
     pub fn save_environment(_input: Environment) -> Result<(), Box<dyn Error>> {
@@ -103,7 +123,8 @@ impl PostieApi {
             raw_url
         }
     }
-    pub async fn make_request(&self, input: HttpRequest) -> Result<Value, Box<dyn Error>> {
+    pub async fn make_request(input: HttpRequest) -> Result<Value, Box<dyn Error>> {
+        let api = PostieApi::new().await;
         println!("Submitting request: {:?}", input);
         let method = match input.method {
             HttpMethod::GET => Method::GET,
@@ -125,7 +146,7 @@ impl PostieApi {
         };
 
         let url = Self::substitute_variables_in_url(&input.environment, input.url.clone());
-        let mut req = self.client.request(method, url).headers(headers);
+        let mut req = api.client.request(method, url).headers(headers);
         if input.body.is_some() {
             req = req.json(&input.body.unwrap_or_default());
         }

@@ -1,6 +1,6 @@
 use api::{
     domain::environment::{EnvironmentFile, EnvironmentValue},
-    initialize_db, HttpMethod, HttpRequest, PostieApi,
+    HttpMethod, HttpRequest, PostieApi,
 };
 use eframe::{
     egui::{CentralPanel, ComboBox, ScrollArea, SidePanel, TextEdit, TopBottomPanel},
@@ -60,18 +60,22 @@ impl Default for GuiConfig {
 }
 
 pub struct Gui {
-    pub api: PostieApi,
-    pub config: Arc<RwLock<GuiConfig>>,
     pub response: Arc<RwLock<Option<Value>>>,
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
     pub environment: Rc<RefCell<api::domain::environment::EnvironmentFile>>,
     pub env_vars: Rc<RefCell<Vec<(bool, String, String, String)>>>,
+    pub active_window: RwLock<ActiveWindow>,
+    pub request_window_mode: RwLock<RequestWindowMode>,
+    pub selected_http_method: HttpMethod,
+    pub url: String,
+    pub body_str: String,
+    pub import_window_open: RwLock<bool>,
+    pub import_mode: RwLock<ImportMode>,
+    pub import_file_path: String,
 }
 impl Default for Gui {
     fn default() -> Self {
         Self {
-            api: PostieApi::new(),
-            config: Arc::new(RwLock::new(GuiConfig::default())),
             response: Arc::new(RwLock::new(None)),
             headers: Rc::new(RefCell::new(vec![
                 (
@@ -102,20 +106,27 @@ impl Default for Gui {
                 String::from("https://httpbin.org"),
                 String::from("default"),
             )])),
+            active_window: RwLock::new(ActiveWindow::REQUEST),
+            request_window_mode: RwLock::new(RequestWindowMode::BODY),
+            selected_http_method: HttpMethod::GET,
+            url: String::from("{{HOST_URL}}/json"),
+            body_str: String::from("{ \"foo\": \"bar\" }"),
+            import_window_open: RwLock::new(false),
+            import_file_path: String::from(""),
+            import_mode: RwLock::new(ImportMode::COLLECTION),
         }
     }
 }
 impl Gui {
-    async fn submit(client: &PostieApi, input: HttpRequest) -> Result<Value, Box<dyn Error>> {
-        PostieApi::make_request(client, input).await
+    async fn submit(input: HttpRequest) -> Result<Value, Box<dyn Error>> {
+        PostieApi::make_request(input).await
     }
-    fn spawn_submit(&self, input: HttpRequest) -> Result<(), Box<dyn Error>> {
+    fn spawn_submit(&mut self, input: HttpRequest) -> Result<(), Box<dyn Error>> {
         // TODO figure out how to imple Send for Gui so it can be passed to another thread.
         // currently getting an error. Workaround is to just clone the PostieApi
         let result_for_worker = self.response.clone();
-        let client_clone = self.api.clone();
         tokio::spawn(async move {
-            match Gui::submit(&client_clone, input).await {
+            match Gui::submit(input).await {
                 Ok(res) => {
                     println!("Res: {}", res);
                     let mut result_write_guard = result_for_worker.try_write().unwrap();
@@ -156,15 +167,19 @@ impl App for Gui {
                     });
                     ui.menu_button("Import", |ui| {
                         if ui.button("Collection").clicked() {
-                            if let Ok(mut config) = self.config.try_write() {
-                                (*config).import_window_open = true;
-                                (*config).import_mode = ImportMode::COLLECTION;
+                            if let Ok(mut import_open) = self.import_window_open.try_write() {
+                                *import_open = true;
+                            }
+                            if let Ok(mut import_mode) = self.import_mode.try_write() {
+                                *import_mode = ImportMode::COLLECTION;
                             }
                         };
                         if ui.button("Environment").clicked() {
-                            if let Ok(mut config) = self.config.try_write() {
-                                (*config).import_window_open = true;
-                                (*config).import_mode = ImportMode::ENVIRONMENT;
+                            if let Ok(mut import_open) = self.import_window_open.try_write() {
+                                *import_open = true;
+                            }
+                            if let Ok(mut import_mode) = self.import_mode.try_write() {
+                                *import_mode = ImportMode::ENVIRONMENT;
                             }
                         };
                     });
@@ -180,21 +195,20 @@ impl App for Gui {
             });
         });
         SidePanel::left("nav_panel").show(ctx, |ui| {
-            if let Ok(mut config) = self.config.try_write() {
+            if let Ok(mut active_window) = self.active_window.try_write() {
                 if ui.button("Request").clicked() {
-                    (*config).active_window = ActiveWindow::REQUEST;
+                    *active_window = ActiveWindow::REQUEST;
                 }
                 if ui.button("Environment").clicked() {
-                    (*config).active_window = ActiveWindow::ENVIRONMENT;
+                    *active_window = ActiveWindow::ENVIRONMENT;
                 }
                 if ui.button("History").clicked() {
-                    (*config).active_window = ActiveWindow::HISTORY;
+                    *active_window = ActiveWindow::HISTORY;
                 }
             }
         });
-        if let Ok(mut config) = self.config.try_write() {
-            let active_window = &config.active_window;
-            SidePanel::left("content_panel").show(ctx, |ui| match active_window {
+        if let Ok(active_window) = self.active_window.try_read() {
+            SidePanel::left("content_panel").show(ctx, |ui| match *active_window {
                 ActiveWindow::REQUEST => {
                     ui.label("Collections");
                 }
@@ -205,68 +219,69 @@ impl App for Gui {
                     ui.label("History");
                 }
             });
-            TopBottomPanel::top("top_panel").show(ctx, |ui| {
-                ui.heading("Welcome to Postie!");
-                ui.horizontal(|ui| {
-                    let mut method = &config.selected_http_method;
-                    ComboBox::from_label("")
-                        .selected_text(format!("{:?}", method))
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut method, &HttpMethod::GET, "GET");
-                            ui.selectable_value(&mut method, &HttpMethod::POST, "POST");
-                            ui.selectable_value(&mut method, &HttpMethod::PUT, "PUT");
-                            ui.selectable_value(&mut method, &HttpMethod::DELETE, "DELETE");
-                            ui.selectable_value(&mut method, &HttpMethod::PATCH, "PATCH");
-                            ui.selectable_value(&mut method, &HttpMethod::OPTIONS, "OPTIONS");
-                            ui.selectable_value(&mut method, &HttpMethod::HEAD, "HEAD");
-                        });
-                    ui.label("URL:");
-                    ui.text_edit_singleline(&mut config.url);
-                    if ui.button("Submit").clicked() {
-                        let body = if config.selected_http_method != HttpMethod::GET {
-                            Some(
-                                serde_json::from_str(&config.body_str)
-                                    .expect("Body is invalid json"),
-                            )
-                        } else {
-                            None
-                        };
-                        let submitted_headers = self
-                            .headers
-                            .borrow_mut()
-                            .iter()
-                            .filter(|h| h.0 == true)
-                            .map(|h| (h.1.to_owned(), h.2.to_owned()))
-                            .collect();
-                        let request = HttpRequest {
-                            id: Uuid::new_v4(),
-                            name: None,
-                            headers: Some(Gui::remove_duplicate_headers(submitted_headers)),
-                            body,
-                            method: config.selected_http_method.clone(),
-                            url: config.url.clone(),
-                            environment: self.environment.borrow().clone(),
-                        };
+        }
+        TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            ui.heading("Welcome to Postie!");
+            ui.horizontal(|ui| {
+                let mut method = &self.selected_http_method;
+                ComboBox::from_label("")
+                    .selected_text(format!("{:?}", method))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut method, &HttpMethod::GET, "GET");
+                        ui.selectable_value(&mut method, &HttpMethod::POST, "POST");
+                        ui.selectable_value(&mut method, &HttpMethod::PUT, "PUT");
+                        ui.selectable_value(&mut method, &HttpMethod::DELETE, "DELETE");
+                        ui.selectable_value(&mut method, &HttpMethod::PATCH, "PATCH");
+                        ui.selectable_value(&mut method, &HttpMethod::OPTIONS, "OPTIONS");
+                        ui.selectable_value(&mut method, &HttpMethod::HEAD, "HEAD");
+                    });
+                ui.label("URL:");
+                ui.text_edit_singleline(&mut self.url);
+                if ui.button("Submit").clicked() {
+                    let body = if self.selected_http_method != HttpMethod::GET {
+                        Some(serde_json::from_str(&self.body_str).expect("Body is invalid json"))
+                    } else {
+                        None
+                    };
+                    let submitted_headers = self
+                        .headers
+                        .borrow_mut()
+                        .iter()
+                        .filter(|h| h.0 == true)
+                        .map(|h| (h.1.to_owned(), h.2.to_owned()))
+                        .collect();
+                    let request = HttpRequest {
+                        id: Uuid::new_v4(),
+                        name: None,
+                        headers: Some(Gui::remove_duplicate_headers(submitted_headers)),
+                        body,
+                        method: self.selected_http_method.clone(),
+                        url: self.url.clone(),
+                        environment: self.environment.borrow().clone(),
+                    };
 
-                        let _ = Gui::spawn_submit(self, request);
-                    }
-                });
+                    let _ = Gui::spawn_submit(self, request);
+                }
+            });
+            if let Ok(mut request_window_mode) = self.request_window_mode.try_write() {
                 ui.horizontal(|ui| {
                     if ui.button("Environment").clicked() {
-                        (*config).request_window_mode = RequestWindowMode::ENVIRONMENT;
+                        *request_window_mode = RequestWindowMode::ENVIRONMENT;
                     }
                     if ui.button("Params").clicked() {
-                        (*config).request_window_mode = RequestWindowMode::PARAMS;
+                        *request_window_mode = RequestWindowMode::PARAMS;
                     }
                     if ui.button("Headers").clicked() {
-                        (*config).request_window_mode = RequestWindowMode::HEADERS;
+                        *request_window_mode = RequestWindowMode::HEADERS;
                     }
                     if ui.button("Body").clicked() {
-                        (*config).request_window_mode = RequestWindowMode::BODY;
+                        *request_window_mode = RequestWindowMode::BODY;
                     }
                 });
-            });
-            match config.request_window_mode {
+            }
+        });
+        if let Ok(request_window_mode) = self.request_window_mode.try_read() {
+            match *request_window_mode {
                 RequestWindowMode::BODY => {
                     TopBottomPanel::top("request_panel")
                         .resizable(true)
@@ -274,7 +289,7 @@ impl App for Gui {
                         .show(ctx, |ui| {
                             ScrollArea::vertical().show(ui, |ui| {
                                 ui.add(
-                                    TextEdit::multiline(&mut config.body_str)
+                                    TextEdit::multiline(&mut self.body_str)
                                         .code_editor()
                                         .desired_rows(20)
                                         .lock_focus(true)
@@ -438,27 +453,31 @@ impl App for Gui {
                     });
                 }
             };
-            if config.import_window_open == true {
+        }
+        if let Ok(mut import_window_open) = self.import_window_open.try_write() {
+            if *import_window_open == true {
                 egui::Window::new("Import Modal")
-                    .open(&mut config.import_window_open.clone())
+                    .open(&mut *import_window_open)
                     .show(ctx, |ui| {
                         ui.label("Please copy and paste the file path to import");
                         ui.horizontal(|ui| {
-                            ui.text_edit_singleline(&mut config.import_file_path.clone());
+                            ui.text_edit_singleline(&mut self.import_file_path.clone());
                             if ui.button("Import").clicked() {
-                                let path = config.import_file_path.to_owned();
-                                let _ = match config.import_mode {
-                                    ImportMode::COLLECTION => {
-                                        tokio::spawn(async move {
-                                            PostieApi::import_collection(&path).await
-                                        });
-                                    }
-                                    ImportMode::ENVIRONMENT => {
-                                        tokio::spawn(async move {
-                                            PostieApi::import_environment(&path).await
-                                        });
-                                    }
-                                };
+                                let path = self.import_file_path.to_owned();
+                                if let Ok(import_mode) = self.import_mode.try_read() {
+                                    match *import_mode {
+                                        ImportMode::COLLECTION => {
+                                            tokio::spawn(async move {
+                                                PostieApi::import_collection(&path).await
+                                            });
+                                        }
+                                        ImportMode::ENVIRONMENT => {
+                                            tokio::spawn(async move {
+                                                PostieApi::import_environment(&path).await
+                                            });
+                                        }
+                                    };
+                                }
                             };
                         });
                     });
@@ -469,8 +488,6 @@ impl App for Gui {
 
 #[tokio::main]
 async fn main() {
-    let _con = initialize_db().await;
-    println!("{:?}", _con);
     let app = Gui::default();
     let native_options = NativeOptions::default();
     let _ = eframe::run_native("Postie", native_options, Box::new(|_cc| Box::new(app)));
