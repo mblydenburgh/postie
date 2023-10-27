@@ -461,7 +461,7 @@ impl App for Gui {
                     .show(ctx, |ui| {
                         ui.label("Please copy and paste the file path to import");
                         ui.horizontal(|ui| {
-                            ui.text_edit_singleline(&mut self.import_file_path.clone());
+                            ui.text_edit_singleline(&mut self.import_file_path);
                             if ui.button("Import").clicked() {
                                 let path = self.import_file_path.to_owned();
                                 if let Ok(import_mode) = self.import_mode.try_read() {
