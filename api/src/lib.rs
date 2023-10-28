@@ -6,11 +6,11 @@ use domain::collection::Collection;
 use domain::environment::EnvironmentFile;
 use reqwest::{
     header::{HeaderMap, HeaderName, HeaderValue},
-    Method,
+    Client, Method, Response,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use sqlx::{Connection, SqliteConnection};
+use sqlx::{Connection, SqliteConnection, Executor};
 use uuid::Uuid;
 
 #[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
@@ -161,6 +161,10 @@ impl PostieApi {
 
         let res_str = res.text().await?;
         let res_json = serde_json::from_str(&res_str).unwrap_or_default();
+
+        let mut db = PostieDb::new().await;
+        let _ = db.save_request_history(DBRequest { id: input.id.to_string(), body: "hi".to_string(), name: "my request".to_string(), method: "POST".to_string(), url: "https://google.com".to_string(), headers: json!({ "x-api-key": "foo" }).to_string() }).await?;
+
         Ok(res_json)
     }
 }
@@ -171,4 +175,73 @@ pub async fn initialize_db() -> Result<SqliteConnection, Box<dyn Error>> {
     println!("{:?} sqlite connection established", connection);
 
     Ok(connection)
+}
+
+pub struct PostieDb {
+    pub connection: SqliteConnection
+}
+
+#[derive(Debug)]
+pub struct DBRequest {
+    id: String,
+    method: String,
+    url: String,
+    name: String,
+    headers: String,
+    body: String
+}
+
+struct DBResponse {
+    id: String,
+    status_code: u8,
+    name: String,
+    headers: String,
+    body: String
+}
+
+struct DBRequestHistoryItem {
+    id: String,
+    request_id: String,
+    response_id: String,
+    sent_at: String,
+    response_time: u32
+}
+
+impl PostieDb {
+    pub async fn new() -> Self {
+        PostieDb { connection: initialize_db().await.ok().unwrap() }
+    }
+
+    pub async fn save_request_history(&mut self, request: DBRequest) -> Result<(), Box<dyn Error>> {
+        println!("got request: {:?}", request);
+        let mut transaction = self.connection.begin().await?;
+        // let res = sqlx::query!("SELECT * FROM request_history").fetch_all(&mut *transaction).await;
+
+        let _request = sqlx::query_as!(DBRequest, "INSERT INTO request (id, method, url, name, headers, body) VALUES ($1, $2, $3, $4, $5, $6)", request.id, request.method, request.url, request.name, request.headers, request.body).execute(&mut *transaction).await?;
+
+        transaction.commit().await?;
+        println!("transaction committed");
+
+        Ok(())
+    }
+
+    pub async fn save_environment(&mut self, environment: EnvironmentFile) -> Result<(), Box<dyn Error>> {
+        let mut transaction = self.connection.begin().await?;
+        let value_json = match environment.values {
+            None => json!("[]"),
+            Some(values) => Value::String(serde_json::to_string(&values).unwrap()),
+        };
+        sqlx::query!(
+            r#"
+            INSERT INTO environment (id, name, variables)
+            VALUES ($1, $2, $3)
+            "#,
+            environment.id,
+            environment.name,
+            value_json
+        )
+        .execute(&mut self.db_connection)
+        .await
+        .unwrap();
+    }
 }

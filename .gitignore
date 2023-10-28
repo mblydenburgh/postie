@@ -4,3 +4,4 @@
 
 # db files created by sqlite vscode plugin
 postie.sqlite-*
+.idea/
