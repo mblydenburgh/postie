@@ -220,12 +220,13 @@ impl PostieDb {
             None => json!("[]"),
             Some(values) => Value::String(serde_json::to_string(&values).unwrap()),
         };
+        let uuid = Uuid::new_v4().to_string();
         _ = sqlx::query!(
             r#"
             INSERT INTO environment (id, name, variables)
             VALUES ($1, $2, $3)
             "#,
-            environment.id,
+            uuid,
             environment.name,
             value_json
         )
