@@ -49,17 +49,16 @@ pub struct PostieApi {
     pub client: reqwest::Client,
     pub collection: Option<String>,
     pub environment: Option<String>,
-    pub db_connection: SqliteConnection,
+    pub db: PostieDb,
 }
 
 impl PostieApi {
     pub async fn new() -> Self {
-        let db_connection = initialize_db().await.unwrap();
         PostieApi {
             client: reqwest::Client::new(),
             collection: None,
             environment: None,
-            db_connection,
+            db: PostieDb::new().await,
         }
     }
     pub fn parse_collection(collection_json: &str) -> Collection {
@@ -80,29 +79,19 @@ impl PostieApi {
         println!("Successfully parsed postman collection!");
         Ok(())
     }
-    pub async fn import_environment(path: &str) -> Result<(), Box<dyn Error + Send>> {
+    // TODO - better error handling
+    pub async fn import_environment(path: &str) -> Result<String, Box<dyn Error + Send>> {
         let mut api = PostieApi::new().await;
         let file_str = Self::read_file(path).unwrap();
         let environment = Self::parse_environment(&file_str);
         println!("Successfully parsed postman environment!");
-        let value_json = match environment.values {
-            None => json!("[]"),
-            Some(values) => Value::String(serde_json::to_string(&values).unwrap()),
-        };
-        sqlx::query!(
-            r#"
-            INSERT INTO environment (id, name, variables)
-            VALUES ($1, $2, $3)
-            "#,
-            environment.id,
-            environment.name,
-            value_json
-        )
-        .execute(&mut api.db_connection)
-        .await
-        .unwrap();
-        println!("Saved environment to database");
-        Ok(())
+        match api.db.save_environment(environment).await {
+            Ok(_) => Ok(String::from("Import successful")),
+            Err(_) => {
+                println!("Error saving enviornment");
+                Ok(String::from("Error with importing"))
+            },
+        }
     }
     pub fn save_environment(_input: Environment) -> Result<(), Box<dyn Error>> {
         Ok(())
@@ -231,7 +220,7 @@ impl PostieDb {
             None => json!("[]"),
             Some(values) => Value::String(serde_json::to_string(&values).unwrap()),
         };
-        sqlx::query!(
+        _ = sqlx::query!(
             r#"
             INSERT INTO environment (id, name, variables)
             VALUES ($1, $2, $3)
@@ -240,8 +229,10 @@ impl PostieDb {
             environment.name,
             value_json
         )
-        .execute(&mut self.db_connection)
+        .execute(&mut *transaction)
         .await
         .unwrap();
+        transaction.commit().await?;
+        Ok(())
     }
 }

@@ -10,7 +10,7 @@ use egui::TextStyle;
 use egui_extras::{Column, TableBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{cell::RefCell, collections::HashSet, error::Error, rc::Rc, sync::Arc};
+use std::{cell::RefCell, collections::HashSet, error::Error, rc::Rc, sync::{Arc, Mutex}};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -72,6 +72,7 @@ pub struct Gui {
     pub import_window_open: RwLock<bool>,
     pub import_mode: RwLock<ImportMode>,
     pub import_file_path: String,
+    pub import_result: Arc<Mutex<Option<String>>>
 }
 impl Default for Gui {
     fn default() -> Self {
@@ -114,6 +115,7 @@ impl Default for Gui {
             import_window_open: RwLock::new(false),
             import_file_path: String::from(""),
             import_mode: RwLock::new(ImportMode::COLLECTION),
+            import_result: Arc::new(Mutex::new(None))
         }
     }
 }
@@ -465,6 +467,7 @@ impl App for Gui {
                             if ui.button("Import").clicked() {
                                 let path = self.import_file_path.to_owned();
                                 if let Ok(import_mode) = self.import_mode.try_read() {
+                                    let import_result_clone = self.import_result.clone();
                                     match *import_mode {
                                         ImportMode::COLLECTION => {
                                             tokio::spawn(async move {
@@ -473,12 +476,18 @@ impl App for Gui {
                                         }
                                         ImportMode::ENVIRONMENT => {
                                             tokio::spawn(async move {
-                                                PostieApi::import_environment(&path).await
+                                                let res = PostieApi::import_environment(&path).await.unwrap();
+                                                let mut data = import_result_clone.lock().unwrap();
+                                                *data = Some(res);
                                             });
                                         }
                                     };
                                 }
                             };
+                            let i = self.import_result.lock().unwrap();
+                            if let Some(import_res) = &*i {
+                                ui.label(import_res);
+                            }
                         });
                     });
             }
