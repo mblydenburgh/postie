@@ -1,5 +1,5 @@
 use api::{
-    domain::environment::{EnvironmentFile, EnvironmentValue},
+    domain::environment::EnvironmentFile,
     HttpMethod, HttpRequest, PostieApi,
 };
 use eframe::{
@@ -68,7 +68,7 @@ impl Default for GuiConfig {
 pub struct Gui {
     pub response: Arc<RwLock<Option<Value>>>,
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
-    pub selected_environment: Rc<RefCell<api::domain::environment::EnvironmentFile>>,
+    pub selected_environment: Rc<RefCell<Option<api::domain::environment::EnvironmentFile>>>,
     pub environments: Rc<RefCell<Option<Vec<api::domain::environment::EnvironmentFile>>>>,
     pub env_vars: Rc<RefCell<Vec<(bool, String, String, String)>>>,
     pub active_window: RwLock<ActiveWindow>,
@@ -98,23 +98,9 @@ impl Default for Gui {
                     String::from("no-cache"),
                 ),
             ])),
-            selected_environment: Rc::new(RefCell::new(EnvironmentFile {
-                id: String::from("id"),
-                name: String::from("Default"),
-                values: Some(vec![EnvironmentValue {
-                    key: String::from("HOST_URL"),
-                    value: String::from("https://httpbin.org"),
-                    r#type: String::from("default"),
-                    enabled: true,
-                }]),
-            })),
+            selected_environment: Rc::new(RefCell::new(None)),
             environments: Rc::new(RefCell::new(None)),
-            env_vars: Rc::new(RefCell::new(vec![(
-                true,
-                String::from("HOST_URL"),
-                String::from("https://httpbin.org"),
-                String::from("default"),
-            )])),
+            env_vars: Rc::new(RefCell::new(vec![])),
             active_window: RwLock::new(ActiveWindow::REQUEST),
             request_window_mode: RwLock::new(RequestWindowMode::BODY),
             selected_http_method: HttpMethod::GET,
@@ -236,6 +222,13 @@ impl App for Gui {
                 }
                 ActiveWindow::ENVIRONMENT => {
                     ui.label("Environments");
+                    let envs_clone = Rc::clone(&self.environments);
+                    let envs = envs_clone.borrow();
+                    if let Some(env_vec) = &*envs {
+                        for env in env_vec {
+                            ui.selectable_value(&mut self.selected_environment, Rc::new(RefCell::from(Some(env.clone()))), format!("{}", env.name));
+                        }
+                    }
                 }
                 ActiveWindow::HISTORY => {
                     ui.label("History");
@@ -279,7 +272,7 @@ impl App for Gui {
                         body,
                         method: self.selected_http_method.clone(),
                         url: self.url.clone(),
-                        environment: self.selected_environment.borrow().clone(),
+                        environment: self.selected_environment.borrow().clone().unwrap(),
                     };
 
                     let _ = Gui::spawn_submit(self, request);
