@@ -11,6 +11,7 @@ pub struct EnvironmentFile {
 pub struct EnvironmentValue {
     pub key: String,
     pub value: String,
+    #[serde(rename = "type")]
     pub r#type: String,
     pub enabled: bool,
 }

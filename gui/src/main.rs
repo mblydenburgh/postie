@@ -10,7 +10,13 @@ use egui::TextStyle;
 use egui_extras::{Column, TableBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{cell::RefCell, collections::HashSet, error::Error, rc::Rc, sync::{Arc, Mutex}};
+use std::{
+    cell::RefCell,
+    collections::HashSet,
+    error::Error,
+    rc::Rc,
+    sync::{Arc, Mutex},
+};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -72,7 +78,7 @@ pub struct Gui {
     pub import_window_open: RwLock<bool>,
     pub import_mode: RwLock<ImportMode>,
     pub import_file_path: String,
-    pub import_result: Arc<Mutex<Option<String>>>
+    pub import_result: Arc<Mutex<Option<String>>>,
 }
 impl Default for Gui {
     fn default() -> Self {
@@ -115,7 +121,7 @@ impl Default for Gui {
             import_window_open: RwLock::new(false),
             import_file_path: String::from(""),
             import_mode: RwLock::new(ImportMode::COLLECTION),
-            import_result: Arc::new(Mutex::new(None))
+            import_result: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -190,6 +196,7 @@ impl App for Gui {
                             ui.close_menu();
                         };
                         if ui.button("Environment").clicked() {
+                            tokio::spawn(async move { PostieApi::load_environments().await });
                             ui.close_menu();
                         };
                     });
@@ -476,7 +483,9 @@ impl App for Gui {
                                         }
                                         ImportMode::ENVIRONMENT => {
                                             tokio::spawn(async move {
-                                                let res = PostieApi::import_environment(&path).await.unwrap();
+                                                let res = PostieApi::import_environment(&path)
+                                                    .await
+                                                    .unwrap();
                                                 let mut data = import_result_clone.lock().unwrap();
                                                 *data = Some(res);
                                             });

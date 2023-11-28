@@ -6,11 +6,11 @@ use domain::collection::Collection;
 use domain::environment::EnvironmentFile;
 use reqwest::{
     header::{HeaderMap, HeaderName, HeaderValue},
-    Client, Method, Response,
+    Method,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use sqlx::{Connection, SqliteConnection, Executor};
+use sqlx::{sqlite::SqliteRow, Connection, Row, SqliteConnection};
 use uuid::Uuid;
 
 #[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
@@ -90,7 +90,7 @@ impl PostieApi {
             Err(_) => {
                 println!("Error saving enviornment");
                 Ok(String::from("Error with importing"))
-            },
+            }
         }
     }
     pub fn save_environment(_input: Environment) -> Result<(), Box<dyn Error>> {
@@ -98,6 +98,11 @@ impl PostieApi {
     }
     pub fn save_collection(_input: RequestCollection) -> Result<(), Box<dyn Error>> {
         Ok(())
+    }
+    pub async fn load_environments() -> Result<Vec<EnvironmentFile>, Box<dyn Error + Send>> {
+        let mut api = PostieApi::new().await;
+        let envs = api.db.get_all_environments().await.unwrap();
+        Ok(envs)
     }
     pub fn substitute_variables_in_url(environment: &EnvironmentFile, raw_url: String) -> String {
         println!("substituting env vars");
@@ -152,7 +157,16 @@ impl PostieApi {
         let res_json = serde_json::from_str(&res_str).unwrap_or_default();
 
         let mut db = PostieDb::new().await;
-        let _ = db.save_request_history(DBRequest { id: input.id.to_string(), body: "hi".to_string(), name: "my request".to_string(), method: "POST".to_string(), url: "https://google.com".to_string(), headers: json!({ "x-api-key": "foo" }).to_string() }).await?;
+        let _ = db
+            .save_request_history(DBRequest {
+                id: input.id.to_string(),
+                body: "hi".to_string(),
+                name: "my request".to_string(),
+                method: "POST".to_string(),
+                url: "https://google.com".to_string(),
+                headers: json!({ "x-api-key": "foo" }).to_string(),
+            })
+            .await?;
 
         Ok(res_json)
     }
@@ -167,7 +181,7 @@ pub async fn initialize_db() -> Result<SqliteConnection, Box<dyn Error>> {
 }
 
 pub struct PostieDb {
-    pub connection: SqliteConnection
+    pub connection: SqliteConnection,
 }
 
 #[derive(Debug)]
@@ -177,7 +191,7 @@ pub struct DBRequest {
     url: String,
     name: String,
     headers: String,
-    body: String
+    body: String,
 }
 
 struct DBResponse {
@@ -185,7 +199,7 @@ struct DBResponse {
     status_code: u8,
     name: String,
     headers: String,
-    body: String
+    body: String,
 }
 
 struct DBRequestHistoryItem {
@@ -193,12 +207,14 @@ struct DBRequestHistoryItem {
     request_id: String,
     response_id: String,
     sent_at: String,
-    response_time: u32
+    response_time: u32,
 }
 
 impl PostieDb {
     pub async fn new() -> Self {
-        PostieDb { connection: initialize_db().await.ok().unwrap() }
+        PostieDb {
+            connection: initialize_db().await.ok().unwrap(),
+        }
     }
 
     pub async fn save_request_history(&mut self, request: DBRequest) -> Result<(), Box<dyn Error>> {
@@ -214,7 +230,10 @@ impl PostieDb {
         Ok(())
     }
 
-    pub async fn save_environment(&mut self, environment: EnvironmentFile) -> Result<(), Box<dyn Error>> {
+    pub async fn save_environment(
+        &mut self,
+        environment: EnvironmentFile,
+    ) -> Result<(), Box<dyn Error>> {
         let mut transaction = self.connection.begin().await?;
         let value_json = match environment.values {
             None => json!("[]"),
@@ -223,7 +242,7 @@ impl PostieDb {
         let uuid = Uuid::new_v4().to_string();
         _ = sqlx::query!(
             r#"
-            INSERT INTO environment (id, name, variables)
+            INSERT INTO environment (id, name, `values`)
             VALUES ($1, $2, $3)
             "#,
             uuid,
@@ -235,5 +254,66 @@ impl PostieDb {
         .unwrap();
         transaction.commit().await?;
         Ok(())
+    }
+
+    pub async fn get_all_environments(&mut self) -> Result<Vec<EnvironmentFile>, Box<dyn Error>> {
+        println!("getting all envs");
+        let rows = sqlx::query("SELECT * FROM environment")
+            .map(|row: SqliteRow| {
+                let id: String = row.get("id");
+                let name: String = row.get("name");
+                let raw_values: Option<String> = row.get("values");
+                if let Some(values_json) = raw_values {
+                    let values_str: Result<String, serde_json::Error> =
+                        serde_json::from_str(&values_json);
+                    match values_str {
+                        Ok(str) => {
+                            let values = serde_json::from_str(&str).expect("couldnt parse string");
+                            EnvironmentFile {
+                                id,
+                                name,
+                                values: Some(values),
+                            }
+                        }
+                        Err(e) => {
+                            println!("error: {:#?}", e);
+                            EnvironmentFile {
+                                id,
+                                name,
+                                values: None,
+                            }
+                        }
+                    }
+                } else {
+                    EnvironmentFile {
+                        id,
+                        name,
+                        values: None,
+                    }
+                }
+            })
+            .fetch_all(&mut self.connection)
+            .await
+            .unwrap();
+
+        for row in rows.clone().into_iter() {
+            println!("row: {:?}", &row);
+        }
+        Ok(rows)
+    }
+
+    fn unescape_string(str: &str) -> Option<String> {
+        let mut n = String::new();
+
+        let mut chars = str.chars();
+
+        while let Some(c) = chars.next() {
+            n.push(match c {
+                '\\' => chars.next()?,
+                c => c,
+            });
+        }
+
+        Some(n)
     }
 }
