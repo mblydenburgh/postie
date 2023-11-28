@@ -1,5 +1,5 @@
 use api::{
-    domain::environment::EnvironmentFile,
+    domain::environment::{EnvironmentFile, EnvironmentValue},
     HttpMethod, HttpRequest, PostieApi,
 };
 use eframe::{
@@ -70,7 +70,7 @@ pub struct Gui {
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
     pub selected_environment: Rc<RefCell<Option<api::domain::environment::EnvironmentFile>>>,
     pub environments: Rc<RefCell<Option<Vec<api::domain::environment::EnvironmentFile>>>>,
-    pub env_vars: Rc<RefCell<Vec<(bool, String, String, String)>>>,
+    pub env_vars: Rc<RefCell<Vec<EnvironmentValue>>>,
     pub active_window: RwLock<ActiveWindow>,
     pub request_window_mode: RwLock<RequestWindowMode>,
     pub selected_http_method: HttpMethod,
@@ -115,11 +115,13 @@ impl Default for Gui {
 }
 impl Gui {
     async fn new() -> Self {
-        let envs = PostieApi::load_environments().await.unwrap_or(vec![EnvironmentFile {
-            id: Uuid::new_v4().to_string(),
-            name: String::from("default"),
-            values: None,
-        }]);
+        let envs = PostieApi::load_environments()
+            .await
+            .unwrap_or(vec![EnvironmentFile {
+                id: Uuid::new_v4().to_string(),
+                name: String::from("default"),
+                values: None,
+            }]);
         let mut default = Gui::default();
         default.environments = Rc::new(RefCell::from(Some(envs)));
         default
@@ -226,7 +228,11 @@ impl App for Gui {
                     let envs = envs_clone.borrow();
                     if let Some(env_vec) = &*envs {
                         for env in env_vec {
-                            ui.selectable_value(&mut self.selected_environment, Rc::new(RefCell::from(Some(env.clone()))), format!("{}", env.name));
+                            ui.selectable_value(
+                                &mut self.selected_environment,
+                                Rc::new(RefCell::from(Some(env.clone()))),
+                                format!("{}", env.name),
+                            );
                         }
                     }
                 }
@@ -406,61 +412,37 @@ impl App for Gui {
                                 });
                             })
                             .body(|mut body| {
-                                for env_var in self.env_vars.borrow_mut().iter_mut() {
-                                    let (enabled, key, value, r#type) = env_var;
-                                    body.row(30.0, |mut row| {
-                                        row.col(|ui| {
-                                            ui.checkbox(enabled, "");
-                                        });
-                                        row.col(|ui| {
-                                            ui.text_edit_singleline(key);
-                                        });
-                                        row.col(|ui| {
-                                            ui.text_edit_singleline(value);
-                                        });
-                                        row.col(|ui| {
-                                            ui.text_edit_singleline(r#type);
-                                        });
-                                    });
+                                let selected_environment =
+                                    self.selected_environment.borrow_mut().clone();
+                                if let Some(env) = selected_environment {
+                                    if let Some(values) = env.values {
+                                        for mut env_var in values {
+                                            body.row(30.0, |mut row| {
+                                                row.col(|ui| {
+                                                    ui.checkbox(&mut env_var.enabled, "");
+                                                });
+                                                row.col(|ui| {
+                                                    ui.text_edit_singleline(&mut env_var.key);
+                                                });
+                                                row.col(|ui| {
+                                                    ui.text_edit_singleline(&mut env_var.value);
+                                                });
+                                                row.col(|ui| {
+                                                    ui.text_edit_singleline(&mut env_var.r#type);
+                                                });
+                                            });
+                                        }
+                                    }
                                 }
-                                //TODO - make inputs work with a struct. can only get things to
-                                //compile by cloning the .borrow_mut, but since that creates a new
-                                //space in memory, the updates to the input dont update the
-                                //original env var value. end effect is the text input doesnt
-                                //change value.
-                                //if let Some(values) = &self.environment.borrow_mut().values {
-                                //    for mut value in values {
-                                //        body.row(30.0, |mut row| {
-                                //            row.col(|ui| {
-                                //                ui.checkbox(value.enabled, "");
-                                //            });
-                                //            row.col(|ui| {
-                                //                ui.text_edit_singleline(&mut value.key);
-                                //            });
-                                //            row.col(|ui| {
-                                //                ui.text_edit_singleline(&mut value.r#type);
-                                //            });
-                                //            row.col(|ui| {
-                                //                ui.text_edit_singleline(&mut value.value);
-                                //            });
-                                //        });
-                                //    }
-                                //}
                                 body.row(30.0, |mut row| {
                                     row.col(|ui| {
                                         if ui.button("Add").clicked() {
-                                            self.env_vars.borrow_mut().push((
-                                                true,
-                                                String::from(""),
-                                                String::from(""),
-                                                String::from("default"),
-                                            ));
-                                            //self.environment.borrow_mut().values.unwrap().push(EnvironmentValue {
-                                            //    key: String::from(""),
-                                            //    value: String::from(""),
-                                            //    r#type: String::from("default"),
-                                            //    enabled: true,
-                                            //});
+                                            self.env_vars.borrow_mut().push(EnvironmentValue {
+                                                key: String::from(""),
+                                                value: String::from(""),
+                                                r#type: String::from("default"),
+                                                enabled: true,
+                                            });
                                         };
                                     });
                                 });
