@@ -68,7 +68,8 @@ impl Default for GuiConfig {
 pub struct Gui {
     pub response: Arc<RwLock<Option<Value>>>,
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
-    pub environment: Rc<RefCell<api::domain::environment::EnvironmentFile>>,
+    pub selected_environment: Rc<RefCell<api::domain::environment::EnvironmentFile>>,
+    pub environments: Rc<RefCell<Option<Vec<api::domain::environment::EnvironmentFile>>>>,
     pub env_vars: Rc<RefCell<Vec<(bool, String, String, String)>>>,
     pub active_window: RwLock<ActiveWindow>,
     pub request_window_mode: RwLock<RequestWindowMode>,
@@ -97,7 +98,7 @@ impl Default for Gui {
                     String::from("no-cache"),
                 ),
             ])),
-            environment: Rc::new(RefCell::new(EnvironmentFile {
+            selected_environment: Rc::new(RefCell::new(EnvironmentFile {
                 id: String::from("id"),
                 name: String::from("Default"),
                 values: Some(vec![EnvironmentValue {
@@ -107,6 +108,7 @@ impl Default for Gui {
                     enabled: true,
                 }]),
             })),
+            environments: Rc::new(RefCell::new(None)),
             env_vars: Rc::new(RefCell::new(vec![(
                 true,
                 String::from("HOST_URL"),
@@ -123,6 +125,18 @@ impl Default for Gui {
             import_mode: RwLock::new(ImportMode::COLLECTION),
             import_result: Arc::new(Mutex::new(None)),
         }
+    }
+}
+impl Gui {
+    async fn new() -> Self {
+        let envs = PostieApi::load_environments().await.unwrap_or(vec![EnvironmentFile {
+            id: Uuid::new_v4().to_string(),
+            name: String::from("default"),
+            values: None,
+        }]);
+        let mut default = Gui::default();
+        default.environments = Rc::new(RefCell::from(Some(envs)));
+        default
     }
 }
 impl Gui {
@@ -196,7 +210,6 @@ impl App for Gui {
                             ui.close_menu();
                         };
                         if ui.button("Environment").clicked() {
-                            tokio::spawn(async move { PostieApi::load_environments().await });
                             ui.close_menu();
                         };
                     });
@@ -266,7 +279,7 @@ impl App for Gui {
                         body,
                         method: self.selected_http_method.clone(),
                         url: self.url.clone(),
-                        environment: self.environment.borrow().clone(),
+                        environment: self.selected_environment.borrow().clone(),
                     };
 
                     let _ = Gui::spawn_submit(self, request);
@@ -506,7 +519,7 @@ impl App for Gui {
 
 #[tokio::main]
 async fn main() {
-    let app = Gui::default();
+    let app = Gui::new().await;
     let native_options = NativeOptions::default();
     let _ = eframe::run_native("Postie", native_options, Box::new(|_cc| Box::new(app)));
 }
