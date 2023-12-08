@@ -98,7 +98,11 @@ impl Default for Gui {
                     String::from("no-cache"),
                 ),
             ])),
-            selected_environment: Rc::new(RefCell::new(None)),
+            selected_environment: Rc::new(RefCell::new(Some(EnvironmentFile {
+                id: Uuid::new_v4().to_string(),
+                name: String::from("default"),
+                values: None,
+            }))),
             environments: Rc::new(RefCell::new(None)),
             env_vars: Rc::new(RefCell::new(vec![])),
             active_window: RwLock::new(ActiveWindow::REQUEST),
