@@ -1,6 +1,6 @@
 pub mod domain;
 
-use std::{error::Error, fs};
+use std::{borrow::BorrowMut, error::Error, fs};
 
 use domain::collection::Collection;
 use domain::environment::EnvironmentFile;
@@ -13,6 +13,8 @@ use serde_json::{json, Value};
 use sqlx::{sqlite::SqliteRow, Connection, Row, SqliteConnection};
 use uuid::Uuid;
 
+use crate::domain::request::DBRequest;
+
 #[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
 pub enum HttpMethod {
     GET,
@@ -22,6 +24,11 @@ pub enum HttpMethod {
     DELETE,
     OPTIONS,
     HEAD,
+}
+impl std::fmt::Display for HttpMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[derive(Debug)]
@@ -131,7 +138,7 @@ impl PostieApi {
         };
 
         let mut headers = HeaderMap::new();
-        if let Some(h) = input.headers {
+        if let Some(h) = input.headers.clone() {
             for (key, value) in h {
                 let header_name = HeaderName::from_bytes(&key.as_bytes()).unwrap();
                 let header_value = HeaderValue::from_str(&value).unwrap();
@@ -140,9 +147,9 @@ impl PostieApi {
         };
 
         let url = Self::substitute_variables_in_url(&input.environment, input.url.clone());
-        let mut req = api.client.request(method, url).headers(headers);
+        let mut req = api.client.request(method, url).headers(headers.clone());
         if input.body.is_some() {
-            req = req.json(&input.body.unwrap_or_default());
+            req = req.json(&input.body.clone().unwrap_or_default());
         }
 
         let res = req.send().await?;
@@ -156,15 +163,22 @@ impl PostieApi {
         let res_str = res.text().await?;
         let res_json = serde_json::from_str(&res_str).unwrap_or_default();
 
+        let request_headers = input
+            .headers
+            .clone()
+            .unwrap()
+            .into_iter()
+            .map(|(key, value)| domain::request::RequestHeader { key, value })
+            .collect();
         let mut db = PostieDb::new().await;
         let _ = db
             .save_request_history(DBRequest {
                 id: input.id.to_string(),
-                body: "hi".to_string(),
-                name: "my request".to_string(),
-                method: "POST".to_string(),
-                url: "https://google.com".to_string(),
-                headers: json!({ "x-api-key": "foo" }).to_string(),
+                body: input.body,
+                name: input.name,
+                method: input.method.to_string(),
+                url: input.url,
+                headers: request_headers,
             })
             .await?;
 
@@ -182,16 +196,6 @@ pub async fn initialize_db() -> Result<SqliteConnection, Box<dyn Error>> {
 
 pub struct PostieDb {
     pub connection: SqliteConnection,
-}
-
-#[derive(Debug)]
-pub struct DBRequest {
-    id: String,
-    method: String,
-    url: String,
-    name: String,
-    headers: String,
-    body: String,
 }
 
 struct DBResponse {
@@ -220,9 +224,21 @@ impl PostieDb {
     pub async fn save_request_history(&mut self, request: DBRequest) -> Result<(), Box<dyn Error>> {
         println!("got request: {:?}", request);
         let mut transaction = self.connection.begin().await?;
-        // let res = sqlx::query!("SELECT * FROM request_history").fetch_all(&mut *transaction).await;
-
-        let _request = sqlx::query_as!(DBRequest, "INSERT INTO request (id, method, url, name, headers, body) VALUES ($1, $2, $3, $4, $5, $6)", request.id, request.method, request.url, request.name, request.headers, request.body).execute(&mut *transaction).await?;
+        let header_json = serde_json::to_string(&request.headers)?;
+        let _request = sqlx::query!(
+            r#"
+            INSERT INTO request (id, method, url, name, headers, body) 
+            VALUES ($1, $2, $3, $4, $5, $6)
+            "#,
+            request.id,
+            request.method,
+            request.url,
+            request.name,
+            header_json,
+            request.body
+        )
+        .execute(&mut *transaction)
+        .await?;
 
         transaction.commit().await?;
         println!("transaction committed");
@@ -300,20 +316,5 @@ impl PostieDb {
             println!("row: {:?}", &row);
         }
         Ok(rows)
-    }
-
-    fn unescape_string(str: &str) -> Option<String> {
-        let mut n = String::new();
-
-        let mut chars = str.chars();
-
-        while let Some(c) = chars.next() {
-            n.push(match c {
-                '\\' => chars.next()?,
-                c => c,
-            });
-        }
-
-        Some(n)
     }
 }
