@@ -1,7 +1,7 @@
 pub mod domain;
 
-use std::{borrow::BorrowMut, error::Error, fs};
-
+use chrono::prelude::*;
+use std::{error::Error, fs, borrow::BorrowMut, time::Instant};
 use domain::collection::Collection;
 use domain::environment::EnvironmentFile;
 use reqwest::{
@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 use sqlx::{sqlite::SqliteRow, Connection, Row, SqliteConnection};
 use uuid::Uuid;
 
-use crate::domain::request::DBRequest;
+use crate::domain::{request::DBRequest, response::DBResponse, request_item::RequestHistoryItem};
 
 #[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
 pub enum HttpMethod {
@@ -152,16 +152,20 @@ impl PostieApi {
             req = req.json(&input.body.clone().unwrap_or_default());
         }
 
+        let now: DateTime<Utc> = Utc::now();
+        let sent_at = std::time::Instant::now();
         let res = req.send().await?;
-        let res_type = res.headers().get("content-type").unwrap().to_str().unwrap();
+        let response_time = sent_at.elapsed().as_millis();
+        let res_headers = res.headers().clone();
+        let res_status = res.status().clone();
+        let res_type = res_headers.get("content-type").unwrap().to_str().unwrap();
+        let res_text = res.text().await?;
+        let res_json: serde_json::Value = serde_json::from_str(&res_text).unwrap();
         if !res_type.starts_with("application/json") {
             // I couldn't figure out how to safely throw an error so I'm just returning this for now
             println!("expected application/json, got {}", res_type);
             return Ok(json!({"msg": "not JSON!"}));
         }
-
-        let res_str = res.text().await?;
-        let res_json = serde_json::from_str(&res_str).unwrap_or_default();
 
         let request_headers = input
             .headers
@@ -171,18 +175,35 @@ impl PostieApi {
             .map(|(key, value)| domain::request::RequestHeader { key, value })
             .collect();
         let mut db = PostieDb::new().await;
-        let _ = db
-            .save_request_history(DBRequest {
+        let db_request = DBRequest {
                 id: input.id.to_string(),
                 body: input.body,
-                name: input.name,
+                name: input.name.clone(),
                 method: input.method.to_string(),
                 url: input.url,
                 headers: request_headers,
-            })
+            };
+        let _ = db
+            .save_request_history(&db_request)
             .await?;
+        let response_headers: Vec<domain::response::ResponseHeader> = res_headers
+            .into_iter()
+            .map(|(key, value)| domain::response::ResponseHeader { 
+                key: String::from(HeaderName::as_str(&key.unwrap())),
+                value: String::from(HeaderValue::to_str(&value).unwrap()) 
+            }).collect();
+        let db_response = DBResponse {
+            id: Uuid::new_v4().to_string(),
+            status_code: res_status.as_u16(),
+            name: input.name.clone(),
+            headers: response_headers,
+            body: Some(res_json.clone()),
+        };
+        let _ = db.save_response(&db_response).await?;
+        let _ = db.save_request_response_item(&db_request, &db_response, &now, &response_time).await?;
 
-        Ok(res_json)
+
+        Ok(res_json.clone())
     }
 }
 
@@ -198,22 +219,6 @@ pub struct PostieDb {
     pub connection: SqliteConnection,
 }
 
-struct DBResponse {
-    id: String,
-    status_code: u8,
-    name: String,
-    headers: String,
-    body: String,
-}
-
-struct DBRequestHistoryItem {
-    id: String,
-    request_id: String,
-    response_id: String,
-    sent_at: String,
-    response_time: u32,
-}
-
 impl PostieDb {
     pub async fn new() -> Self {
         PostieDb {
@@ -221,7 +226,7 @@ impl PostieDb {
         }
     }
 
-    pub async fn save_request_history(&mut self, request: DBRequest) -> Result<(), Box<dyn Error>> {
+    pub async fn save_request_history(&mut self, request: &DBRequest) -> Result<(), Box<dyn Error>> {
         println!("got request: {:?}", request);
         let mut transaction = self.connection.begin().await?;
         let header_json = serde_json::to_string(&request.headers)?;
@@ -243,6 +248,36 @@ impl PostieDb {
         transaction.commit().await?;
         println!("transaction committed");
 
+        Ok(())
+    }
+
+    pub async fn save_request_response_item(
+        &mut self,
+        request: &DBRequest,
+        response: &DBResponse,
+        sent_at: &DateTime<Utc>,
+        response_time: &u128
+) -> Result<(), Box<dyn Error>> {
+        println!("Saving request response history item");
+        let mut transaction = self.connection.begin().await?;
+        let id = Uuid::new_v4().to_string();
+        let converted_sent = sent_at.to_string();
+        let converted_response_time = response_time.to_string();
+        _ = sqlx::query!(
+            r#"
+            INSERT INTO request_history (id, request_id, response_id, sent_at, response_time_ms)
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
+            id,
+            request.id,
+            response.id,
+            converted_sent,
+           converted_response_time 
+        )
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+        transaction.commit().await?;
         Ok(())
     }
 
@@ -268,6 +303,28 @@ impl PostieDb {
         .execute(&mut *transaction)
         .await
         .unwrap();
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    pub async fn save_response(&mut self, response: &DBResponse) -> Result<(), Box<dyn Error>> {
+        println!("Saving response to db");
+        let mut transaction = self.connection.begin().await?;
+        let header_json = serde_json::to_string(&response.headers)?;
+        _ = sqlx::query!(
+            r#"
+            INSERT INTO response (id, name, status_code, headers, body)
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
+            response.id,
+            response.name,
+            response.status_code,
+            header_json,
+            response.body
+        )
+            .execute(&mut *transaction)
+            .await
+            .unwrap();
         transaction.commit().await?;
         Ok(())
     }
@@ -317,4 +374,6 @@ impl PostieDb {
         }
         Ok(rows)
     }
+
+    
 }
