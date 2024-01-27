@@ -1,5 +1,5 @@
 use api::{
-    domain::environment::{EnvironmentFile, EnvironmentValue},
+    domain::{environment::{EnvironmentFile, EnvironmentValue}, request::DBRequest, response::DBResponse},
     HttpMethod, HttpRequest, PostieApi,
 };
 use eframe::{
@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     cell::RefCell,
-    collections::HashSet,
+    collections::{HashSet, HashMap},
     error::Error,
     rc::Rc,
     sync::{Arc, Mutex},
@@ -39,32 +39,6 @@ pub enum RequestWindowMode {
     ENVIRONMENT,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct GuiConfig {
-    pub active_window: ActiveWindow,
-    pub request_window_mode: RequestWindowMode,
-    pub selected_http_method: HttpMethod,
-    pub url: String,
-    pub body_str: String,
-    pub import_window_open: bool,
-    pub import_mode: ImportMode,
-    pub import_file_path: String,
-}
-impl Default for GuiConfig {
-    fn default() -> Self {
-        Self {
-            active_window: ActiveWindow::REQUEST,
-            request_window_mode: RequestWindowMode::BODY,
-            selected_http_method: HttpMethod::GET,
-            url: String::from("{{HOST_URL}}/json"),
-            body_str: String::from("{ \"foo\": \"bar\" }"),
-            import_window_open: false,
-            import_file_path: String::from(""),
-            import_mode: ImportMode::COLLECTION,
-        }
-    }
-}
-
 pub struct Gui {
     pub response: Arc<RwLock<Option<Value>>>,
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
@@ -72,6 +46,8 @@ pub struct Gui {
     pub environments: Rc<RefCell<Option<Vec<api::domain::environment::EnvironmentFile>>>>,
     pub request_history_items: Rc<RefCell<Option<Vec<api::domain::request_item::RequestHistoryItem>>>>,
     pub selected_history_item: Rc<RefCell<Option<api::domain::request_item::RequestHistoryItem>>>,
+    pub saved_requests: Rc<RefCell<Option<HashMap<String, api::domain::request::DBRequest>>>>,
+    pub saved_responses: Rc<RefCell<Option<HashMap<String, api::domain::response::DBResponse>>>>,
     pub env_vars: Rc<RefCell<Vec<EnvironmentValue>>>,
     pub active_window: RwLock<ActiveWindow>,
     pub request_window_mode: RwLock<RequestWindowMode>,
@@ -109,6 +85,8 @@ impl Default for Gui {
             env_vars: Rc::new(RefCell::new(vec![])),
             request_history_items: Rc::new(RefCell::new(None)),
             selected_history_item: Rc::new(RefCell::new(None)),
+            saved_requests: Rc::new(RefCell::new(None)),
+            saved_responses: Rc::new(RefCell::new(None)),
             active_window: RwLock::new(ActiveWindow::REQUEST),
             request_window_mode: RwLock::new(RequestWindowMode::BODY),
             selected_http_method: HttpMethod::GET,
@@ -133,9 +111,21 @@ impl Gui {
         let request_history_items = PostieApi::load_request_response_items()
             .await
             .unwrap();
+        let saved_requests = PostieApi::load_saved_requests()
+            .await
+            .unwrap();
+        let saved_responses = PostieApi::load_saved_responses()
+            .await
+            .unwrap();
+        let requests_by_id: HashMap<String, DBRequest> = saved_requests.into_iter().map(|r| (r.id.clone(), r)).collect();
+        println!("{:?}", requests_by_id);
+        let responses_by_id: HashMap<String, DBResponse> = saved_responses.into_iter().map(|r| (r.id.clone(), r)).collect();
+        println!("{:?}", responses_by_id);
         let mut default = Gui::default();
         default.environments = Rc::new(RefCell::from(Some(envs)));
         default.request_history_items = Rc::new(RefCell::from(Some(request_history_items)));
+        default.saved_requests = Rc::new(RefCell::from(Some(requests_by_id)));
+        default.saved_responses = Rc::new(RefCell::from(Some(responses_by_id)));
         default
     }
 }
@@ -254,11 +244,17 @@ impl App for Gui {
                     let history_items = history_items_clone.borrow();
                     if let Some(item_vec) = &*history_items {
                         for item in item_vec {
-                            ui.selectable_value(
+                            if ui.selectable_value(
                                 &mut self.selected_history_item,
                                 Rc::new(RefCell::from(Some(item.clone()))),
                                 format!("{}", item.id)
-                            );
+                            ).clicked() {
+                                // TODO - replace url, method, request body, response body
+                                let requests_clone = self.saved_requests.borrow();
+                                let requests = requests_clone.as_ref().unwrap();
+                                let historical_request = requests.get(&item.request_id).unwrap();
+                                self.url = historical_request.url.clone();
+                            }
                         }
                     }
                 }

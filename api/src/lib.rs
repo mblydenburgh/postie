@@ -1,7 +1,7 @@
 pub mod domain;
 
 use chrono::prelude::*;
-use std::{error::Error, fs, borrow::BorrowMut, time::Instant, sync::Arc};
+use std::{error::Error, fs, borrow::Borrow, fmt::write};
 use domain::collection::Collection;
 use domain::environment::EnvironmentFile;
 use reqwest::{
@@ -13,7 +13,7 @@ use serde_json::{json, Value, from_str};
 use sqlx::{sqlite::SqliteRow, Connection, Row, SqliteConnection};
 use uuid::Uuid;
 
-use crate::domain::{request::DBRequest, response::DBResponse, request_item::RequestHistoryItem};
+use crate::domain::{request::{DBRequest, self, RequestHeader}, response::{DBResponse, ResponseHeader}, request_item::RequestHistoryItem};
 
 #[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
 pub enum HttpMethod {
@@ -115,6 +115,16 @@ impl PostieApi {
         let mut api = PostieApi::new().await;
         let items = api.db.get_request_response_items().await.unwrap();
         Ok(items)
+    }
+    pub async fn load_saved_requests() -> Result<Vec<DBRequest>, Box<dyn Error + Send>> {
+        let mut api = PostieApi::new().await;
+        let requests = api.db.get_all_requests().await.unwrap();
+        Ok(requests)
+    }
+    pub async fn load_saved_responses() -> Result<Vec<DBResponse>, Box<dyn Error + Send>> {
+        let mut api = PostieApi::new().await;
+        let responses = api.db.get_all_responses().await.unwrap();
+        Ok(responses)
     }
     pub fn substitute_variables_in_url(environment: &EnvironmentFile, raw_url: String) -> String {
         println!("substituting env vars");
@@ -357,6 +367,54 @@ impl PostieDb {
             .unwrap();
         transaction.commit().await?;
         Ok(())
+    }
+
+    pub async fn get_all_requests(&mut self) -> Result<Vec<DBRequest>, Box<dyn Error>> {
+        println!("getting all saved requests");
+        let rows = sqlx::query("SELECT * FROM request")
+            .map(|row: SqliteRow| {
+                let id: String = row.get("id");
+                let method: String = row.get("method");
+                let url: String = row.get("url");
+                let name: Option<String> = row.get("name");
+                let raw_body: Option<String> = row.get("body");
+                let raw_headers: String = row.get("headers");
+                let mut body: Option<serde_json::Value> = None;
+                let headers: Vec<request::RequestHeader> = serde_json::from_str::<Vec<RequestHeader>>(&raw_headers).unwrap();
+                if let Some(body_str) = raw_body {
+                    body = serde_json::from_str(&body_str).unwrap()
+                }
+                DBRequest { id, method, url, name, headers, body }
+            })
+        .fetch_all(&mut self.connection)
+        .await
+        .unwrap();
+        Ok(rows)
+    }
+
+    pub async fn get_all_responses(&mut self) -> Result<Vec<DBResponse>, Box<dyn Error>> {
+        println!("getting all saved responses");
+        let rows = sqlx::query("SELECT * from response")
+            .map(|row: SqliteRow| {
+                let id: String = row.get("id");
+                let status_code: u16 = row.get("status_code");
+                let name: Option<String> = row.get("name");
+                let raw_headers: String = row.get("headers");
+                let raw_body: String = row.get("body");
+                let headers = serde_json::from_str::<Vec<ResponseHeader>>(&raw_headers).unwrap();
+                let body = serde_json::from_str(&raw_body).unwrap();
+                DBResponse {
+                    id,
+                    status_code,
+                    name,
+                    headers,
+                    body
+                }
+            })
+            .fetch_all(&mut self.connection)
+            .await
+            .unwrap();
+        Ok(rows)
     }
 
     pub async fn get_all_environments(&mut self) -> Result<Vec<EnvironmentFile>, Box<dyn Error>> {
