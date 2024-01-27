@@ -1,6 +1,6 @@
 pub mod domain;
 
-use std::{borrow::BorrowMut, error::Error, fs};
+use std::{borrow::BorrowMut, error::Error, fs, sync::Arc};
 
 use domain::collection::Collection;
 use domain::environment::EnvironmentFile;
@@ -198,22 +198,6 @@ pub struct PostieDb {
     pub connection: SqliteConnection,
 }
 
-struct DBResponse {
-    id: String,
-    status_code: u8,
-    name: String,
-    headers: String,
-    body: String,
-}
-
-struct DBRequestHistoryItem {
-    id: String,
-    request_id: String,
-    response_id: String,
-    sent_at: String,
-    response_time: u32,
-}
-
 impl PostieDb {
     pub async fn new() -> Self {
         PostieDb {
@@ -244,6 +228,29 @@ impl PostieDb {
         println!("transaction committed");
 
         Ok(())
+    }
+
+    pub async fn get_request_history(
+        &mut self
+    ) -> Result<Arc<[DBRequest]>, Box<dyn Error>> {
+        let rows = sqlx::query!("SELECT * FROM request_history")
+            .map(|row: SqliteRow| {
+                let id: String = row.get("id");
+                let request_id: String = row.get("request_id");
+                let response_id: String = row.get("response_id");
+                let sent_at: String = row.get("sent_at");
+                let response_time_ms: String = row.get("response_time_ms");
+                DBRequest {
+                    id,
+                    request_id,
+                    response_id,
+                    response_time_ms,
+                    sent_at
+                }
+            })
+            .fetch_all(&mut self.connection)
+            .await
+            .unwrap();
     }
 
     pub async fn save_environment(
