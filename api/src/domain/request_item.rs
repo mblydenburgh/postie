@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RequestHistoryItem {
     pub id: String,
     pub request_id: String,

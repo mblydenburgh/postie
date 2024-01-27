@@ -71,7 +71,7 @@ pub struct Gui {
     pub selected_environment: Rc<RefCell<Option<api::domain::environment::EnvironmentFile>>>,
     pub environments: Rc<RefCell<Option<Vec<api::domain::environment::EnvironmentFile>>>>,
     pub request_history_items: Rc<RefCell<Option<Vec<api::domain::request_item::RequestHistoryItem>>>>,
-    pub selected_history_items: Rc<RefCell<Option<api::domain::request_item::RequestHistoryItem>>>,
+    pub selected_history_item: Rc<RefCell<Option<api::domain::request_item::RequestHistoryItem>>>,
     pub env_vars: Rc<RefCell<Vec<EnvironmentValue>>>,
     pub active_window: RwLock<ActiveWindow>,
     pub request_window_mode: RwLock<RequestWindowMode>,
@@ -108,7 +108,7 @@ impl Default for Gui {
             environments: Rc::new(RefCell::new(None)),
             env_vars: Rc::new(RefCell::new(vec![])),
             request_history_items: Rc::new(RefCell::new(None)),
-            selected_history_items: Rc::new(RefCell::new(None)),
+            selected_history_item: Rc::new(RefCell::new(None)),
             active_window: RwLock::new(ActiveWindow::REQUEST),
             request_window_mode: RwLock::new(RequestWindowMode::BODY),
             selected_http_method: HttpMethod::GET,
@@ -250,6 +250,17 @@ impl App for Gui {
                 }
                 ActiveWindow::HISTORY => {
                     ui.label("History");
+                    let history_items_clone = Rc::clone(&self.request_history_items);
+                    let history_items = history_items_clone.borrow();
+                    if let Some(item_vec) = &*history_items {
+                        for item in item_vec {
+                            ui.selectable_value(
+                                &mut self.selected_history_item,
+                                Rc::new(RefCell::from(Some(item.clone()))),
+                                format!("{}", item.id)
+                            );
+                        }
+                    }
                 }
             });
         }
