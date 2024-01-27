@@ -70,6 +70,8 @@ pub struct Gui {
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
     pub selected_environment: Rc<RefCell<Option<api::domain::environment::EnvironmentFile>>>,
     pub environments: Rc<RefCell<Option<Vec<api::domain::environment::EnvironmentFile>>>>,
+    pub request_history_items: Rc<RefCell<Option<Vec<api::domain::request_item::RequestHistoryItem>>>>,
+    pub selected_history_items: Rc<RefCell<Option<api::domain::request_item::RequestHistoryItem>>>,
     pub env_vars: Rc<RefCell<Vec<EnvironmentValue>>>,
     pub active_window: RwLock<ActiveWindow>,
     pub request_window_mode: RwLock<RequestWindowMode>,
@@ -105,6 +107,8 @@ impl Default for Gui {
             }))),
             environments: Rc::new(RefCell::new(None)),
             env_vars: Rc::new(RefCell::new(vec![])),
+            request_history_items: Rc::new(RefCell::new(None)),
+            selected_history_items: Rc::new(RefCell::new(None)),
             active_window: RwLock::new(ActiveWindow::REQUEST),
             request_window_mode: RwLock::new(RequestWindowMode::BODY),
             selected_http_method: HttpMethod::GET,
@@ -126,8 +130,12 @@ impl Gui {
                 name: String::from("default"),
                 values: None,
             }]);
+        let request_history_items = PostieApi::load_request_response_items()
+            .await
+            .unwrap();
         let mut default = Gui::default();
         default.environments = Rc::new(RefCell::from(Some(envs)));
+        default.request_history_items = Rc::new(RefCell::from(Some(request_history_items)));
         default
     }
 }

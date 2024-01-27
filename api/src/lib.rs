@@ -1,7 +1,7 @@
 pub mod domain;
 
-use std::{borrow::BorrowMut, error::Error, fs, sync::Arc};
-
+use chrono::prelude::*;
+use std::{error::Error, fs, borrow::BorrowMut, time::Instant, sync::Arc};
 use domain::collection::Collection;
 use domain::environment::EnvironmentFile;
 use reqwest::{
@@ -9,11 +9,11 @@ use reqwest::{
     Method,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{json, Value, from_str};
 use sqlx::{sqlite::SqliteRow, Connection, Row, SqliteConnection};
 use uuid::Uuid;
 
-use crate::domain::request::DBRequest;
+use crate::domain::{request::DBRequest, response::DBResponse, request_item::RequestHistoryItem};
 
 #[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
 pub enum HttpMethod {
@@ -111,6 +111,11 @@ impl PostieApi {
         let envs = api.db.get_all_environments().await.unwrap();
         Ok(envs)
     }
+    pub async fn load_request_response_items() -> Result<Vec<RequestHistoryItem>, Box<dyn Error + Send>> {
+        let mut api = PostieApi::new().await;
+        let items = api.db.get_request_response_items().await.unwrap();
+        Ok(items)
+    }
     pub fn substitute_variables_in_url(environment: &EnvironmentFile, raw_url: String) -> String {
         println!("substituting env vars");
         if let Some(values) = environment.clone().values {
@@ -152,16 +157,20 @@ impl PostieApi {
             req = req.json(&input.body.clone().unwrap_or_default());
         }
 
+        let now: DateTime<Utc> = Utc::now();
+        let sent_at = std::time::Instant::now();
         let res = req.send().await?;
-        let res_type = res.headers().get("content-type").unwrap().to_str().unwrap();
+        let response_time = sent_at.elapsed().as_millis();
+        let res_headers = res.headers().clone();
+        let res_status = res.status().clone();
+        let res_type = res_headers.get("content-type").unwrap().to_str().unwrap();
+        let res_text = res.text().await?;
+        let res_json: serde_json::Value = serde_json::from_str(&res_text).unwrap();
         if !res_type.starts_with("application/json") {
             // I couldn't figure out how to safely throw an error so I'm just returning this for now
             println!("expected application/json, got {}", res_type);
             return Ok(json!({"msg": "not JSON!"}));
         }
-
-        let res_str = res.text().await?;
-        let res_json = serde_json::from_str(&res_str).unwrap_or_default();
 
         let request_headers = input
             .headers
@@ -171,18 +180,35 @@ impl PostieApi {
             .map(|(key, value)| domain::request::RequestHeader { key, value })
             .collect();
         let mut db = PostieDb::new().await;
-        let _ = db
-            .save_request_history(DBRequest {
+        let db_request = DBRequest {
                 id: input.id.to_string(),
                 body: input.body,
-                name: input.name,
+                name: input.name.clone(),
                 method: input.method.to_string(),
                 url: input.url,
                 headers: request_headers,
-            })
+            };
+        let _ = db
+            .save_request_history(&db_request)
             .await?;
+        let response_headers: Vec<domain::response::ResponseHeader> = res_headers
+            .into_iter()
+            .map(|(key, value)| domain::response::ResponseHeader { 
+                key: String::from(HeaderName::as_str(&key.unwrap())),
+                value: String::from(HeaderValue::to_str(&value).unwrap()) 
+            }).collect();
+        let db_response = DBResponse {
+            id: Uuid::new_v4().to_string(),
+            status_code: res_status.as_u16(),
+            name: input.name.clone(),
+            headers: response_headers,
+            body: Some(res_json.clone()),
+        };
+        let _ = db.save_response(&db_response).await?;
+        let _ = db.save_request_response_item(&db_request, &db_response, &now, &response_time).await?;
 
-        Ok(res_json)
+
+        Ok(res_json.clone())
     }
 }
 
@@ -205,7 +231,7 @@ impl PostieDb {
         }
     }
 
-    pub async fn save_request_history(&mut self, request: DBRequest) -> Result<(), Box<dyn Error>> {
+    pub async fn save_request_history(&mut self, request: &DBRequest) -> Result<(), Box<dyn Error>> {
         println!("got request: {:?}", request);
         let mut transaction = self.connection.begin().await?;
         let header_json = serde_json::to_string(&request.headers)?;
@@ -230,27 +256,59 @@ impl PostieDb {
         Ok(())
     }
 
-    pub async fn get_request_history(
+    pub async fn save_request_response_item(
+        &mut self,
+        request: &DBRequest,
+        response: &DBResponse,
+        sent_at: &DateTime<Utc>,
+        response_time: &u128
+    ) -> Result<(), Box<dyn Error>> {
+        println!("Saving request response history item");
+        let mut transaction = self.connection.begin().await?;
+        let id = Uuid::new_v4().to_string();
+        let converted_sent = sent_at.to_string();
+        let converted_response_time = response_time.to_string();
+        _ = sqlx::query!(
+            r#"
+            INSERT INTO request_history (id, request_id, response_id, sent_at, response_time_ms)
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
+            id,
+            request.id,
+            response.id,
+            converted_sent,
+           converted_response_time 
+        )
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    pub async fn get_request_response_items(
         &mut self
-    ) -> Result<Arc<[DBRequest]>, Box<dyn Error>> {
-        let rows = sqlx::query!("SELECT * FROM request_history")
+    ) -> Result<Vec<RequestHistoryItem>, Box<dyn Error>> {
+        println!("getting all request response items");
+        let rows = sqlx::query("SELECT * FROM request_history")
             .map(|row: SqliteRow| {
                 let id: String = row.get("id");
                 let request_id: String = row.get("request_id");
                 let response_id: String = row.get("response_id");
                 let sent_at: String = row.get("sent_at");
-                let response_time_ms: String = row.get("response_time_ms");
-                DBRequest {
+                let response_time: String = row.get("response_time_ms");
+                RequestHistoryItem {
                     id,
                     request_id,
                     response_id,
-                    response_time_ms,
+                    response_time: from_str::<usize>(&response_time).unwrap(),
                     sent_at
                 }
             })
             .fetch_all(&mut self.connection)
             .await
             .unwrap();
+        Ok(rows)
     }
 
     pub async fn save_environment(
@@ -275,6 +333,28 @@ impl PostieDb {
         .execute(&mut *transaction)
         .await
         .unwrap();
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    pub async fn save_response(&mut self, response: &DBResponse) -> Result<(), Box<dyn Error>> {
+        println!("Saving response to db");
+        let mut transaction = self.connection.begin().await?;
+        let header_json = serde_json::to_string(&response.headers)?;
+        _ = sqlx::query!(
+            r#"
+            INSERT INTO response (id, name, status_code, headers, body)
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
+            response.id,
+            response.name,
+            response.status_code,
+            header_json,
+            response.body
+        )
+            .execute(&mut *transaction)
+            .await
+            .unwrap();
         transaction.commit().await?;
         Ok(())
     }
@@ -324,4 +404,6 @@ impl PostieDb {
         }
         Ok(rows)
     }
+
+    
 }
