@@ -95,7 +95,7 @@ impl Default for Gui {
             saved_responses: Rc::new(RefCell::new(None)),
             active_window: RwLock::new(ActiveWindow::REQUEST),
             request_window_mode: RwLock::new(RequestWindowMode::BODY),
-            selected_http_method: HttpMethod::POST,
+            selected_http_method: HttpMethod::GET,
             url: String::from("{{HOST_URL}}/json"),
             body_str: String::from("{ \"foo\": \"bar\" }"),
             import_window_open: RwLock::new(false),
@@ -291,17 +291,16 @@ impl App for Gui {
         TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.heading("Welcome to Postie!");
             ui.horizontal(|ui| {
-                let mut method = &self.selected_http_method;
                 ComboBox::from_label("")
-                    .selected_text(format!("{:?}", method))
+                    .selected_text(format!("{:?}", &mut self.selected_http_method))
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut method, &HttpMethod::GET, "GET");
-                        ui.selectable_value(&mut method, &HttpMethod::POST, "POST");
-                        ui.selectable_value(&mut method, &HttpMethod::PUT, "PUT");
-                        ui.selectable_value(&mut method, &HttpMethod::DELETE, "DELETE");
-                        ui.selectable_value(&mut method, &HttpMethod::PATCH, "PATCH");
-                        ui.selectable_value(&mut method, &HttpMethod::OPTIONS, "OPTIONS");
-                        ui.selectable_value(&mut method, &HttpMethod::HEAD, "HEAD");
+                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::GET, "GET");
+                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::POST, "POST");
+                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::PUT, "PUT");
+                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::DELETE, "DELETE");
+                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::PATCH, "PATCH");
+                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::OPTIONS, "OPTIONS");
+                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::HEAD, "HEAD");
                     });
                 ui.label("URL:");
                 ui.text_edit_singleline(&mut self.url);
