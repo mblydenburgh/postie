@@ -1,7 +1,7 @@
 pub mod domain;
 
 use chrono::prelude::*;
-use std::{error::Error, fs, borrow::Borrow, fmt::write};
+use std::{error::Error, fs, str::FromStr};
 use domain::collection::Collection;
 use domain::environment::EnvironmentFile;
 use reqwest::{
@@ -28,6 +28,24 @@ pub enum HttpMethod {
 impl std::fmt::Display for HttpMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+#[derive(Debug)]
+pub struct HttpMethodParseError;
+impl FromStr for HttpMethod {
+    type Err = HttpMethodParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "GET" => Ok(HttpMethod::GET),
+            "POST" => Ok(HttpMethod::POST),
+            "PUT" => Ok(HttpMethod::PUT),
+            "PATCH" => Ok(HttpMethod::PATCH),
+            "DELETE" => Ok(HttpMethod::DELETE),
+            "OPTIONS" => Ok(HttpMethod::OPTIONS),
+            "HEAD" => Ok(HttpMethod::HEAD),
+            _ => Err(HttpMethodParseError)
+        }
     }
 }
 

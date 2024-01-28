@@ -15,7 +15,7 @@ use std::{
     collections::{HashSet, HashMap},
     error::Error,
     rc::Rc,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}, str::FromStr,
 };
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -89,7 +89,7 @@ impl Default for Gui {
             saved_responses: Rc::new(RefCell::new(None)),
             active_window: RwLock::new(ActiveWindow::REQUEST),
             request_window_mode: RwLock::new(RequestWindowMode::BODY),
-            selected_http_method: HttpMethod::GET,
+            selected_http_method: HttpMethod::POST,
             url: String::from("{{HOST_URL}}/json"),
             body_str: String::from("{ \"foo\": \"bar\" }"),
             import_window_open: RwLock::new(false),
@@ -118,9 +118,7 @@ impl Gui {
             .await
             .unwrap();
         let requests_by_id: HashMap<String, DBRequest> = saved_requests.into_iter().map(|r| (r.id.clone(), r)).collect();
-        println!("{:?}", requests_by_id);
         let responses_by_id: HashMap<String, DBResponse> = saved_responses.into_iter().map(|r| (r.id.clone(), r)).collect();
-        println!("{:?}", responses_by_id);
         let mut default = Gui::default();
         default.environments = Rc::new(RefCell::from(Some(envs)));
         default.request_history_items = Rc::new(RefCell::from(Some(request_history_items)));
@@ -254,6 +252,7 @@ impl App for Gui {
                                 let requests = requests_clone.as_ref().unwrap();
                                 let historical_request = requests.get(&item.request_id).unwrap();
                                 self.url = historical_request.url.clone();
+                                self.selected_http_method = HttpMethod::from_str(&historical_request.method).unwrap();
                             }
                         }
                     }
