@@ -253,6 +253,13 @@ impl App for Gui {
                                 let historical_request = requests.get(&item.request_id).unwrap();
                                 self.url = historical_request.url.clone();
                                 self.selected_http_method = HttpMethod::from_str(&historical_request.method).unwrap();
+                                match &historical_request.body {
+                                    Some(body_json) => {
+                                        let body_str = serde_json::from_value(body_json.clone()).unwrap();
+                                        self.body_str = body_str;
+                                    },
+                                    None => self.body_str = String::from(""),
+                                }
                             }
                         }
                     }
