@@ -9,7 +9,7 @@ use eframe::{
 use egui::TextStyle;
 use egui_extras::{Column, TableBuilder};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::{
     cell::RefCell,
     collections::{HashSet, HashMap},
@@ -101,6 +101,7 @@ impl Default for Gui {
 }
 impl Gui {
     async fn new() -> Self {
+        // Initialize Postie with values from db
         let envs = PostieApi::load_environments()
             .await
             .unwrap_or(vec![EnvironmentFile {
@@ -132,7 +133,7 @@ impl Gui {
         PostieApi::make_request(input).await
     }
     fn spawn_submit(&mut self, input: HttpRequest) -> Result<(), Box<dyn Error>> {
-        // TODO figure out how to imple Send for Gui so it can be passed to another thread.
+        // TODO figure out how to impl Send for Gui so it can be passed to another thread.
         // currently getting an error. Workaround is to just clone the PostieApi
         let result_for_worker = self.response.clone();
         tokio::spawn(async move {
@@ -249,8 +250,11 @@ impl App for Gui {
                             ).clicked() {
                                 // TODO - replace url, method, request body, response body
                                 let requests_clone = self.saved_requests.borrow();
+                                let responses_clone = self.saved_responses.borrow();
                                 let requests = requests_clone.as_ref().unwrap();
+                                let responses = responses_clone.as_ref().unwrap();
                                 let historical_request = requests.get(&item.request_id).unwrap();
+                                let historical_response = responses.get(&item.response_id).unwrap();
                                 self.url = historical_request.url.clone();
                                 self.selected_http_method = HttpMethod::from_str(&historical_request.method).unwrap();
                                 match &historical_request.body {
@@ -259,6 +263,13 @@ impl App for Gui {
                                         self.body_str = body_str;
                                     },
                                     None => self.body_str = String::from(""),
+                                }
+                                let ui_response_clone = self.response.clone();
+                                let mut ui_response_guard = ui_response_clone.try_write().unwrap();
+                                let response_body = &historical_response.body;
+                                match response_body {
+                                    Some(body) => *ui_response_guard = Some(body.clone()),
+                                    None => *ui_response_guard = None,
                                 }
                             }
                         }
