@@ -1,7 +1,6 @@
 pub mod domain;
 
 use chrono::prelude::*;
-use std::{error::Error, fs, str::FromStr};
 use domain::collection::Collection;
 use domain::environment::EnvironmentFile;
 use reqwest::{
@@ -9,11 +8,16 @@ use reqwest::{
     Method,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value, from_str};
+use serde_json::{from_str, json, Value};
 use sqlx::{sqlite::SqliteRow, Connection, Row, SqliteConnection};
+use std::{error::Error, fs, str::FromStr};
 use uuid::Uuid;
 
-use crate::domain::{request::{DBRequest, self, RequestHeader}, response::{DBResponse, ResponseHeader}, request_item::RequestHistoryItem};
+use crate::domain::{
+    request::{self, DBRequest, RequestHeader},
+    request_item::RequestHistoryItem,
+    response::{DBResponse, ResponseHeader},
+};
 
 #[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
 pub enum HttpMethod {
@@ -44,7 +48,7 @@ impl FromStr for HttpMethod {
             "DELETE" => Ok(HttpMethod::DELETE),
             "OPTIONS" => Ok(HttpMethod::OPTIONS),
             "HEAD" => Ok(HttpMethod::HEAD),
-            _ => Err(HttpMethodParseError)
+            _ => Err(HttpMethodParseError),
         }
     }
 }
@@ -129,7 +133,8 @@ impl PostieApi {
         let envs = api.db.get_all_environments().await.unwrap();
         Ok(envs)
     }
-    pub async fn load_request_response_items() -> Result<Vec<RequestHistoryItem>, Box<dyn Error + Send>> {
+    pub async fn load_request_response_items(
+    ) -> Result<Vec<RequestHistoryItem>, Box<dyn Error + Send>> {
         let mut api = PostieApi::new().await;
         let items = api.db.get_request_response_items().await.unwrap();
         Ok(items)
@@ -209,22 +214,21 @@ impl PostieApi {
             .collect();
         let mut db = PostieDb::new().await;
         let db_request = DBRequest {
-                id: input.id.to_string(),
-                body: input.body,
-                name: input.name.clone(),
-                method: input.method.to_string(),
-                url: input.url,
-                headers: request_headers,
-            };
-        let _ = db
-            .save_request_history(&db_request)
-            .await?;
+            id: input.id.to_string(),
+            body: input.body,
+            name: input.name.clone(),
+            method: input.method.to_string(),
+            url: input.url,
+            headers: request_headers,
+        };
+        let _ = db.save_request_history(&db_request).await?;
         let response_headers: Vec<domain::response::ResponseHeader> = res_headers
             .into_iter()
-            .map(|(key, value)| domain::response::ResponseHeader { 
+            .map(|(key, value)| domain::response::ResponseHeader {
                 key: String::from(HeaderName::as_str(&key.unwrap())),
-                value: String::from(HeaderValue::to_str(&value).unwrap()) 
-            }).collect();
+                value: String::from(HeaderValue::to_str(&value).unwrap()),
+            })
+            .collect();
         let db_response = DBResponse {
             id: Uuid::new_v4().to_string(),
             status_code: res_status.as_u16(),
@@ -233,8 +237,9 @@ impl PostieApi {
             body: Some(res_json.clone()),
         };
         let _ = db.save_response(&db_response).await?;
-        let _ = db.save_request_response_item(&db_request, &db_response, &now, &response_time).await?;
-
+        let _ = db
+            .save_request_response_item(&db_request, &db_response, &now, &response_time)
+            .await?;
 
         Ok(res_json.clone())
     }
@@ -259,7 +264,10 @@ impl PostieDb {
         }
     }
 
-    pub async fn save_request_history(&mut self, request: &DBRequest) -> Result<(), Box<dyn Error>> {
+    pub async fn save_request_history(
+        &mut self,
+        request: &DBRequest,
+    ) -> Result<(), Box<dyn Error>> {
         println!("got request: {:?}", request);
         let mut transaction = self.connection.begin().await?;
         let header_json = serde_json::to_string(&request.headers)?;
@@ -289,7 +297,7 @@ impl PostieDb {
         request: &DBRequest,
         response: &DBResponse,
         sent_at: &DateTime<Utc>,
-        response_time: &u128
+        response_time: &u128,
     ) -> Result<(), Box<dyn Error>> {
         println!("Saving request response history item");
         let mut transaction = self.connection.begin().await?;
@@ -305,7 +313,7 @@ impl PostieDb {
             request.id,
             response.id,
             converted_sent,
-           converted_response_time 
+            converted_response_time
         )
         .execute(&mut *transaction)
         .await
@@ -315,7 +323,7 @@ impl PostieDb {
     }
 
     pub async fn get_request_response_items(
-        &mut self
+        &mut self,
     ) -> Result<Vec<RequestHistoryItem>, Box<dyn Error>> {
         println!("getting all request response items");
         let rows = sqlx::query("SELECT * FROM request_history")
@@ -330,7 +338,7 @@ impl PostieDb {
                     request_id,
                     response_id,
                     response_time: from_str::<usize>(&response_time).unwrap(),
-                    sent_at
+                    sent_at,
                 }
             })
             .fetch_all(&mut self.connection)
@@ -380,9 +388,9 @@ impl PostieDb {
             header_json,
             response.body
         )
-            .execute(&mut *transaction)
-            .await
-            .unwrap();
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
         transaction.commit().await?;
         Ok(())
     }
@@ -398,15 +406,23 @@ impl PostieDb {
                 let raw_body: Option<String> = row.get("body");
                 let raw_headers: String = row.get("headers");
                 let mut body: Option<serde_json::Value> = None;
-                let headers: Vec<request::RequestHeader> = serde_json::from_str::<Vec<RequestHeader>>(&raw_headers).unwrap();
+                let headers: Vec<request::RequestHeader> =
+                    serde_json::from_str::<Vec<RequestHeader>>(&raw_headers).unwrap();
                 if let Some(body_str) = raw_body {
                     body = serde_json::from_str(&body_str).unwrap()
                 }
-                DBRequest { id, method, url, name, headers, body }
+                DBRequest {
+                    id,
+                    method,
+                    url,
+                    name,
+                    headers,
+                    body,
+                }
             })
-        .fetch_all(&mut self.connection)
-        .await
-        .unwrap();
+            .fetch_all(&mut self.connection)
+            .await
+            .unwrap();
         Ok(rows)
     }
 
@@ -426,7 +442,7 @@ impl PostieDb {
                     status_code,
                     name,
                     headers,
-                    body
+                    body,
                 }
             })
             .fetch_all(&mut self.connection)
@@ -480,6 +496,4 @@ impl PostieDb {
         }
         Ok(rows)
     }
-
-    
 }

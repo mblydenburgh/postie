@@ -1,5 +1,9 @@
 use api::{
-    domain::{environment::{EnvironmentFile, EnvironmentValue}, request::DBRequest, response::DBResponse},
+    domain::{
+        environment::{EnvironmentFile, EnvironmentValue},
+        request::DBRequest,
+        response::DBResponse,
+    },
     HttpMethod, HttpRequest, PostieApi,
 };
 use eframe::{
@@ -9,13 +13,14 @@ use eframe::{
 use egui::TextStyle;
 use egui_extras::{Column, TableBuilder};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::{
     cell::RefCell,
-    collections::{HashSet, HashMap},
+    collections::{HashMap, HashSet},
     error::Error,
     rc::Rc,
-    sync::{Arc, Mutex}, str::FromStr,
+    str::FromStr,
+    sync::{Arc, Mutex},
 };
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -44,7 +49,8 @@ pub struct Gui {
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
     pub selected_environment: Rc<RefCell<Option<api::domain::environment::EnvironmentFile>>>,
     pub environments: Rc<RefCell<Option<Vec<api::domain::environment::EnvironmentFile>>>>,
-    pub request_history_items: Rc<RefCell<Option<Vec<api::domain::request_item::RequestHistoryItem>>>>,
+    pub request_history_items:
+        Rc<RefCell<Option<Vec<api::domain::request_item::RequestHistoryItem>>>>,
     pub selected_history_item: Rc<RefCell<Option<api::domain::request_item::RequestHistoryItem>>>,
     pub saved_requests: Rc<RefCell<Option<HashMap<String, api::domain::request::DBRequest>>>>,
     pub saved_responses: Rc<RefCell<Option<HashMap<String, api::domain::response::DBResponse>>>>,
@@ -109,17 +115,17 @@ impl Gui {
                 name: String::from("default"),
                 values: None,
             }]);
-        let request_history_items = PostieApi::load_request_response_items()
-            .await
-            .unwrap();
-        let saved_requests = PostieApi::load_saved_requests()
-            .await
-            .unwrap();
-        let saved_responses = PostieApi::load_saved_responses()
-            .await
-            .unwrap();
-        let requests_by_id: HashMap<String, DBRequest> = saved_requests.into_iter().map(|r| (r.id.clone(), r)).collect();
-        let responses_by_id: HashMap<String, DBResponse> = saved_responses.into_iter().map(|r| (r.id.clone(), r)).collect();
+        let request_history_items = PostieApi::load_request_response_items().await.unwrap();
+        let saved_requests = PostieApi::load_saved_requests().await.unwrap();
+        let saved_responses = PostieApi::load_saved_responses().await.unwrap();
+        let requests_by_id: HashMap<String, DBRequest> = saved_requests
+            .into_iter()
+            .map(|r| (r.id.clone(), r))
+            .collect();
+        let responses_by_id: HashMap<String, DBResponse> = saved_responses
+            .into_iter()
+            .map(|r| (r.id.clone(), r))
+            .collect();
         let mut default = Gui::default();
         default.environments = Rc::new(RefCell::from(Some(envs)));
         default.request_history_items = Rc::new(RefCell::from(Some(request_history_items)));
@@ -243,11 +249,14 @@ impl App for Gui {
                     let history_items = history_items_clone.borrow();
                     if let Some(item_vec) = &*history_items {
                         for item in item_vec {
-                            if ui.selectable_value(
-                                &mut self.selected_history_item,
-                                Rc::new(RefCell::from(Some(item.clone()))),
-                                format!("{}", item.id)
-                            ).clicked() {
+                            if ui
+                                .selectable_value(
+                                    &mut self.selected_history_item,
+                                    Rc::new(RefCell::from(Some(item.clone()))),
+                                    format!("{}", item.id),
+                                )
+                                .clicked()
+                            {
                                 // TODO - replace url, method, request body, response body
                                 let requests_clone = self.saved_requests.borrow();
                                 let responses_clone = self.saved_responses.borrow();
@@ -256,12 +265,14 @@ impl App for Gui {
                                 let historical_request = requests.get(&item.request_id).unwrap();
                                 let historical_response = responses.get(&item.response_id).unwrap();
                                 self.url = historical_request.url.clone();
-                                self.selected_http_method = HttpMethod::from_str(&historical_request.method).unwrap();
+                                self.selected_http_method =
+                                    HttpMethod::from_str(&historical_request.method).unwrap();
                                 match &historical_request.body {
                                     Some(body_json) => {
-                                        let body_str = serde_json::from_value(body_json.clone()).unwrap();
+                                        let body_str =
+                                            serde_json::from_value(body_json.clone()).unwrap();
                                         self.body_str = body_str;
-                                    },
+                                    }
                                     None => self.body_str = String::from(""),
                                 }
                                 let ui_response_clone = self.response.clone();
