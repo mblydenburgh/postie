@@ -15,7 +15,7 @@ use egui_extras::{Column, TableBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
-    cell::RefCell,
+    cell::{RefCell, RefMut},
     collections::{HashMap, HashSet},
     error::Error,
     rc::Rc,
@@ -47,7 +47,7 @@ pub enum RequestWindowMode {
 pub struct Gui {
     pub response: Arc<RwLock<Option<Value>>>,
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
-    pub selected_environment: Rc<RefCell<Option<api::domain::environment::EnvironmentFile>>>,
+    pub selected_environment: Rc<RefCell<api::domain::environment::EnvironmentFile>>,
     pub environments: Rc<RefCell<Option<Vec<api::domain::environment::EnvironmentFile>>>>,
     pub request_history_items:
         Rc<RefCell<Option<Vec<api::domain::request_item::RequestHistoryItem>>>>,
@@ -82,11 +82,11 @@ impl Default for Gui {
                     String::from("no-cache"),
                 ),
             ])),
-            selected_environment: Rc::new(RefCell::new(Some(EnvironmentFile {
+            selected_environment: Rc::new(RefCell::new(EnvironmentFile {
                 id: Uuid::new_v4().to_string(),
                 name: String::from("default"),
                 values: None,
-            }))),
+            })),
             environments: Rc::new(RefCell::new(None)),
             env_vars: Rc::new(RefCell::new(vec![])),
             request_history_items: Rc::new(RefCell::new(None)),
@@ -237,7 +237,7 @@ impl App for Gui {
                         for env in env_vec {
                             ui.selectable_value(
                                 &mut self.selected_environment,
-                                Rc::new(RefCell::from(Some(env.clone()))),
+                                Rc::new(RefCell::from(env.clone())),
                                 format!("{}", env.name),
                             );
                         }
@@ -324,7 +324,7 @@ impl App for Gui {
                         body,
                         method: self.selected_http_method.clone(),
                         url: self.url.clone(),
-                        environment: self.selected_environment.borrow().clone().unwrap(),
+                        environment: self.selected_environment.borrow().clone(),
                     };
 
                     let _ = Gui::spawn_submit(self, request);
@@ -459,10 +459,10 @@ impl App for Gui {
                             })
                             .body(|mut body| {
                                 let selected_environment =
-                                    self.selected_environment.borrow_mut().clone();
-                                if let Some(env) = selected_environment {
-                                    if let Some(values) = env.values {
-                                        for mut env_var in values {
+                                    self.selected_environment.borrow_mut();
+                                    let mut values_ref = RefMut::map(selected_environment, |env| &mut env.values);
+                                    if let Some(values) = values_ref.as_mut() {
+                                        for env_var in values {
                                             body.row(30.0, |mut row| {
                                                 row.col(|ui| {
                                                     ui.checkbox(&mut env_var.enabled, "");
@@ -478,12 +478,11 @@ impl App for Gui {
                                                 });
                                             });
                                         }
-                                    }
                                 }
                                 body.row(30.0, |mut row| {
                                     row.col(|ui| {
                                         if ui.button("Add").clicked() {
-                                            self.env_vars.borrow_mut().push(EnvironmentValue {
+                                            self.selected_environment.clone().borrow_mut().values.clone().unwrap().push(EnvironmentValue {
                                                 key: String::from(""),
                                                 value: String::from(""),
                                                 r#type: String::from("default"),
