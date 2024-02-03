@@ -85,7 +85,7 @@ impl Default for Gui {
             selected_environment: Rc::new(RefCell::new(EnvironmentFile {
                 id: Uuid::new_v4().to_string(),
                 name: String::from("default"),
-                values: None,
+                values: Some(vec![EnvironmentValue { key: String::from("HOST_URL"), value: String::from("https://httpbin.org/json"), r#type: String::from("default"), enabled: true }]),
             })),
             environments: Rc::new(RefCell::new(None)),
             env_vars: Rc::new(RefCell::new(vec![])),
@@ -113,7 +113,7 @@ impl Gui {
             .unwrap_or(vec![EnvironmentFile {
                 id: Uuid::new_v4().to_string(),
                 name: String::from("default"),
-                values: None,
+                values: Some(vec![EnvironmentValue { key: String::from(""), value: String::from(""), r#type: String::from("default"), enabled: true }]),
             }]);
         let request_history_items = PostieApi::load_request_response_items().await.unwrap();
         let saved_requests = PostieApi::load_saved_requests().await.unwrap();
@@ -482,12 +482,15 @@ impl App for Gui {
                                 body.row(30.0, |mut row| {
                                     row.col(|ui| {
                                         if ui.button("Add").clicked() {
-                                            self.selected_environment.clone().borrow_mut().values.clone().unwrap().push(EnvironmentValue {
-                                                key: String::from(""),
-                                                value: String::from(""),
-                                                r#type: String::from("default"),
-                                                enabled: true,
-                                            });
+                                            if let Some(vals) = values_ref.as_mut() {
+                                                vals.push(EnvironmentValue {
+                                                    key: String::from(""),
+                                                    value: String::from(""),
+                                                    r#type: String::from("default"),
+                                                    enabled: true,
+                                                });
+
+                                            }
                                         };
                                     });
                                 });
