@@ -1,5 +1,9 @@
 use api::{
-    domain::environment::{EnvironmentFile, EnvironmentValue},
+    domain::{
+        environment::{EnvironmentFile, EnvironmentValue},
+        request::DBRequest,
+        response::DBResponse,
+    },
     HttpMethod, HttpRequest, PostieApi,
 };
 use eframe::{
@@ -9,12 +13,13 @@ use eframe::{
 use egui::TextStyle;
 use egui_extras::{Column, TableBuilder};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::{
-    cell::RefCell,
-    collections::HashSet,
+    cell::{RefCell, RefMut},
+    collections::{HashMap, HashSet},
     error::Error,
     rc::Rc,
+    str::FromStr,
     sync::{Arc, Mutex},
 };
 use tokio::sync::RwLock;
@@ -39,37 +44,16 @@ pub enum RequestWindowMode {
     ENVIRONMENT,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct GuiConfig {
-    pub active_window: ActiveWindow,
-    pub request_window_mode: RequestWindowMode,
-    pub selected_http_method: HttpMethod,
-    pub url: String,
-    pub body_str: String,
-    pub import_window_open: bool,
-    pub import_mode: ImportMode,
-    pub import_file_path: String,
-}
-impl Default for GuiConfig {
-    fn default() -> Self {
-        Self {
-            active_window: ActiveWindow::REQUEST,
-            request_window_mode: RequestWindowMode::BODY,
-            selected_http_method: HttpMethod::GET,
-            url: String::from("{{HOST_URL}}/json"),
-            body_str: String::from("{ \"foo\": \"bar\" }"),
-            import_window_open: false,
-            import_file_path: String::from(""),
-            import_mode: ImportMode::COLLECTION,
-        }
-    }
-}
-
 pub struct Gui {
     pub response: Arc<RwLock<Option<Value>>>,
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
-    pub selected_environment: Rc<RefCell<Option<api::domain::environment::EnvironmentFile>>>,
+    pub selected_environment: Rc<RefCell<api::domain::environment::EnvironmentFile>>,
     pub environments: Rc<RefCell<Option<Vec<api::domain::environment::EnvironmentFile>>>>,
+    pub request_history_items:
+        Rc<RefCell<Option<Vec<api::domain::request_item::RequestHistoryItem>>>>,
+    pub selected_history_item: Rc<RefCell<Option<api::domain::request_item::RequestHistoryItem>>>,
+    pub saved_requests: Rc<RefCell<Option<HashMap<String, api::domain::request::DBRequest>>>>,
+    pub saved_responses: Rc<RefCell<Option<HashMap<String, api::domain::response::DBResponse>>>>,
     pub env_vars: Rc<RefCell<Vec<EnvironmentValue>>>,
     pub active_window: RwLock<ActiveWindow>,
     pub request_window_mode: RwLock<RequestWindowMode>,
@@ -98,13 +82,17 @@ impl Default for Gui {
                     String::from("no-cache"),
                 ),
             ])),
-            selected_environment: Rc::new(RefCell::new(Some(EnvironmentFile {
+            selected_environment: Rc::new(RefCell::new(EnvironmentFile {
                 id: Uuid::new_v4().to_string(),
                 name: String::from("default"),
-                values: None,
-            }))),
+                values: Some(vec![EnvironmentValue { key: String::from("HOST_URL"), value: String::from("https://httpbin.org/json"), r#type: String::from("default"), enabled: true }]),
+            })),
             environments: Rc::new(RefCell::new(None)),
             env_vars: Rc::new(RefCell::new(vec![])),
+            request_history_items: Rc::new(RefCell::new(None)),
+            selected_history_item: Rc::new(RefCell::new(None)),
+            saved_requests: Rc::new(RefCell::new(None)),
+            saved_responses: Rc::new(RefCell::new(None)),
             active_window: RwLock::new(ActiveWindow::REQUEST),
             request_window_mode: RwLock::new(RequestWindowMode::BODY),
             selected_http_method: HttpMethod::GET,
@@ -119,15 +107,30 @@ impl Default for Gui {
 }
 impl Gui {
     async fn new() -> Self {
+        // Initialize Postie with values from db
         let envs = PostieApi::load_environments()
             .await
             .unwrap_or(vec![EnvironmentFile {
                 id: Uuid::new_v4().to_string(),
                 name: String::from("default"),
-                values: None,
+                values: Some(vec![EnvironmentValue { key: String::from(""), value: String::from(""), r#type: String::from("default"), enabled: true }]),
             }]);
+        let request_history_items = PostieApi::load_request_response_items().await.unwrap();
+        let saved_requests = PostieApi::load_saved_requests().await.unwrap();
+        let saved_responses = PostieApi::load_saved_responses().await.unwrap();
+        let requests_by_id: HashMap<String, DBRequest> = saved_requests
+            .into_iter()
+            .map(|r| (r.id.clone(), r))
+            .collect();
+        let responses_by_id: HashMap<String, DBResponse> = saved_responses
+            .into_iter()
+            .map(|r| (r.id.clone(), r))
+            .collect();
         let mut default = Gui::default();
         default.environments = Rc::new(RefCell::from(Some(envs)));
+        default.request_history_items = Rc::new(RefCell::from(Some(request_history_items)));
+        default.saved_requests = Rc::new(RefCell::from(Some(requests_by_id)));
+        default.saved_responses = Rc::new(RefCell::from(Some(responses_by_id)));
         default
     }
 }
@@ -136,7 +139,7 @@ impl Gui {
         PostieApi::make_request(input).await
     }
     fn spawn_submit(&mut self, input: HttpRequest) -> Result<(), Box<dyn Error>> {
-        // TODO figure out how to imple Send for Gui so it can be passed to another thread.
+        // TODO figure out how to impl Send for Gui so it can be passed to another thread.
         // currently getting an error. Workaround is to just clone the PostieApi
         let result_for_worker = self.response.clone();
         tokio::spawn(async move {
@@ -234,7 +237,7 @@ impl App for Gui {
                         for env in env_vec {
                             ui.selectable_value(
                                 &mut self.selected_environment,
-                                Rc::new(RefCell::from(Some(env.clone()))),
+                                Rc::new(RefCell::from(env.clone())),
                                 format!("{}", env.name),
                             );
                         }
@@ -242,23 +245,62 @@ impl App for Gui {
                 }
                 ActiveWindow::HISTORY => {
                     ui.label("History");
+                    let history_items_clone = Rc::clone(&self.request_history_items);
+                    let history_items = history_items_clone.borrow();
+                    if let Some(item_vec) = &*history_items {
+                        for item in item_vec {
+                            if ui
+                                .selectable_value(
+                                    &mut self.selected_history_item,
+                                    Rc::new(RefCell::from(Some(item.clone()))),
+                                    format!("{}", item.id),
+                                )
+                                .clicked()
+                            {
+                                // TODO - replace url, method, request body, response body
+                                let requests_clone = self.saved_requests.borrow();
+                                let responses_clone = self.saved_responses.borrow();
+                                let requests = requests_clone.as_ref().unwrap();
+                                let responses = responses_clone.as_ref().unwrap();
+                                let historical_request = requests.get(&item.request_id).unwrap();
+                                let historical_response = responses.get(&item.response_id).unwrap();
+                                self.url = historical_request.url.clone();
+                                self.selected_http_method =
+                                    HttpMethod::from_str(&historical_request.method).unwrap();
+                                match &historical_request.body {
+                                    Some(body_json) => {
+                                        let body_str =
+                                            serde_json::from_value(body_json.clone()).unwrap();
+                                        self.body_str = body_str;
+                                    }
+                                    None => self.body_str = String::from(""),
+                                }
+                                let ui_response_clone = self.response.clone();
+                                let mut ui_response_guard = ui_response_clone.try_write().unwrap();
+                                let response_body = &historical_response.body;
+                                match response_body {
+                                    Some(body) => *ui_response_guard = Some(body.clone()),
+                                    None => *ui_response_guard = None,
+                                }
+                            }
+                        }
+                    }
                 }
             });
         }
         TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.heading("Welcome to Postie!");
             ui.horizontal(|ui| {
-                let mut method = &self.selected_http_method;
                 ComboBox::from_label("")
-                    .selected_text(format!("{:?}", method))
+                    .selected_text(format!("{:?}", &mut self.selected_http_method))
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut method, &HttpMethod::GET, "GET");
-                        ui.selectable_value(&mut method, &HttpMethod::POST, "POST");
-                        ui.selectable_value(&mut method, &HttpMethod::PUT, "PUT");
-                        ui.selectable_value(&mut method, &HttpMethod::DELETE, "DELETE");
-                        ui.selectable_value(&mut method, &HttpMethod::PATCH, "PATCH");
-                        ui.selectable_value(&mut method, &HttpMethod::OPTIONS, "OPTIONS");
-                        ui.selectable_value(&mut method, &HttpMethod::HEAD, "HEAD");
+                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::GET, "GET");
+                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::POST, "POST");
+                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::PUT, "PUT");
+                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::DELETE, "DELETE");
+                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::PATCH, "PATCH");
+                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::OPTIONS, "OPTIONS");
+                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::HEAD, "HEAD");
                     });
                 ui.label("URL:");
                 ui.text_edit_singleline(&mut self.url);
@@ -282,7 +324,7 @@ impl App for Gui {
                         body,
                         method: self.selected_http_method.clone(),
                         url: self.url.clone(),
-                        environment: self.selected_environment.borrow().clone().unwrap(),
+                        environment: self.selected_environment.borrow().clone(),
                     };
 
                     let _ = Gui::spawn_submit(self, request);
@@ -417,10 +459,10 @@ impl App for Gui {
                             })
                             .body(|mut body| {
                                 let selected_environment =
-                                    self.selected_environment.borrow_mut().clone();
-                                if let Some(env) = selected_environment {
-                                    if let Some(values) = env.values {
-                                        for mut env_var in values {
+                                    self.selected_environment.borrow_mut();
+                                    let mut values_ref = RefMut::map(selected_environment, |env| &mut env.values);
+                                    if let Some(values) = values_ref.as_mut() {
+                                        for env_var in values {
                                             body.row(30.0, |mut row| {
                                                 row.col(|ui| {
                                                     ui.checkbox(&mut env_var.enabled, "");
@@ -436,17 +478,19 @@ impl App for Gui {
                                                 });
                                             });
                                         }
-                                    }
                                 }
                                 body.row(30.0, |mut row| {
                                     row.col(|ui| {
                                         if ui.button("Add").clicked() {
-                                            self.env_vars.borrow_mut().push(EnvironmentValue {
-                                                key: String::from(""),
-                                                value: String::from(""),
-                                                r#type: String::from("default"),
-                                                enabled: true,
-                                            });
+                                            if let Some(vals) = values_ref.as_mut() {
+                                                vals.push(EnvironmentValue {
+                                                    key: String::from(""),
+                                                    value: String::from(""),
+                                                    r#type: String::from("default"),
+                                                    enabled: true,
+                                                });
+
+                                            }
                                         };
                                     });
                                 });
