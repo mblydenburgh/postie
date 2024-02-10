@@ -102,11 +102,18 @@ impl PostieApi {
         println!("Reading file: {}", path);
         Ok(fs::read_to_string(path)?)
     }
-    pub async fn import_collection(path: &str) -> Result<(), Box<dyn Error + Send>> {
+    pub async fn import_collection(path: &str) -> Result<String, Box<dyn Error + Send>> {
+        let mut api = PostieApi::new().await;
         let file_str = Self::read_file(path).unwrap();
-        let _collection = Self::parse_collection(&file_str);
+        let collection = Self::parse_collection(&file_str);
         println!("Successfully parsed postman collection!");
-        Ok(())
+        match api.db.save_collection(collection).await {
+            Ok(_) => Ok(String::from("Import successful")),
+            Err(_) => {
+                println!("Error saving collection");
+                Ok(String::from("Error saving collection"))
+            },
+        }
     }
     // TODO - better error handling
     pub async fn import_environment(path: &str) -> Result<String, Box<dyn Error + Send>> {
@@ -122,6 +129,7 @@ impl PostieApi {
             }
         }
     }
+    //TODO - connect to save button on ui to overwrite changes to existing env/collection
     pub fn save_environment(_input: Environment) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
@@ -365,6 +373,28 @@ impl PostieDb {
             uuid,
             environment.name,
             value_json
+        )
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    pub async fn save_collection(&mut self, collection: Collection) -> Result <(), Box<dyn Error>> {
+        println!("Saving collection to db");
+        let mut transaction = self.connection.begin().await?;
+        let id = Uuid::new_v4().to_string();
+        let items_json = serde_json::to_string(&collection.item)?;
+        _ = sqlx::query!(
+            r#"
+            INSERT INTO collections (id, name, description, item)
+            VALUES ($1, $2, $3, $4)
+            "#,
+            id,
+            collection.info.name,
+            collection.info.description,
+            items_json
         )
         .execute(&mut *transaction)
         .await
