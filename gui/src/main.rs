@@ -13,7 +13,7 @@ use eframe::{
 use egui::TextStyle;
 use egui_extras::{Column, TableBuilder};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::{
     cell::{RefCell, RefMut},
     collections::{HashMap, HashSet},
@@ -47,17 +47,19 @@ pub enum RequestWindowMode {
 pub struct Gui {
     pub response: Arc<RwLock<Option<Value>>>,
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
-    pub selected_environment: Rc<RefCell<api::domain::environment::EnvironmentFile>>,
     pub environments: Rc<RefCell<Option<Vec<api::domain::environment::EnvironmentFile>>>>,
+    pub collections: Rc<RefCell<Option<Vec<api::domain::collection::Collection>>>>,
     pub request_history_items:
         Rc<RefCell<Option<Vec<api::domain::request_item::RequestHistoryItem>>>>,
-    pub selected_history_item: Rc<RefCell<Option<api::domain::request_item::RequestHistoryItem>>>,
     pub saved_requests: Rc<RefCell<Option<HashMap<String, api::domain::request::DBRequest>>>>,
     pub saved_responses: Rc<RefCell<Option<HashMap<String, api::domain::response::DBResponse>>>>,
+    pub selected_history_item: Rc<RefCell<Option<api::domain::request_item::RequestHistoryItem>>>,
+    pub selected_environment: Rc<RefCell<api::domain::environment::EnvironmentFile>>,
+    pub selected_collection: Rc<RefCell<Option<api::domain::collection::Collection>>>,
+    pub selected_http_method: HttpMethod,
     pub env_vars: Rc<RefCell<Vec<EnvironmentValue>>>,
     pub active_window: RwLock<ActiveWindow>,
     pub request_window_mode: RwLock<RequestWindowMode>,
-    pub selected_http_method: HttpMethod,
     pub url: String,
     pub body_str: String,
     pub import_window_open: RwLock<bool>,
@@ -87,7 +89,9 @@ impl Default for Gui {
                 name: String::from("default"),
                 values: Some(vec![EnvironmentValue { key: String::from("HOST_URL"), value: String::from("https://httpbin.org/json"), r#type: String::from("default"), enabled: true }]),
             })),
+            selected_collection: Rc::new(RefCell::new(None)),
             environments: Rc::new(RefCell::new(None)),
+            collections: Rc::new(RefCell::new(None)),
             env_vars: Rc::new(RefCell::new(vec![])),
             request_history_items: Rc::new(RefCell::new(None)),
             selected_history_item: Rc::new(RefCell::new(None)),
@@ -115,6 +119,9 @@ impl Gui {
                 name: String::from("default"),
                 values: Some(vec![EnvironmentValue { key: String::from(""), value: String::from(""), r#type: String::from("default"), enabled: true }]),
             }]);
+        let collections = PostieApi::load_collections()
+            .await
+            .unwrap();
         let request_history_items = PostieApi::load_request_response_items().await.unwrap();
         let saved_requests = PostieApi::load_saved_requests().await.unwrap();
         let saved_responses = PostieApi::load_saved_responses().await.unwrap();
@@ -128,6 +135,7 @@ impl Gui {
             .collect();
         let mut default = Gui::default();
         default.environments = Rc::new(RefCell::from(Some(envs)));
+        default.collections = Rc::new(RefCell::from(Some(collections)));
         default.request_history_items = Rc::new(RefCell::from(Some(request_history_items)));
         default.saved_requests = Rc::new(RefCell::from(Some(requests_by_id)));
         default.saved_responses = Rc::new(RefCell::from(Some(responses_by_id)));
@@ -228,6 +236,17 @@ impl App for Gui {
             SidePanel::left("content_panel").show(ctx, |ui| match *active_window {
                 ActiveWindow::REQUEST => {
                     ui.label("Collections");
+                    let collections_clone = Rc::clone(&self.collections);
+                    let collections = collections_clone.borrow();
+                    if let Some(cols) = &*collections {
+                        for c in cols {
+                            ui.selectable_value(
+                                &mut self.selected_collection,
+                                Rc::new(RefCell::from(Some(c.clone()))),
+                                format!("{}", c.info.name)
+                            );
+                        }
+                    }
                 }
                 ActiveWindow::ENVIRONMENT => {
                     ui.label("Environments");

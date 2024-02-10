@@ -14,9 +14,7 @@ use std::{error::Error, fs, str::FromStr};
 use uuid::Uuid;
 
 use crate::domain::{
-    request::{self, DBRequest, RequestHeader},
-    request_item::RequestHistoryItem,
-    response::{DBResponse, ResponseHeader},
+    collection::{CollectionAuth, CollectionInfo, CollectionItemOrFolder}, request::{self, DBRequest, RequestHeader}, request_item::RequestHistoryItem, response::{DBResponse, ResponseHeader}
 };
 
 #[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
@@ -140,6 +138,11 @@ impl PostieApi {
         let mut api = PostieApi::new().await;
         let envs = api.db.get_all_environments().await.unwrap();
         Ok(envs)
+    }
+    pub async fn load_collections() -> Result<Vec<Collection>, Box<dyn Error + Send>> {
+        let mut api = PostieApi::new().await;
+        let collections = api.db.get_all_collections().await.unwrap();
+        Ok(collections)
     }
     pub async fn load_request_response_items(
     ) -> Result<Vec<RequestHistoryItem>, Box<dyn Error + Send>> {
@@ -384,17 +387,18 @@ impl PostieDb {
     pub async fn save_collection(&mut self, collection: Collection) -> Result <(), Box<dyn Error>> {
         println!("Saving collection to db");
         let mut transaction = self.connection.begin().await?;
-        let id = Uuid::new_v4().to_string();
         let items_json = serde_json::to_string(&collection.item)?;
+        let auth_json = serde_json::to_string(&collection.auth)?;
         _ = sqlx::query!(
             r#"
-            INSERT INTO collections (id, name, description, item)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO collections (id, name, description, item, auth)
+            VALUES ($1, $2, $3, $4, $5)
             "#,
-            id,
+            collection.info.id,
             collection.info.name,
             collection.info.description,
-            items_json
+            items_json,
+            auth_json
         )
         .execute(&mut *transaction)
         .await
@@ -451,6 +455,37 @@ impl PostieDb {
                 }
             })
             .fetch_all(&mut self.connection)
+            .await
+            .unwrap();
+        Ok(rows)
+    }
+
+    pub async fn get_all_collections(&mut self) -> Result<Vec<Collection>, Box<dyn Error>> {
+        println!("getting all saved collections");
+        let rows = sqlx::query("SELECT * from collections")
+            .map(|row: SqliteRow| {
+                let id: String = row.get("id");
+                let name: String = row.get("name");
+                let description: Option<String> = row.get("description");
+                let raw_item: String = row.get("item"); 
+                let raw_auth: Option<String> = row.get("auth");
+                let item: Vec<CollectionItemOrFolder> =
+                    serde_json::from_str(&raw_item).unwrap();
+                let auth: Option<CollectionAuth> = match raw_auth {
+                    Some(a) => serde_json::from_str(&a).unwrap(),
+                    None => None,
+                };
+                Collection {
+                    info: CollectionInfo {
+                        id,
+                        name,
+                        description,
+                    },
+                    item,
+                    auth
+                }
+            })
+        .fetch_all(&mut self.connection)
             .await
             .unwrap();
         Ok(rows)
