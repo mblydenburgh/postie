@@ -53,7 +53,7 @@ pub struct CollectionUrl {
 #[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
 pub struct RequestBody {
     pub mode: String,
-    pub raw: String,
+    pub raw: Option<String>,
     pub options: Option<BodyOptions>,
 }
 
