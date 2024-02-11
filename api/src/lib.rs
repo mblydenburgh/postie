@@ -14,7 +14,10 @@ use std::{error::Error, fs, str::FromStr};
 use uuid::Uuid;
 
 use crate::domain::{
-    collection::{CollectionAuth, CollectionInfo, CollectionItemOrFolder}, request::{self, DBRequest, RequestHeader}, request_item::RequestHistoryItem, response::{DBResponse, ResponseHeader}
+    collection::{CollectionAuth, CollectionInfo, CollectionItemOrFolder},
+    request::{self, DBRequest, RequestHeader},
+    request_item::RequestHistoryItem,
+    response::{DBResponse, ResponseHeader},
 };
 
 #[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
@@ -110,7 +113,7 @@ impl PostieApi {
             Err(_) => {
                 println!("Error saving collection");
                 Ok(String::from("Error saving collection"))
-            },
+            }
         }
     }
     // TODO - better error handling
@@ -384,7 +387,7 @@ impl PostieDb {
         Ok(())
     }
 
-    pub async fn save_collection(&mut self, collection: Collection) -> Result <(), Box<dyn Error>> {
+    pub async fn save_collection(&mut self, collection: Collection) -> Result<(), Box<dyn Error>> {
         println!("Saving collection to db");
         let mut transaction = self.connection.begin().await?;
         let items_json = serde_json::to_string(&collection.item)?;
@@ -467,10 +470,9 @@ impl PostieDb {
                 let id: String = row.get("id");
                 let name: String = row.get("name");
                 let description: Option<String> = row.get("description");
-                let raw_item: String = row.get("item"); 
+                let raw_item: String = row.get("item");
                 let raw_auth: Option<String> = row.get("auth");
-                let item: Vec<CollectionItemOrFolder> =
-                    serde_json::from_str(&raw_item).unwrap();
+                let item: Vec<CollectionItemOrFolder> = serde_json::from_str(&raw_item).unwrap();
                 let auth: Option<CollectionAuth> = match raw_auth {
                     Some(a) => serde_json::from_str(&a).unwrap(),
                     None => None,
@@ -482,10 +484,10 @@ impl PostieDb {
                         description,
                     },
                     item,
-                    auth
+                    auth,
                 }
             })
-        .fetch_all(&mut self.connection)
+            .fetch_all(&mut self.connection)
             .await
             .unwrap();
         Ok(rows)

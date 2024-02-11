@@ -1,5 +1,6 @@
 use api::{
     domain::{
+        collection::{CollectionRequest, CollectionUrl},
         environment::{EnvironmentFile, EnvironmentValue},
         request::DBRequest,
         response::DBResponse,
@@ -57,6 +58,7 @@ pub struct Gui {
     pub selected_environment: Rc<RefCell<api::domain::environment::EnvironmentFile>>,
     pub selected_collection: Rc<RefCell<Option<api::domain::collection::Collection>>>,
     pub selected_http_method: HttpMethod,
+    pub selected_request: Rc<RefCell<Option<api::domain::collection::CollectionRequest>>>,
     pub env_vars: Rc<RefCell<Vec<EnvironmentValue>>>,
     pub active_window: RwLock<ActiveWindow>,
     pub request_window_mode: RwLock<RequestWindowMode>,
@@ -84,22 +86,28 @@ impl Default for Gui {
                     String::from("no-cache"),
                 ),
             ])),
-            selected_environment: Rc::new(RefCell::new(EnvironmentFile {
-                id: Uuid::new_v4().to_string(),
-                name: String::from("default"),
-                values: Some(vec![EnvironmentValue { key: String::from("HOST_URL"), value: String::from("https://httpbin.org/json"), r#type: String::from("default"), enabled: true }]),
-            })),
-            selected_collection: Rc::new(RefCell::new(None)),
             environments: Rc::new(RefCell::new(None)),
             collections: Rc::new(RefCell::new(None)),
             env_vars: Rc::new(RefCell::new(vec![])),
             request_history_items: Rc::new(RefCell::new(None)),
+            selected_environment: Rc::new(RefCell::new(EnvironmentFile {
+                id: Uuid::new_v4().to_string(),
+                name: String::from("default"),
+                values: Some(vec![EnvironmentValue {
+                    key: String::from("HOST_URL"),
+                    value: String::from("https://httpbin.org/json"),
+                    r#type: String::from("default"),
+                    enabled: true,
+                }]),
+            })),
+            selected_collection: Rc::new(RefCell::new(None)),
             selected_history_item: Rc::new(RefCell::new(None)),
+            selected_http_method: HttpMethod::GET,
+            selected_request: Rc::new(RefCell::new(None)),
             saved_requests: Rc::new(RefCell::new(None)),
             saved_responses: Rc::new(RefCell::new(None)),
             active_window: RwLock::new(ActiveWindow::REQUEST),
             request_window_mode: RwLock::new(RequestWindowMode::BODY),
-            selected_http_method: HttpMethod::GET,
             url: String::from("{{HOST_URL}}/json"),
             body_str: String::from("{ \"foo\": \"bar\" }"),
             import_window_open: RwLock::new(false),
@@ -117,11 +125,14 @@ impl Gui {
             .unwrap_or(vec![EnvironmentFile {
                 id: Uuid::new_v4().to_string(),
                 name: String::from("default"),
-                values: Some(vec![EnvironmentValue { key: String::from(""), value: String::from(""), r#type: String::from("default"), enabled: true }]),
+                values: Some(vec![EnvironmentValue {
+                    key: String::from(""),
+                    value: String::from(""),
+                    r#type: String::from("default"),
+                    enabled: true,
+                }]),
             }]);
-        let collections = PostieApi::load_collections()
-            .await
-            .unwrap();
+        let collections = PostieApi::load_collections().await.unwrap();
         let request_history_items = PostieApi::load_request_response_items().await.unwrap();
         let saved_requests = PostieApi::load_saved_requests().await.unwrap();
         let saved_responses = PostieApi::load_saved_responses().await.unwrap();
@@ -240,11 +251,48 @@ impl App for Gui {
                     let collections = collections_clone.borrow();
                     if let Some(cols) = &*collections {
                         for c in cols {
-                            ui.selectable_value(
-                                &mut self.selected_collection,
-                                Rc::new(RefCell::from(Some(c.clone()))),
-                                format!("{}", c.info.name)
-                            );
+                            let c_clone = c.clone();
+                            ui.collapsing(c_clone.info.name, |ui| {
+                                for i in c_clone.item {
+                                    match i {
+                                        api::domain::collection::CollectionItemOrFolder::Item(item) => {
+                                            ui.selectable_value(&mut self.selected_request, Rc::new(RefCell::from(Some(item.request))), format!("{}", item.name))
+                                        },
+                                        // TODO - figure out how to correctly pass around Gui and
+                                        // Ui to be able to call the recursive function. Also
+                                        // figure out a way to make the recursive render function
+                                        // not return () and always return a Ui::Response. For now,
+                                        // handle rendering one level deep of folders. If a folder
+                                        // within a folder is found then a dummy request it
+                                        // substituted.
+                                        api::domain::collection::CollectionItemOrFolder::Folder(folder) => {
+                                            ui.collapsing(folder.name, |ui| {
+                                                for folder_item in folder.item {
+                                                    match folder_item {
+                                                        api::domain::collection::CollectionItemOrFolder::Item(i) => {
+                                                            ui.selectable_value(&mut self.selected_request, Rc::new(RefCell::from(Some(i.request))), format!("{}", i.name))
+                                                        },
+                                                        api::domain::collection::CollectionItemOrFolder::Folder(f) => {
+                                                            let fallback_request = CollectionRequest {
+                                                                method: String::from("GET"),
+                                                                url: CollectionUrl {
+                                                                    raw: String::from("default"),
+                                                                    host: None,
+                                                                    path: None,
+                                                                },
+                                                                auth: None,
+                                                                header: None,
+                                                                body: None,
+                                                            };
+                                                            ui.selectable_value(&mut self.selected_request, Rc::new(RefCell::from(Some(fallback_request))), format!("{}", f.name))
+                                                        },
+                                                    };
+                                                }
+                                            }).header_response
+                                        },
+                                    };
+                                }
+                            });
                         }
                     }
                 }
@@ -314,12 +362,32 @@ impl App for Gui {
                     .selected_text(format!("{:?}", &mut self.selected_http_method))
                     .show_ui(ui, |ui| {
                         ui.selectable_value(&mut self.selected_http_method, HttpMethod::GET, "GET");
-                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::POST, "POST");
+                        ui.selectable_value(
+                            &mut self.selected_http_method,
+                            HttpMethod::POST,
+                            "POST",
+                        );
                         ui.selectable_value(&mut self.selected_http_method, HttpMethod::PUT, "PUT");
-                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::DELETE, "DELETE");
-                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::PATCH, "PATCH");
-                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::OPTIONS, "OPTIONS");
-                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::HEAD, "HEAD");
+                        ui.selectable_value(
+                            &mut self.selected_http_method,
+                            HttpMethod::DELETE,
+                            "DELETE",
+                        );
+                        ui.selectable_value(
+                            &mut self.selected_http_method,
+                            HttpMethod::PATCH,
+                            "PATCH",
+                        );
+                        ui.selectable_value(
+                            &mut self.selected_http_method,
+                            HttpMethod::OPTIONS,
+                            "OPTIONS",
+                        );
+                        ui.selectable_value(
+                            &mut self.selected_http_method,
+                            HttpMethod::HEAD,
+                            "HEAD",
+                        );
                     });
                 ui.label("URL:");
                 ui.text_edit_singleline(&mut self.url);
@@ -477,26 +545,26 @@ impl App for Gui {
                                 });
                             })
                             .body(|mut body| {
-                                let selected_environment =
-                                    self.selected_environment.borrow_mut();
-                                    let mut values_ref = RefMut::map(selected_environment, |env| &mut env.values);
-                                    if let Some(values) = values_ref.as_mut() {
-                                        for env_var in values {
-                                            body.row(30.0, |mut row| {
-                                                row.col(|ui| {
-                                                    ui.checkbox(&mut env_var.enabled, "");
-                                                });
-                                                row.col(|ui| {
-                                                    ui.text_edit_singleline(&mut env_var.key);
-                                                });
-                                                row.col(|ui| {
-                                                    ui.text_edit_singleline(&mut env_var.value);
-                                                });
-                                                row.col(|ui| {
-                                                    ui.text_edit_singleline(&mut env_var.r#type);
-                                                });
+                                let selected_environment = self.selected_environment.borrow_mut();
+                                let mut values_ref =
+                                    RefMut::map(selected_environment, |env| &mut env.values);
+                                if let Some(values) = values_ref.as_mut() {
+                                    for env_var in values {
+                                        body.row(30.0, |mut row| {
+                                            row.col(|ui| {
+                                                ui.checkbox(&mut env_var.enabled, "");
                                             });
-                                        }
+                                            row.col(|ui| {
+                                                ui.text_edit_singleline(&mut env_var.key);
+                                            });
+                                            row.col(|ui| {
+                                                ui.text_edit_singleline(&mut env_var.value);
+                                            });
+                                            row.col(|ui| {
+                                                ui.text_edit_singleline(&mut env_var.r#type);
+                                            });
+                                        });
+                                    }
                                 }
                                 body.row(30.0, |mut row| {
                                     row.col(|ui| {
@@ -508,7 +576,6 @@ impl App for Gui {
                                                     r#type: String::from("default"),
                                                     enabled: true,
                                                 });
-
                                             }
                                         };
                                     });
