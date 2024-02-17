@@ -256,7 +256,21 @@ impl App for Gui {
                                 for i in c_clone.item {
                                     match i {
                                         api::domain::collection::CollectionItemOrFolder::Item(item) => {
-                                            ui.selectable_value(&mut self.selected_request, Rc::new(RefCell::from(Some(item.request))), format!("{}", item.name))
+                                            if ui.selectable_value(&mut self.selected_request, Rc::new(RefCell::from(Some(item.clone().request))), format!("{}", item.name)).clicked() {
+                                                                    self.url = item.request.url.raw.clone();
+                                                                    self.selected_http_method = HttpMethod::from_str(&item.request.method.clone()).unwrap();
+                                                                    if let Some(body) = item.request.body {
+                                                                        if let Some(body_str) = body.raw {
+                                                                            self.body_str = body_str;
+                                                                        }
+                                                                    }
+                                                                    if let Some(headers) = item.request.header {
+                                                                        let constructed_headers: Vec<(bool, String, String)> = headers.into_iter().map(|h| {
+                                                                            (true, h.key, h.value)
+                                                                        }).collect();
+                                                                        self.headers = Rc::new(RefCell::from(constructed_headers));
+                                                                    }
+                                            }
                                         },
                                         // TODO - figure out how to correctly pass around Gui and
                                         // Ui to be able to call the recursive function. Also
@@ -266,7 +280,7 @@ impl App for Gui {
                                         // within a folder is found then a dummy request it
                                         // substituted.
                                         api::domain::collection::CollectionItemOrFolder::Folder(folder) => {
-                                            ui.collapsing(folder.name, |ui| {
+                                            if ui.collapsing(folder.name, |ui| {
                                                 for folder_item in folder.item {
                                                     match folder_item {
                                                         api::domain::collection::CollectionItemOrFolder::Item(i) => {
@@ -302,9 +316,10 @@ impl App for Gui {
                                                             if ui.selectable_value(&mut self.selected_request, Rc::new(RefCell::from(Some(fallback_request))), format!("{}", f.name)).clicked() {
                                                             }
                                                         },
-                                                    };
+                                                    }
                                                 }
-                                            }).header_response
+                                            }).header_response.clicked() {
+                                            }
                                         },
                                     };
                                 }
