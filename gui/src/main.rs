@@ -28,7 +28,7 @@ use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]
 pub enum ActiveWindow {
-    REQUEST,
+    COLLECTIONS,
     ENVIRONMENT,
     HISTORY,
 }
@@ -106,7 +106,7 @@ impl Default for Gui {
             selected_request: Rc::new(RefCell::new(None)),
             saved_requests: Rc::new(RefCell::new(None)),
             saved_responses: Rc::new(RefCell::new(None)),
-            active_window: RwLock::new(ActiveWindow::REQUEST),
+            active_window: RwLock::new(ActiveWindow::COLLECTIONS),
             request_window_mode: RwLock::new(RequestWindowMode::BODY),
             url: String::from("{{HOST_URL}}/json"),
             body_str: String::from("{ \"foo\": \"bar\" }"),
@@ -232,8 +232,8 @@ impl App for Gui {
         });
         SidePanel::left("nav_panel").show(ctx, |ui| {
             if let Ok(mut active_window) = self.active_window.try_write() {
-                if ui.button("Request").clicked() {
-                    *active_window = ActiveWindow::REQUEST;
+                if ui.button("Collections").clicked() {
+                    *active_window = ActiveWindow::COLLECTIONS;
                 }
                 if ui.button("Environment").clicked() {
                     *active_window = ActiveWindow::ENVIRONMENT;
@@ -245,7 +245,7 @@ impl App for Gui {
         });
         if let Ok(active_window) = self.active_window.try_read() {
             SidePanel::left("content_panel").show(ctx, |ui| match *active_window {
-                ActiveWindow::REQUEST => {
+                ActiveWindow::COLLECTIONS => {
                     ui.label("Collections");
                     let collections_clone = Rc::clone(&self.collections);
                     let collections = collections_clone.borrow();
@@ -270,7 +270,22 @@ impl App for Gui {
                                                 for folder_item in folder.item {
                                                     match folder_item {
                                                         api::domain::collection::CollectionItemOrFolder::Item(i) => {
-                                                            ui.selectable_value(&mut self.selected_request, Rc::new(RefCell::from(Some(i.request))), format!("{}", i.name))
+                                                            if ui.selectable_value(&mut self.selected_request, Rc::new(RefCell::from(Some(i.clone().request))), format!("{}", i.name))
+                                                                .clicked() {
+                                                                    self.url = i.request.url.raw.clone();
+                                                                    self.selected_http_method = HttpMethod::from_str(&i.request.method.clone()).unwrap();
+                                                                    if let Some(body) = i.request.body {
+                                                                        if let Some(body_str) = body.raw {
+                                                                            self.body_str = body_str;
+                                                                        }
+                                                                    }
+                                                                    if let Some(headers) = i.request.header {
+                                                                        let constructed_headers: Vec<(bool, String, String)> = headers.into_iter().map(|h| {
+                                                                            (true, h.key, h.value)
+                                                                        }).collect();
+                                                                        self.headers = Rc::new(RefCell::from(constructed_headers));
+                                                                    }
+                                                                }
                                                         },
                                                         api::domain::collection::CollectionItemOrFolder::Folder(f) => {
                                                             let fallback_request = CollectionRequest {
@@ -284,7 +299,8 @@ impl App for Gui {
                                                                 header: None,
                                                                 body: None,
                                                             };
-                                                            ui.selectable_value(&mut self.selected_request, Rc::new(RefCell::from(Some(fallback_request))), format!("{}", f.name))
+                                                            if ui.selectable_value(&mut self.selected_request, Rc::new(RefCell::from(Some(fallback_request))), format!("{}", f.name)).clicked() {
+                                                            }
                                                         },
                                                     };
                                                 }
@@ -320,7 +336,7 @@ impl App for Gui {
                                 .selectable_value(
                                     &mut self.selected_history_item,
                                     Rc::new(RefCell::from(Some(item.clone()))),
-                                    format!("{}", item.id),
+                                    format!("{}", item.id), // TODO - create function to get name
                                 )
                                 .clicked()
                             {
