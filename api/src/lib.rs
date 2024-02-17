@@ -14,6 +14,7 @@ use std::{error::Error, fs, str::FromStr};
 use uuid::Uuid;
 
 use crate::domain::{
+    collection::{CollectionAuth, CollectionInfo, CollectionItemOrFolder},
     request::{self, DBRequest, RequestHeader},
     request_item::RequestHistoryItem,
     response::{DBResponse, ResponseHeader},
@@ -102,11 +103,18 @@ impl PostieApi {
         println!("Reading file: {}", path);
         Ok(fs::read_to_string(path)?)
     }
-    pub async fn import_collection(path: &str) -> Result<(), Box<dyn Error + Send>> {
+    pub async fn import_collection(path: &str) -> Result<String, Box<dyn Error + Send>> {
+        let mut api = PostieApi::new().await;
         let file_str = Self::read_file(path).unwrap();
-        let _collection = Self::parse_collection(&file_str);
+        let collection = Self::parse_collection(&file_str);
         println!("Successfully parsed postman collection!");
-        Ok(())
+        match api.db.save_collection(collection).await {
+            Ok(_) => Ok(String::from("Import successful")),
+            Err(_) => {
+                println!("Error saving collection");
+                Ok(String::from("Error saving collection"))
+            }
+        }
     }
     // TODO - better error handling
     pub async fn import_environment(path: &str) -> Result<String, Box<dyn Error + Send>> {
@@ -122,6 +130,7 @@ impl PostieApi {
             }
         }
     }
+    //TODO - connect to save button on ui to overwrite changes to existing env/collection
     pub fn save_environment(_input: Environment) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
@@ -132,6 +141,11 @@ impl PostieApi {
         let mut api = PostieApi::new().await;
         let envs = api.db.get_all_environments().await.unwrap();
         Ok(envs)
+    }
+    pub async fn load_collections() -> Result<Vec<Collection>, Box<dyn Error + Send>> {
+        let mut api = PostieApi::new().await;
+        let collections = api.db.get_all_collections().await.unwrap();
+        Ok(collections)
     }
     pub async fn load_request_response_items(
     ) -> Result<Vec<RequestHistoryItem>, Box<dyn Error + Send>> {
@@ -373,6 +387,29 @@ impl PostieDb {
         Ok(())
     }
 
+    pub async fn save_collection(&mut self, collection: Collection) -> Result<(), Box<dyn Error>> {
+        println!("Saving collection to db");
+        let mut transaction = self.connection.begin().await?;
+        let items_json = serde_json::to_string(&collection.item)?;
+        let auth_json = serde_json::to_string(&collection.auth)?;
+        _ = sqlx::query!(
+            r#"
+            INSERT INTO collections (id, name, description, item, auth)
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
+            collection.info.id,
+            collection.info.name,
+            collection.info.description,
+            items_json,
+            auth_json
+        )
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+        transaction.commit().await?;
+        Ok(())
+    }
+
     pub async fn save_response(&mut self, response: &DBResponse) -> Result<(), Box<dyn Error>> {
         println!("Saving response to db");
         let mut transaction = self.connection.begin().await?;
@@ -418,6 +455,36 @@ impl PostieDb {
                     name,
                     headers,
                     body,
+                }
+            })
+            .fetch_all(&mut self.connection)
+            .await
+            .unwrap();
+        Ok(rows)
+    }
+
+    pub async fn get_all_collections(&mut self) -> Result<Vec<Collection>, Box<dyn Error>> {
+        println!("getting all saved collections");
+        let rows = sqlx::query("SELECT * from collections")
+            .map(|row: SqliteRow| {
+                let id: String = row.get("id");
+                let name: String = row.get("name");
+                let description: Option<String> = row.get("description");
+                let raw_item: String = row.get("item");
+                let raw_auth: Option<String> = row.get("auth");
+                let item: Vec<CollectionItemOrFolder> = serde_json::from_str(&raw_item).unwrap();
+                let auth: Option<CollectionAuth> = match raw_auth {
+                    Some(a) => serde_json::from_str(&a).unwrap(),
+                    None => None,
+                };
+                Collection {
+                    info: CollectionInfo {
+                        id,
+                        name,
+                        description,
+                    },
+                    item,
+                    auth,
                 }
             })
             .fetch_all(&mut self.connection)
