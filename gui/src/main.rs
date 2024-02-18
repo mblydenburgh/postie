@@ -12,7 +12,8 @@ use eframe::{
     App, NativeOptions,
 };
 use egui::TextStyle;
-use egui_extras::{Column, TableBuilder};
+use egui_extras::{syntax_highlighting::CodeTheme, Column, TableBuilder};
+use egui_json_tree::JsonTree;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -95,7 +96,7 @@ impl Default for Gui {
                 name: String::from("default"),
                 values: Some(vec![EnvironmentValue {
                     key: String::from("HOST_URL"),
-                    value: String::from("https://httpbin.org/json"),
+                    value: String::from("https://httpbin.org"),
                     r#type: String::from("default"),
                     enabled: true,
                 }]),
@@ -478,20 +479,16 @@ impl App for Gui {
                                         .code_editor()
                                         .desired_rows(20)
                                         .lock_focus(true)
+                                        .desired_width(f32::INFINITY)
                                         .font(TextStyle::Monospace),
                                 );
                             });
                         });
                     if self.response.try_read().unwrap().is_some() {
                         CentralPanel::default().show(ctx, |ui| {
-                            ui.label(
-                                self.response
-                                    .try_read()
-                                    .unwrap()
-                                    .as_ref()
-                                    .unwrap()
-                                    .to_string(),
-                            );
+                            ScrollArea::vertical().show(ui, |ui| {
+                                JsonTree::new("respons-json", self.response.try_read().unwrap().as_ref().unwrap()).show(ui);
+                            });
                         });
                     }
                 }
