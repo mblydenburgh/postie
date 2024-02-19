@@ -7,11 +7,12 @@ edition = "2021"
 
 [dependencies]
 api= { path = "../api/" }
-egui = "0.23.0"
-egui_extras = "0.23.0"
-eframe = "0.23.0"
-log = "0.4"
-serde = { version = "1.0.188", features = ["derive"] }
-serde_json = "1.0.107"
+egui = "0.26.2"
+egui_extras = "0.26.2"
+egui_json_tree = "0.4.0"
+eframe = "0.26.2"
+log = "0.4.20"
+serde = { version = "1.0.196", features = ["derive"] }
+serde_json = "1.0.113"
 tokio = { version = "1", features = ["full"] }
-uuid = { version = "1.4.1", features = ["v4", "fast-rng"] }
+uuid = { version = "1.7.0", features = ["v4", "fast-rng"] }
