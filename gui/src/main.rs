@@ -5,7 +5,7 @@ use api::{
         request::DBRequest,
         response::DBResponse,
     },
-    HttpMethod, HttpRequest, PostieApi,
+    HttpMethod, HttpRequest, PostieApi, ResponseData,
 };
 use eframe::{
     egui::{CentralPanel, ComboBox, ScrollArea, SidePanel, TextEdit, TopBottomPanel},
@@ -47,7 +47,7 @@ pub enum RequestWindowMode {
 }
 
 pub struct Gui {
-    pub response: Arc<RwLock<Option<Value>>>,
+    pub response: Arc<RwLock<Option<ResponseData>>>,
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
     pub environments: Rc<RefCell<Option<Vec<api::domain::environment::EnvironmentFile>>>>,
     pub collections: Rc<RefCell<Option<Vec<api::domain::collection::Collection>>>>,
@@ -155,7 +155,7 @@ impl Gui {
     }
 }
 impl Gui {
-    async fn submit(input: HttpRequest) -> Result<Value, Box<dyn Error>> {
+    async fn submit(input: HttpRequest) -> Result<ResponseData, Box<dyn Error>> {
         PostieApi::make_request(input).await
     }
     fn spawn_submit(&mut self, input: HttpRequest) -> Result<(), Box<dyn Error>> {
@@ -165,7 +165,7 @@ impl Gui {
         tokio::spawn(async move {
             match Gui::submit(input).await {
                 Ok(res) => {
-                    println!("Res: {}", res);
+                    println!("Res: {:?}", res);
                     let mut result_write_guard = result_for_worker.try_write().unwrap();
                     *result_write_guard = Some(res);
                 }
@@ -378,7 +378,13 @@ impl App for Gui {
                                 let mut ui_response_guard = ui_response_clone.try_write().unwrap();
                                 let response_body = &historical_response.body;
                                 match response_body {
-                                    Some(body) => *ui_response_guard = Some(body.clone()),
+                                    Some(body) => {
+                                        let parsed_body = match serde_json::from_str(&body) {
+                                            Ok(b) => ResponseData::JSON(b),
+                                            Err(_) => ResponseData::TEXT(body.clone()),
+                                        };
+                                        *ui_response_guard = Some(parsed_body)
+                                    },
                                     None => *ui_response_guard = None,
                                 }
                             }
@@ -486,9 +492,20 @@ impl App for Gui {
                         });
                     if self.response.try_read().unwrap().is_some() {
                         CentralPanel::default().show(ctx, |ui| {
-                            ScrollArea::vertical().show(ui, |ui| {
-                                JsonTree::new("respons-json", self.response.try_read().unwrap().as_ref().unwrap()).show(ui);
-                            });
+                            let binding = self.response.try_read().unwrap();
+                            let r = binding.as_ref().unwrap();
+                            match r {
+                                ResponseData::JSON(json) => {
+                                    ScrollArea::vertical().show(ui, |ui| {
+                                        JsonTree::new("response-json", json).show(ui);
+                                    });
+                                }
+                                ResponseData::TEXT(text) => {
+                                    ScrollArea::vertical().show(ui, |ui| {
+                                        ui.label(text);
+                                    });
+                                }
+                            };
                         });
                     }
                 }

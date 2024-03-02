@@ -10,7 +10,7 @@ use reqwest::{
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, json, Value};
 use sqlx::{sqlite::SqliteRow, Connection, Row, SqliteConnection};
-use std::{error::Error, fs, str::FromStr};
+use std::{borrow::Borrow, error::Error, fs, str::FromStr};
 use uuid::Uuid;
 
 use crate::domain::{
@@ -63,6 +63,12 @@ pub struct HttpRequest {
     pub headers: Option<Vec<(String, String)>>,
     pub body: Option<Value>,
     pub environment: EnvironmentFile,
+}
+
+#[derive(Debug)]
+pub enum ResponseData {
+    JSON(serde_json::Value),
+    TEXT(String),
 }
 
 pub struct RequestCollection {
@@ -176,7 +182,7 @@ impl PostieApi {
             raw_url
         }
     }
-    pub async fn make_request(input: HttpRequest) -> Result<Value, Box<dyn Error>> {
+    pub async fn make_request(input: HttpRequest) -> Result<ResponseData, Box<dyn Error>> {
         let api = PostieApi::new().await;
         println!("Submitting request: {:?}", input);
         let method = match input.method {
@@ -210,13 +216,20 @@ impl PostieApi {
         let response_time = sent_at.elapsed().as_millis();
         let res_headers = res.headers().clone();
         let res_status = res.status().clone();
-        let res_type = res_headers.get("content-type").unwrap().to_str().unwrap();
+        let res_type = &res_headers.get("content-type").unwrap().to_str().unwrap();
         let res_text = res.text().await?;
-        let res_json: serde_json::Value = serde_json::from_str(&res_text).unwrap();
-        if !res_type.starts_with("application/json") {
+        if !res_type.starts_with("application/json")
+            && !res_type.starts_with("text/plain")
+            && !res_type.starts_with("text/html")
+        {
             // I couldn't figure out how to safely throw an error so I'm just returning this for now
-            println!("expected application/json, got {}", res_type);
-            return Ok(json!({"msg": "not JSON!"}));
+            println!(
+                "expected application/json text/html, or text/plain, got {}",
+                res_type
+            );
+            return Ok(ResponseData::JSON(
+                json!({"err": "unsupported response type!"}),
+            ));
         }
 
         let request_headers = input
@@ -237,9 +250,10 @@ impl PostieApi {
         };
         let _ = db.save_request_history(&db_request).await?;
         let response_headers: Vec<domain::response::ResponseHeader> = res_headers
+            .borrow()
             .into_iter()
             .map(|(key, value)| domain::response::ResponseHeader {
-                key: String::from(HeaderName::as_str(&key.unwrap())),
+                key: String::from(HeaderName::as_str(&key)),
                 value: String::from(HeaderValue::to_str(&value).unwrap()),
             })
             .collect();
@@ -248,14 +262,19 @@ impl PostieApi {
             status_code: res_status.as_u16(),
             name: input.name.clone(),
             headers: response_headers,
-            body: Some(res_json.clone()),
+            body: Some(res_text.clone()),
         };
         let _ = db.save_response(&db_response).await?;
         let _ = db
             .save_request_response_item(&db_request, &db_response, &now, &response_time)
             .await?;
-
-        Ok(res_json.clone())
+        let response_data = if res_type.starts_with("application/json") {
+            let res_json = serde_json::from_str(&res_text)?;
+            ResponseData::JSON(res_json)
+        } else {
+            ResponseData::TEXT(res_text)
+        };
+        Ok(response_data)
     }
 }
 
@@ -503,7 +522,13 @@ impl PostieDb {
                 let raw_headers: String = row.get("headers");
                 let raw_body: String = row.get("body");
                 let headers = serde_json::from_str::<Vec<ResponseHeader>>(&raw_headers).unwrap();
-                let body = serde_json::from_str(&raw_body).unwrap();
+                println!("RAW BODY: {:?}", &raw_body);
+                let body = if raw_body.is_empty() {
+                    None // or handle the empty case as desired
+                } else {
+                    // Attempt to parse as JSON only if it is not an empty string
+                    serde_json::from_str(&raw_body).ok()
+                };
                 DBResponse {
                     id,
                     status_code,
