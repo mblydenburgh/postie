@@ -187,6 +187,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "snailquote",
  "sqlx",
  "tokio",
  "url",
@@ -3400,6 +3401,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6845563ada680337a52d43bb0b29f396f2d911616f6573012645b9e3d048a49"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "snailquote"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec62a949bda7f15800481a711909f946e1204f2460f89210eaf7f57730f88f86"
+dependencies = [
+ "thiserror",
+ "unicode_categories",
 ]
 
 [[package]]

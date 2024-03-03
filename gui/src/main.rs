@@ -12,10 +12,9 @@ use eframe::{
     App, NativeOptions,
 };
 use egui::TextStyle;
-use egui_extras::{syntax_highlighting::CodeTheme, Column, TableBuilder};
+use egui_extras::{Column, TableBuilder};
 use egui_json_tree::JsonTree;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::{
     cell::{RefCell, RefMut},
     collections::{HashMap, HashSet},

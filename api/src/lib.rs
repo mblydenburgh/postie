@@ -9,6 +9,7 @@ use reqwest::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, json, Value};
+use snailquote::unescape;
 use sqlx::{sqlite::SqliteRow, Connection, Row, SqliteConnection};
 use std::{borrow::Borrow, error::Error, fs, str::FromStr};
 use uuid::Uuid;
@@ -522,12 +523,11 @@ impl PostieDb {
                 let raw_headers: String = row.get("headers");
                 let raw_body: String = row.get("body");
                 let headers = serde_json::from_str::<Vec<ResponseHeader>>(&raw_headers).unwrap();
-                println!("RAW BODY: {:?}", &raw_body);
                 let body = if raw_body.is_empty() {
                     None // or handle the empty case as desired
                 } else {
-                    // Attempt to parse as JSON only if it is not an empty string
-                    serde_json::from_str(&raw_body).ok()
+                    let escaped = unescape(&raw_body).unwrap();
+                    Some(escaped)
                 };
                 DBResponse {
                     id,
