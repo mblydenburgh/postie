@@ -8,7 +8,7 @@ pub struct DBResponse {
     pub name: Option<String>,
     #[sqlx(default)]
     pub headers: Vec<ResponseHeader>,
-    pub body: Option<serde_json::Value>,
+    pub body: Option<String>,
 }
 
 #[derive(

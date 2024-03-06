@@ -7,6 +7,30 @@ Mainly started due to a need at work, where Postman cloud accounts are not allow
 save collections and environments.
 - Have full interoperability with existing Postman file formats.
 
+## Current State
+Currently in order to run, Rust must be installed as well as setting up the initial SQLite database (see Database Utils).
+The end goal is to have a fully packaged mac application (sorry Windows, for now) that is able to be downloaded and ran.
+### Supported
+- Submitting GET, POST, PUT, PATCH, DELETE requests
+- POST and PUT requests only support application/json body
+- Valid handling of responses with Content-Type of application/json, text/html, text/plain
+- Environments with variable substition
+- Importing postman colellections
+- Importing postman environments
+- Request history is loading on application start to show previous requests & responses
+
+### Not yet supported
+- Creating new collections from scratch
+- Infinite levels of collection nesting, currently only support one level of folder nesting
+- Exporting saved colellections
+- Exporting saved environments
+- File upload request bodies
+- XML request body and response
+- Pre-request scripts
+- Request history, imported files do not reflect on ui until next application start
+- Native mac application
+- Cloud database and user profiles
+
 ## Database Utils
 
 This project uses the rust `sqlx` and `sqlx-cli` packages to manage a SQLite database connection.
