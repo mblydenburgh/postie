@@ -22,7 +22,7 @@ pub fn import_modal(gui: &mut Gui, ctx: &egui::Context) {
                                         });
                                     }
                                     ImportMode::ENVIRONMENT => {
-                                        let spawn = tokio::spawn(async move {
+                                        _ = tokio::spawn(async move {
                                             let res =
                                                 PostieApi::import_environment(&path).await.unwrap();
                                             let mut data = import_result_clone.lock().unwrap();
