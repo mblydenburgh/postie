@@ -2,13 +2,11 @@ pub mod components;
 
 use api::{
     domain::{
-        collection::Collection,
         environment::{EnvironmentFile, EnvironmentValue},
         request::DBRequest,
-        request_item::RequestHistoryItem,
         response::DBResponse,
     },
-    Environment, HttpMethod, HttpRequest, PostieApi, ResponseData,
+    HttpMethod, HttpRequest, PostieApi, ResponseData,
 };
 use components::{
     content_header_panel::content_header_panel, content_panel::content_panel,
@@ -183,6 +181,8 @@ impl Gui {
                 }
             };
 
+            // after response is saved, re-run db calls to refresh ui
+            // TODO - collections and envs not updating, just request history
             let mut environment_write_guard = environment_for_worker.try_write().unwrap();
             let mut collection_write_guard = collections_for_worker.try_write().unwrap();
             let mut request_history_item_write_guard =
