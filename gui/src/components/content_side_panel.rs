@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc, str::FromStr};
+use std::{cell::RefCell, rc::Rc, str::FromStr, sync::Arc};
 
 use crate::{ActiveWindow, Gui};
 use api::{
@@ -12,8 +12,8 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
         SidePanel::left("content_panel").show(ctx, |ui| match *active_window {
                 ActiveWindow::COLLECTIONS => {
                     ui.label("Collections");
-                    let collections_clone = Rc::clone(&gui.collections);
-                    let collections = collections_clone.borrow();
+                    let collections_clone = Arc::clone(&gui.collections);
+                    let collections = collections_clone.try_write().unwrap();
                     if let Some(cols) = &*collections {
                         for c in cols {
                             let c_clone = c.clone();
@@ -94,8 +94,8 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                 }
                 ActiveWindow::ENVIRONMENT => {
                     ui.label("Environments");
-                    let envs_clone = Rc::clone(&gui.environments);
-                    let envs = envs_clone.borrow();
+                    let envs_clone = Arc::clone(&gui.environments);
+                    let envs = envs_clone.try_write().unwrap();
                     if let Some(env_vec) = &*envs {
                         for env in env_vec {
                             ui.selectable_value(
@@ -108,8 +108,8 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                 }
                 ActiveWindow::HISTORY => {
                     ui.label("History");
-                    let history_items_clone = Rc::clone(&gui.request_history_items);
-                    let history_items = history_items_clone.borrow();
+                    let history_items_clone = Arc::clone(&gui.request_history_items);
+                    let history_items = history_items_clone.try_write().unwrap();
                     if let Some(item_vec) = &*history_items {
                         for item in item_vec {
                             if ui
@@ -121,8 +121,8 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                                 .clicked()
                             {
                                 // TODO - replace url, method, request body, response body
-                                let requests_clone = gui.saved_requests.borrow();
-                                let responses_clone = gui.saved_responses.borrow();
+                                let requests_clone = gui.saved_requests.try_write().unwrap();
+                                let responses_clone = gui.saved_responses.try_write().unwrap();
                                 let requests = requests_clone.as_ref().unwrap();
                                 let responses = responses_clone.as_ref().unwrap();
                                 let historical_request = requests.get(&item.request_id).unwrap();

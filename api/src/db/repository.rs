@@ -5,7 +5,13 @@ use serde_json::from_str;
 use sqlx::{sqlite::SqliteRow, Connection, Row, SqliteConnection};
 use uuid::Uuid;
 
-use crate::domain::{collection::{Collection, CollectionAuth, CollectionInfo, CollectionItemOrFolder}, environment::EnvironmentFile, request::{self, DBRequest, RequestHeader}, request_item::RequestHistoryItem, response::{DBResponse, ResponseHeader}};
+use crate::domain::{
+    collection::{Collection, CollectionAuth, CollectionInfo, CollectionItemOrFolder},
+    environment::EnvironmentFile,
+    request::{self, DBRequest, RequestHeader},
+    request_item::RequestHistoryItem,
+    response::{DBResponse, ResponseHeader},
+};
 
 pub async fn initialize_db() -> Result<SqliteConnection, Box<dyn Error>> {
     println!("acquiring sqlite connection");

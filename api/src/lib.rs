@@ -1,5 +1,5 @@
-pub mod domain;
 pub mod db;
+pub mod domain;
 
 use chrono::prelude::*;
 use db::repository;
@@ -14,12 +14,7 @@ use serde_json::{json, Value};
 use std::{borrow::Borrow, error::Error, fs, str::FromStr};
 use uuid::Uuid;
 
-use crate::domain::{
-    request::DBRequest,
-    request_item::RequestHistoryItem,
-    response::DBResponse,
-};
-
+use crate::domain::{request::DBRequest, request_item::RequestHistoryItem, response::DBResponse};
 
 #[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
 pub enum HttpMethod {
@@ -278,4 +273,3 @@ impl PostieApi {
         Ok(response_data)
     }
 }
-
