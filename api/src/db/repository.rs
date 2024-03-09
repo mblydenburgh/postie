@@ -2,7 +2,6 @@ use std::error::Error;
 
 use chrono::{DateTime, Utc};
 use serde_json::from_str;
-use snailquote::unescape;
 use sqlx::{sqlite::SqliteRow, Connection, Row, SqliteConnection};
 use uuid::Uuid;
 
@@ -253,10 +252,9 @@ impl PostieDb {
                 let raw_body: String = row.get("body");
                 let headers = serde_json::from_str::<Vec<ResponseHeader>>(&raw_headers).unwrap();
                 let body = if raw_body.is_empty() {
-                    None // or handle the empty case as desired
+                    None
                 } else {
-                    let escaped = unescape(&raw_body).unwrap();
-                    Some(escaped)
+                    Some(String::from(&raw_body))
                 };
                 DBResponse {
                     id,
