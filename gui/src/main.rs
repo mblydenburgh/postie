@@ -15,6 +15,7 @@ use egui::TextStyle;
 use egui_extras::{Column, TableBuilder};
 use egui_json_tree::JsonTree;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::{
     cell::{RefCell, RefMut},
     collections::{HashMap, HashSet},
@@ -186,10 +187,7 @@ impl Gui {
         }
         result
     }
-}
-
-impl App for Gui {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn menu_panel(&self, ctx: &egui::Context) {
         TopBottomPanel::top("menu_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.menu_button("Menu", |ui| {
@@ -230,6 +228,8 @@ impl App for Gui {
                 });
             });
         });
+    }
+    fn side_panel(&self, ctx: &egui::Context) {
         SidePanel::left("nav_panel").show(ctx, |ui| {
             if let Ok(mut active_window) = self.active_window.try_write() {
                 if ui.button("Collections").clicked() {
@@ -243,6 +243,8 @@ impl App for Gui {
                 }
             }
         });
+    }
+    fn content_side_panel(&mut self, ctx: &egui::Context) {
         if let Ok(active_window) = self.active_window.try_read() {
             SidePanel::left("content_panel").show(ctx, |ui| match *active_window {
                 ActiveWindow::COLLECTIONS => {
@@ -378,9 +380,14 @@ impl App for Gui {
                                 let response_body = &historical_response.body;
                                 match response_body {
                                     Some(body) => {
+                                        let json_val = json!(&body);
+                                        println!("val: {}", json_val);
                                         let parsed_body = match serde_json::from_str(&body) {
                                             Ok(b) => ResponseData::JSON(b),
-                                            Err(_) => ResponseData::TEXT(body.clone()),
+                                            Err(e) => {
+                                                println!("{}", e);
+                                                ResponseData::TEXT(body.clone())
+                                            },
                                         };
                                         *ui_response_guard = Some(parsed_body)
                                     },
@@ -392,6 +399,8 @@ impl App for Gui {
                 }
             });
         }
+    }
+    fn content_header_panel(&mut self, ctx: &egui::Context) {
         TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.heading("Welcome to Postie!");
             ui.horizontal(|ui| {
@@ -451,7 +460,7 @@ impl App for Gui {
                         environment: self.selected_environment.borrow().clone(),
                     };
 
-                    let _ = Gui::spawn_submit(self, request);
+                    let _ = Self::spawn_submit(self, request);
                 }
             });
             if let Ok(mut request_window_mode) = self.request_window_mode.try_write() {
@@ -471,6 +480,8 @@ impl App for Gui {
                 });
             }
         });
+    }
+    fn content_panel(&mut self, ctx: &egui::Context) {
         if let Ok(request_window_mode) = self.request_window_mode.try_read() {
             match *request_window_mode {
                 RequestWindowMode::BODY => {
@@ -629,6 +640,8 @@ impl App for Gui {
                 }
             };
         }
+    }
+    fn import_modal(&mut self, ctx: &egui::Context) {
         if let Ok(mut import_window_open) = self.import_window_open.try_write() {
             if *import_window_open == true {
                 egui::Window::new("Import Modal")
@@ -667,6 +680,17 @@ impl App for Gui {
                     });
             }
         }
+    }
+}
+
+impl App for Gui {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        Self::menu_panel(&self, ctx);
+        Self::side_panel(&self, ctx);
+        Self::content_header_panel(self, ctx);
+        Self::content_side_panel(self, ctx);
+        Self::content_panel(self, ctx);
+        Self::import_modal(self, ctx);
     }
 }
 
