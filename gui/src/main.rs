@@ -2,8 +2,10 @@ pub mod components;
 
 use api::{
     domain::{
+        collection::Collection,
         environment::{EnvironmentFile, EnvironmentValue},
         request::DBRequest,
+        request_item::RequestHistoryItem,
         response::DBResponse,
     },
     HttpMethod, HttpRequest, PostieApi, ResponseData,
@@ -158,67 +160,80 @@ impl Gui {
     async fn submit(input: HttpRequest) -> Result<ResponseData, Box<dyn Error>> {
         PostieApi::make_request(input).await
     }
+    async fn refresh_request_data(
+        request_history: Arc<RwLock<Option<Vec<RequestHistoryItem>>>>,
+        responses: Arc<RwLock<Option<HashMap<String, DBResponse>>>>,
+        requests: Arc<RwLock<Option<HashMap<String, DBRequest>>>>,
+    ) {
+        let request_history_items = PostieApi::load_request_response_items().await.unwrap();
+        let saved_requests = PostieApi::load_saved_requests().await.unwrap();
+        let saved_responses = PostieApi::load_saved_responses().await.unwrap();
+        let requests_by_id: HashMap<String, DBRequest> = saved_requests
+            .into_iter()
+            .map(|r| (r.id.clone(), r))
+            .collect();
+        let responses_by_id: HashMap<String, DBResponse> = saved_responses
+            .into_iter()
+            .map(|r| (r.id.clone(), r))
+            .collect();
+
+        let mut request_history_item_write_guard = request_history.try_write().unwrap();
+        let mut saved_requests_write_guard = requests.try_write().unwrap();
+        let mut saved_responses_write_guard = responses.try_write().unwrap();
+        *request_history_item_write_guard = Some(request_history_items).into();
+        *saved_requests_write_guard = Some(requests_by_id);
+        *saved_responses_write_guard = Some(responses_by_id).into();
+    }
+    async fn refresh_collections(old_collections: Arc<RwLock<Option<Vec<Collection>>>>) {
+        let collections = PostieApi::load_collections().await.unwrap();
+        let mut collection_write_guard = old_collections.try_write().unwrap();
+        *collection_write_guard = Some(collections).into();
+    }
+    async fn refresh_environments(old_environments: Arc<RwLock<Option<Vec<EnvironmentFile>>>>) {
+        let envs = PostieApi::load_environments()
+            .await
+            .unwrap_or(vec![EnvironmentFile {
+                id: Uuid::new_v4().to_string(),
+                name: String::from("default"),
+                values: Some(vec![EnvironmentValue {
+                    key: String::from(""),
+                    value: String::from(""),
+                    r#type: String::from("default"),
+                    enabled: true,
+                }]),
+            }]);
+        let mut environment_write_guard = old_environments.try_write().unwrap();
+        *environment_write_guard = Some(envs).into();
+    }
     // egui needs to run on the main thread so all async requests need to be run on a worker
     // thread.
     fn spawn_submit(&mut self, input: HttpRequest) -> Result<(), Box<dyn Error>> {
         // TODO figure out how to impl Send for Gui so it can be passed to another thread.
         // currently getting an error. Workaround is to just clone the PostieApi
         let response_for_worker = self.response.clone();
-        let environment_for_worker = self.environments.clone();
-        let collections_for_worker = self.collections.clone();
         let request_history_for_worker = self.request_history_items.clone();
         let saved_requests_for_worker = self.saved_requests.clone();
         let saved_response_for_worker = self.saved_responses.clone();
         tokio::spawn(async move {
+            let mut result_write_guard = response_for_worker.try_write().unwrap();
             match Gui::submit(input).await {
                 Ok(res) => {
                     println!("Res: {:?}", res);
-                    let mut result_write_guard = response_for_worker.try_write().unwrap();
                     *result_write_guard = Some(res);
                 }
                 Err(err) => {
                     println!("Error with request: {:?}", err);
+                    *result_write_guard = None;
                 }
             };
 
-            // after response is saved, re-run db calls to refresh ui
-            // TODO - collections and envs not updating, just request history
-            let mut environment_write_guard = environment_for_worker.try_write().unwrap();
-            let mut collection_write_guard = collections_for_worker.try_write().unwrap();
-            let mut request_history_item_write_guard =
-                request_history_for_worker.try_write().unwrap();
-            let mut saved_requests_write_guard = saved_requests_for_worker.try_write().unwrap();
-            let mut saved_responses_write_guard = saved_response_for_worker.try_write().unwrap();
-
-            let collections = PostieApi::load_collections().await.unwrap();
-            let envs = PostieApi::load_environments()
-                .await
-                .unwrap_or(vec![EnvironmentFile {
-                    id: Uuid::new_v4().to_string(),
-                    name: String::from("default"),
-                    values: Some(vec![EnvironmentValue {
-                        key: String::from(""),
-                        value: String::from(""),
-                        r#type: String::from("default"),
-                        enabled: true,
-                    }]),
-                }]);
-            let request_history_items = PostieApi::load_request_response_items().await.unwrap();
-            let saved_requests = PostieApi::load_saved_requests().await.unwrap();
-            let saved_responses = PostieApi::load_saved_responses().await.unwrap();
-            let requests_by_id: HashMap<String, DBRequest> = saved_requests
-                .into_iter()
-                .map(|r| (r.id.clone(), r))
-                .collect();
-            let responses_by_id: HashMap<String, DBResponse> = saved_responses
-                .into_iter()
-                .map(|r| (r.id.clone(), r))
-                .collect();
-            *environment_write_guard = Some(envs).into();
-            *collection_write_guard = Some(collections).into();
-            *request_history_item_write_guard = Some(request_history_items).into();
-            *saved_requests_write_guard = Some(requests_by_id).into();
-            *saved_responses_write_guard = Some(responses_by_id).into();
+            // after response is saved, re-run db calls to refresh request/response data
+            Self::refresh_request_data(
+                request_history_for_worker,
+                saved_response_for_worker,
+                saved_requests_for_worker,
+            )
+            .await
         });
         Ok(())
     }

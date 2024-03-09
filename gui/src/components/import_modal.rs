@@ -1,3 +1,5 @@
+use std::{thread, time};
+
 use api::PostieApi;
 
 use crate::{Gui, ImportMode};
@@ -17,16 +19,32 @@ pub fn import_modal(gui: &mut Gui, ctx: &egui::Context) {
                                 let import_result_clone = gui.import_result.clone();
                                 match *import_mode {
                                     ImportMode::COLLECTION => {
-                                        tokio::spawn(async move {
-                                            PostieApi::import_collection(&path).await
+                                        let collections_for_worker = gui.collections.clone();
+                                        _ = tokio::spawn(async move {
+                                            let res =
+                                                PostieApi::import_collection(&path).await.unwrap();
+                                            let mut data = import_result_clone.lock().unwrap();
+                                            *data = Some(res);
+                                        });
+                                        _ = tokio::spawn(async move {
+                                            let sleep = time::Duration::from_millis(100);
+                                            thread::sleep(sleep);
+                                            Gui::refresh_collections(collections_for_worker).await;
                                         });
                                     }
                                     ImportMode::ENVIRONMENT => {
+                                        let environments_for_worker = gui.environments.clone();
                                         _ = tokio::spawn(async move {
                                             let res =
                                                 PostieApi::import_environment(&path).await.unwrap();
                                             let mut data = import_result_clone.lock().unwrap();
                                             *data = Some(res);
+                                        });
+                                        _ = tokio::spawn(async move {
+                                            let sleep = time::Duration::from_millis(100);
+                                            thread::sleep(sleep);
+                                            Gui::refresh_environments(environments_for_worker)
+                                                .await;
                                         });
                                     }
                                 };

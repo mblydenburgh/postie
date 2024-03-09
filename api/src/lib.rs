@@ -105,7 +105,7 @@ impl PostieApi {
         println!("Reading file: {}", path);
         Ok(fs::read_to_string(path)?)
     }
-    pub async fn import_collection(path: &str) -> Result<String, Box<dyn Error + Send>> {
+    pub async fn import_collection(path: &str) -> Result<String, String> {
         let mut api = PostieApi::new().await;
         let file_str = Self::read_file(path).unwrap();
         let collection = Self::parse_collection(&file_str);
