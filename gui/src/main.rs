@@ -44,6 +44,10 @@ pub enum RequestWindowMode {
     ENVIRONMENT,
 }
 
+/* Holds all ui state, I found that keeping each property separate makes updating easier as you
+ * dont need to worry about passing around a single reference to all parts of the ui that are
+ * accessing it at once. Up for thoughts on how to make this a little clean though.
+*/
 pub struct Gui {
     pub response: Arc<RwLock<Option<ResponseData>>>,
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
@@ -156,6 +160,8 @@ impl Gui {
     async fn submit(input: HttpRequest) -> Result<ResponseData, Box<dyn Error>> {
         PostieApi::make_request(input).await
     }
+    // egui needs to run on the main thread so all async requests need to be run on a worker
+    // thread.
     fn spawn_submit(&mut self, input: HttpRequest) -> Result<(), Box<dyn Error>> {
         // TODO figure out how to impl Send for Gui so it can be passed to another thread.
         // currently getting an error. Workaround is to just clone the PostieApi
