@@ -1,11 +1,11 @@
 use std::cell::RefMut;
 
 use api::{domain::environment::EnvironmentValue, ResponseData};
-use egui::{CentralPanel, ScrollArea, TextEdit, TextStyle, TopBottomPanel};
+use egui::{CentralPanel, ComboBox, ScrollArea, TextEdit, TextStyle, TopBottomPanel};
 use egui_extras::{Column, TableBuilder};
 use egui_json_tree::JsonTree;
 
-use crate::{Gui, RequestWindowMode};
+use crate::{AuthMode, Gui, RequestWindowMode};
 
 pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
     if let Ok(request_window_mode) = gui.request_window_mode.try_read() {
@@ -48,6 +48,29 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
             RequestWindowMode::PARAMS => {
                 CentralPanel::default().show(ctx, |ui| {
                     ui.label("params");
+                });
+            }
+            RequestWindowMode::AUTHORIZATION => {
+                CentralPanel::default().show(ctx, |ui| {
+                    ComboBox::from_label("")
+                        .selected_text(format!("{:?}", gui.selected_auth_mode))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut gui.selected_auth_mode, AuthMode::BEARER, "Bearer");
+                            ui.selectable_value(&mut gui.selected_auth_mode, AuthMode::APIKEY, "Api Key");
+                            ui.selectable_value(&mut gui.selected_auth_mode, AuthMode::NONE, "None");
+                        });
+                    match gui.selected_auth_mode {
+                        AuthMode::APIKEY => {
+                            ui.label("Api Key Auth");
+                        },
+                        AuthMode::BEARER => {
+                            ui.label("Enter Bearer Token");
+                            ui.text_edit_multiline(&mut gui.bearer_token);
+                        },
+                        AuthMode::NONE => {
+                            ui.label("None");
+                        }
+                    };
                 });
             }
             RequestWindowMode::HEADERS => {

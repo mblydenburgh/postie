@@ -40,15 +40,28 @@ pub enum ImportMode {
 }
 #[derive(Serialize, Deserialize)]
 pub enum RequestWindowMode {
+    AUTHORIZATION,
     PARAMS,
     HEADERS,
     BODY,
     ENVIRONMENT,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum AuthMode {
+    APIKEY,
+    BEARER,
+    NONE,
+}
+impl std::fmt::Display for AuthMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 /* Holds all ui state, I found that keeping each property separate makes updating easier as you
  * dont need to worry about passing around a single reference to all parts of the ui that are
- * accessing it at once. Up for thoughts on how to make this a little clean though.
+ * accessing it at once. Up for thoughts on how to make this a little cleaner though.
 */
 pub struct Gui {
     pub response: Arc<RwLock<Option<ResponseData>>>,
@@ -63,6 +76,8 @@ pub struct Gui {
     pub selected_environment: Rc<RefCell<api::domain::environment::EnvironmentFile>>,
     pub selected_collection: Rc<RefCell<Option<api::domain::collection::Collection>>>,
     pub selected_http_method: HttpMethod,
+    pub selected_auth_mode: AuthMode,
+    pub bearer_token: String,
     pub selected_request: Rc<RefCell<Option<api::domain::collection::CollectionRequest>>>,
     pub env_vars: Rc<RefCell<Vec<EnvironmentValue>>>,
     pub active_window: RwLock<ActiveWindow>,
@@ -108,7 +123,9 @@ impl Default for Gui {
             selected_collection: Rc::new(RefCell::new(None)),
             selected_history_item: Rc::new(RefCell::new(None)),
             selected_http_method: HttpMethod::GET,
+            selected_auth_mode: AuthMode::NONE,
             selected_request: Rc::new(RefCell::new(None)),
+            bearer_token: String::from(""),
             saved_requests: Arc::new(RwLock::new(None)),
             saved_responses: Arc::new(RwLock::new(None)),
             active_window: RwLock::new(ActiveWindow::COLLECTIONS),

@@ -2,7 +2,7 @@ use api::{HttpMethod, HttpRequest};
 use egui::{ComboBox, TopBottomPanel};
 use uuid::Uuid;
 
-use crate::{Gui, RequestWindowMode};
+use crate::{AuthMode, Gui, RequestWindowMode};
 
 pub fn content_header_panel(gui: &mut Gui, ctx: &egui::Context) {
     TopBottomPanel::top("top_panel").show(ctx, |ui| {
@@ -35,13 +35,20 @@ pub fn content_header_panel(gui: &mut Gui, ctx: &egui::Context) {
                 } else {
                     None
                 };
-                let submitted_headers = gui
+                let mut submitted_headers: Vec<(String, String)> = gui
                     .headers
                     .borrow_mut()
                     .iter()
                     .filter(|h| h.0 == true)
                     .map(|h| (h.1.to_owned(), h.2.to_owned()))
                     .collect();
+                match gui.selected_auth_mode {
+                    AuthMode::APIKEY => (),
+                    AuthMode::BEARER => {
+                        submitted_headers.push((String::from("Authorization"), format!("Bearer {}", gui.bearer_token)));
+                    },
+                    AuthMode::NONE => (),
+                };
                 let request = HttpRequest {
                     id: Uuid::new_v4(),
                     name: None,
@@ -62,6 +69,9 @@ pub fn content_header_panel(gui: &mut Gui, ctx: &egui::Context) {
                 }
                 if ui.button("Params").clicked() {
                     *request_window_mode = RequestWindowMode::PARAMS;
+                }
+                if ui.button("Auth").clicked() {
+                    *request_window_mode = RequestWindowMode::AUTHORIZATION;
                 }
                 if ui.button("Headers").clicked() {
                     *request_window_mode = RequestWindowMode::HEADERS;
