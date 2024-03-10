@@ -62,6 +62,7 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                     match gui.selected_auth_mode {
                         AuthMode::APIKEY => {
                             ui.label("Api Key Auth");
+                            ui.text_edit_multiline(&mut gui.api_key);
                         },
                         AuthMode::BEARER => {
                             ui.label("Enter Bearer Token");

@@ -43,9 +43,16 @@ pub fn content_header_panel(gui: &mut Gui, ctx: &egui::Context) {
                     .map(|h| (h.1.to_owned(), h.2.to_owned()))
                     .collect();
                 match gui.selected_auth_mode {
-                    AuthMode::APIKEY => (),
+                    AuthMode::APIKEY => {
+                        submitted_headers.push(
+                            (String::from("x-api-key"), gui.api_key.clone())
+                        );
+                    },
                     AuthMode::BEARER => {
-                        submitted_headers.push((String::from("Authorization"), format!("Bearer {}", gui.bearer_token)));
+                        submitted_headers.push(
+                            (String::from("Authorization"),
+                            format!("Bearer {}", gui.api_key))
+                        );
                     },
                     AuthMode::NONE => (),
                 };
