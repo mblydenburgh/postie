@@ -1,0 +1,324 @@
+use std::error::Error;
+
+use chrono::{DateTime, Utc};
+use serde_json::from_str;
+use sqlx::{sqlite::SqliteRow, Connection, Row, SqliteConnection};
+use uuid::Uuid;
+
+use crate::domain::{
+    collection::{Collection, CollectionAuth, CollectionInfo, CollectionItemOrFolder},
+    environment::EnvironmentFile,
+    request::{self, DBRequest, RequestHeader},
+    request_item::RequestHistoryItem,
+    response::{DBResponse, ResponseHeader},
+};
+
+pub async fn initialize_db() -> Result<SqliteConnection, Box<dyn Error>> {
+    println!("acquiring sqlite connection");
+    let connection = SqliteConnection::connect("sqlite:postie.sqlite").await?;
+    println!("{:?} sqlite connection established", connection);
+
+    Ok(connection)
+}
+
+pub struct PostieDb {
+    pub connection: SqliteConnection,
+}
+
+impl PostieDb {
+    pub async fn new() -> Self {
+        PostieDb {
+            connection: initialize_db().await.ok().unwrap(),
+        }
+    }
+
+    pub async fn save_request_history(
+        &mut self,
+        request: &DBRequest,
+    ) -> Result<(), Box<dyn Error>> {
+        println!("got request: {:?}", request);
+        let mut transaction = self.connection.begin().await?;
+        let header_json = serde_json::to_string(&request.headers)?;
+        let _request = sqlx::query!(
+            r#"
+            INSERT INTO request (id, method, url, name, headers, body) 
+            VALUES ($1, $2, $3, $4, $5, $6)
+            "#,
+            request.id,
+            request.method,
+            request.url,
+            request.name,
+            header_json,
+            request.body
+        )
+        .execute(&mut *transaction)
+        .await?;
+
+        transaction.commit().await?;
+        println!("transaction committed");
+
+        Ok(())
+    }
+
+    pub async fn save_request_response_item(
+        &mut self,
+        request: &DBRequest,
+        response: &DBResponse,
+        sent_at: &DateTime<Utc>,
+        response_time: &u128,
+    ) -> Result<(), Box<dyn Error>> {
+        println!("Saving request response history item");
+        let mut transaction = self.connection.begin().await?;
+        let id = Uuid::new_v4().to_string();
+        let converted_sent = sent_at.to_string();
+        let converted_response_time = response_time.to_string();
+        _ = sqlx::query!(
+            r#"
+            INSERT INTO request_history (id, request_id, response_id, sent_at, response_time_ms)
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
+            id,
+            request.id,
+            response.id,
+            converted_sent,
+            converted_response_time
+        )
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    pub async fn get_request_response_items(
+        &mut self,
+    ) -> Result<Vec<RequestHistoryItem>, Box<dyn Error>> {
+        println!("getting all request response items");
+        let rows = sqlx::query("SELECT * FROM request_history")
+            .map(|row: SqliteRow| {
+                let id: String = row.get("id");
+                let request_id: String = row.get("request_id");
+                let response_id: String = row.get("response_id");
+                let sent_at: String = row.get("sent_at");
+                let response_time: String = row.get("response_time_ms");
+                RequestHistoryItem {
+                    id,
+                    request_id,
+                    response_id,
+                    response_time: from_str::<usize>(&response_time).unwrap(),
+                    sent_at,
+                }
+            })
+            .fetch_all(&mut self.connection)
+            .await
+            .unwrap();
+        Ok(rows)
+    }
+
+    pub async fn save_environment(
+        &mut self,
+        environment: EnvironmentFile,
+    ) -> Result<(), Box<dyn Error>> {
+        let mut transaction = self.connection.begin().await?;
+        let value_json = match environment.values {
+            None => serde_json::json!("[]"),
+            Some(values) => serde_json::Value::String(serde_json::to_string(&values).unwrap()),
+        };
+        let uuid = Uuid::new_v4().to_string();
+        _ = sqlx::query!(
+            r#"
+            INSERT INTO environment (id, name, `values`)
+            VALUES ($1, $2, $3)
+            "#,
+            uuid,
+            environment.name,
+            value_json
+        )
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    pub async fn save_collection(&mut self, collection: Collection) -> Result<(), Box<dyn Error>> {
+        println!("Saving collection to db");
+        let mut transaction = self.connection.begin().await?;
+        let items_json = serde_json::to_string(&collection.item)?;
+        let auth_json = serde_json::to_string(&collection.auth)?;
+        _ = sqlx::query!(
+            r#"
+            INSERT INTO collections (id, name, description, item, auth)
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
+            collection.info.id,
+            collection.info.name,
+            collection.info.description,
+            items_json,
+            auth_json
+        )
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    pub async fn save_response(&mut self, response: &DBResponse) -> Result<(), Box<dyn Error>> {
+        println!("Saving response to db");
+        let mut transaction = self.connection.begin().await?;
+        let header_json = serde_json::to_string(&response.headers)?;
+        _ = sqlx::query!(
+            r#"
+            INSERT INTO response (id, name, status_code, headers, body)
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
+            response.id,
+            response.name,
+            response.status_code,
+            header_json,
+            response.body
+        )
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    pub async fn get_all_requests(&mut self) -> Result<Vec<DBRequest>, Box<dyn Error>> {
+        println!("getting all saved requests");
+        let rows = sqlx::query("SELECT * FROM request")
+            .map(|row: SqliteRow| {
+                let id: String = row.get("id");
+                let method: String = row.get("method");
+                let url: String = row.get("url");
+                let name: Option<String> = row.get("name");
+                let raw_body: Option<String> = row.get("body");
+                let raw_headers: String = row.get("headers");
+                let mut body: Option<serde_json::Value> = None;
+                let headers: Vec<request::RequestHeader> =
+                    serde_json::from_str::<Vec<RequestHeader>>(&raw_headers).unwrap();
+                if let Some(body_str) = raw_body {
+                    body = serde_json::from_str(&body_str).unwrap()
+                }
+                DBRequest {
+                    id,
+                    method,
+                    url,
+                    name,
+                    headers,
+                    body,
+                }
+            })
+            .fetch_all(&mut self.connection)
+            .await
+            .unwrap();
+        Ok(rows)
+    }
+
+    pub async fn get_all_collections(&mut self) -> Result<Vec<Collection>, Box<dyn Error>> {
+        println!("getting all saved collections");
+        let rows = sqlx::query("SELECT * from collections")
+            .map(|row: SqliteRow| {
+                let id: String = row.get("id");
+                let name: String = row.get("name");
+                let description: Option<String> = row.get("description");
+                let raw_item: String = row.get("item");
+                let raw_auth: Option<String> = row.get("auth");
+                let item: Vec<CollectionItemOrFolder> = serde_json::from_str(&raw_item).unwrap();
+                let auth: Option<CollectionAuth> = match raw_auth {
+                    Some(a) => serde_json::from_str(&a).unwrap(),
+                    None => None,
+                };
+                Collection {
+                    info: CollectionInfo {
+                        id,
+                        name,
+                        description,
+                    },
+                    item,
+                    auth,
+                }
+            })
+            .fetch_all(&mut self.connection)
+            .await
+            .unwrap();
+        Ok(rows)
+    }
+
+    pub async fn get_all_responses(&mut self) -> Result<Vec<DBResponse>, Box<dyn Error>> {
+        println!("getting all saved responses");
+        let rows = sqlx::query("SELECT * from response")
+            .map(|row: SqliteRow| {
+                let id: String = row.get("id");
+                let status_code: u16 = row.get("status_code");
+                let name: Option<String> = row.get("name");
+                let raw_headers: String = row.get("headers");
+                let raw_body: String = row.get("body");
+                let headers = serde_json::from_str::<Vec<ResponseHeader>>(&raw_headers).unwrap();
+                let body = if raw_body.is_empty() {
+                    None
+                } else {
+                    Some(String::from(&raw_body))
+                };
+                DBResponse {
+                    id,
+                    status_code,
+                    name,
+                    headers,
+                    body,
+                }
+            })
+            .fetch_all(&mut self.connection)
+            .await
+            .unwrap();
+        Ok(rows)
+    }
+
+    pub async fn get_all_environments(&mut self) -> Result<Vec<EnvironmentFile>, Box<dyn Error>> {
+        println!("getting all envs");
+        let rows = sqlx::query("SELECT * FROM environment")
+            .map(|row: SqliteRow| {
+                let id: String = row.get("id");
+                let name: String = row.get("name");
+                let raw_values: Option<String> = row.get("values");
+                if let Some(values_json) = raw_values {
+                    let values_str: Result<String, serde_json::Error> =
+                        serde_json::from_str(&values_json);
+                    match values_str {
+                        Ok(str) => {
+                            let values = serde_json::from_str(&str).expect("couldnt parse string");
+                            EnvironmentFile {
+                                id,
+                                name,
+                                values: Some(values),
+                            }
+                        }
+                        Err(e) => {
+                            println!("error: {:#?}", e);
+                            EnvironmentFile {
+                                id,
+                                name,
+                                values: None,
+                            }
+                        }
+                    }
+                } else {
+                    EnvironmentFile {
+                        id,
+                        name,
+                        values: None,
+                    }
+                }
+            })
+            .fetch_all(&mut self.connection)
+            .await
+            .unwrap();
+
+        for row in rows.clone().into_iter() {
+            println!("row: {:?}", &row);
+        }
+        Ok(rows)
+    }
+}

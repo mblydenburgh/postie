@@ -1,26 +1,27 @@
+pub mod components;
+
 use api::{
     domain::{
-        collection::{CollectionRequest, CollectionUrl},
+        collection::Collection,
         environment::{EnvironmentFile, EnvironmentValue},
         request::DBRequest,
+        request_item::RequestHistoryItem,
         response::DBResponse,
     },
     HttpMethod, HttpRequest, PostieApi, ResponseData,
 };
-use eframe::{
-    egui::{CentralPanel, ComboBox, ScrollArea, SidePanel, TextEdit, TopBottomPanel},
-    App, NativeOptions,
+use components::{
+    content_header_panel::content_header_panel, content_panel::content_panel,
+    content_side_panel::content_side_panel, import_modal::import_modal, menu_panel::menu_panel,
+    side_panel::side_panel,
 };
-use egui::TextStyle;
-use egui_extras::{Column, TableBuilder};
-use egui_json_tree::JsonTree;
+use eframe::{egui, App, NativeOptions};
 use serde::{Deserialize, Serialize};
 use std::{
-    cell::{RefCell, RefMut},
+    cell::RefCell,
     collections::{HashMap, HashSet},
     error::Error,
     rc::Rc,
-    str::FromStr,
     sync::{Arc, Mutex},
 };
 use tokio::sync::RwLock;
@@ -39,25 +40,46 @@ pub enum ImportMode {
 }
 #[derive(Serialize, Deserialize)]
 pub enum RequestWindowMode {
+    AUTHORIZATION,
     PARAMS,
     HEADERS,
     BODY,
     ENVIRONMENT,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum AuthMode {
+    APIKEY,
+    BEARER,
+    NONE,
+}
+impl std::fmt::Display for AuthMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+/* Holds all ui state, I found that keeping each property separate makes updating easier as you
+ * dont need to worry about passing around a single reference to all parts of the ui that are
+ * accessing it at once. Up for thoughts on how to make this a little cleaner though.
+*/
 pub struct Gui {
     pub response: Arc<RwLock<Option<ResponseData>>>,
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
-    pub environments: Rc<RefCell<Option<Vec<api::domain::environment::EnvironmentFile>>>>,
-    pub collections: Rc<RefCell<Option<Vec<api::domain::collection::Collection>>>>,
+    pub environments: Arc<RwLock<Option<Vec<api::domain::environment::EnvironmentFile>>>>,
+    pub collections: Arc<RwLock<Option<Vec<api::domain::collection::Collection>>>>,
     pub request_history_items:
-        Rc<RefCell<Option<Vec<api::domain::request_item::RequestHistoryItem>>>>,
-    pub saved_requests: Rc<RefCell<Option<HashMap<String, api::domain::request::DBRequest>>>>,
-    pub saved_responses: Rc<RefCell<Option<HashMap<String, api::domain::response::DBResponse>>>>,
+        Arc<RwLock<Option<Vec<api::domain::request_item::RequestHistoryItem>>>>,
+    pub saved_requests: Arc<RwLock<Option<HashMap<String, api::domain::request::DBRequest>>>>,
+    pub saved_responses: Arc<RwLock<Option<HashMap<String, api::domain::response::DBResponse>>>>,
     pub selected_history_item: Rc<RefCell<Option<api::domain::request_item::RequestHistoryItem>>>,
     pub selected_environment: Rc<RefCell<api::domain::environment::EnvironmentFile>>,
     pub selected_collection: Rc<RefCell<Option<api::domain::collection::Collection>>>,
     pub selected_http_method: HttpMethod,
+    pub selected_auth_mode: AuthMode,
+    pub api_key: String,
+    pub api_key_name: String,
+    pub bearer_token: String,
     pub selected_request: Rc<RefCell<Option<api::domain::collection::CollectionRequest>>>,
     pub env_vars: Rc<RefCell<Vec<EnvironmentValue>>>,
     pub active_window: RwLock<ActiveWindow>,
@@ -86,10 +108,10 @@ impl Default for Gui {
                     String::from("no-cache"),
                 ),
             ])),
-            environments: Rc::new(RefCell::new(None)),
-            collections: Rc::new(RefCell::new(None)),
+            environments: Arc::new(RwLock::new(None)),
+            collections: Arc::new(RwLock::new(None)),
             env_vars: Rc::new(RefCell::new(vec![])),
-            request_history_items: Rc::new(RefCell::new(None)),
+            request_history_items: Arc::new(RwLock::new(None)),
             selected_environment: Rc::new(RefCell::new(EnvironmentFile {
                 id: Uuid::new_v4().to_string(),
                 name: String::from("default"),
@@ -103,9 +125,13 @@ impl Default for Gui {
             selected_collection: Rc::new(RefCell::new(None)),
             selected_history_item: Rc::new(RefCell::new(None)),
             selected_http_method: HttpMethod::GET,
+            selected_auth_mode: AuthMode::NONE,
             selected_request: Rc::new(RefCell::new(None)),
-            saved_requests: Rc::new(RefCell::new(None)),
-            saved_responses: Rc::new(RefCell::new(None)),
+            api_key_name: String::from(""),
+            api_key: String::from(""),
+            bearer_token: String::from(""),
+            saved_requests: Arc::new(RwLock::new(None)),
+            saved_responses: Arc::new(RwLock::new(None)),
             active_window: RwLock::new(ActiveWindow::COLLECTIONS),
             request_window_mode: RwLock::new(RequestWindowMode::BODY),
             url: String::from("{{HOST_URL}}/json"),
@@ -145,33 +171,90 @@ impl Gui {
             .map(|r| (r.id.clone(), r))
             .collect();
         let mut default = Gui::default();
-        default.environments = Rc::new(RefCell::from(Some(envs)));
-        default.collections = Rc::new(RefCell::from(Some(collections)));
-        default.request_history_items = Rc::new(RefCell::from(Some(request_history_items)));
-        default.saved_requests = Rc::new(RefCell::from(Some(requests_by_id)));
-        default.saved_responses = Rc::new(RefCell::from(Some(responses_by_id)));
+        default.environments = Arc::new(RwLock::from(Some(envs)));
+        default.collections = Arc::new(RwLock::from(Some(collections)));
+        default.request_history_items = Arc::new(RwLock::from(Some(request_history_items)));
+        default.saved_requests = Arc::new(RwLock::from(Some(requests_by_id)));
+        default.saved_responses = Arc::new(RwLock::from(Some(responses_by_id)));
         default
     }
-}
-impl Gui {
     async fn submit(input: HttpRequest) -> Result<ResponseData, Box<dyn Error>> {
         PostieApi::make_request(input).await
     }
+    async fn refresh_request_data(
+        request_history: Arc<RwLock<Option<Vec<RequestHistoryItem>>>>,
+        responses: Arc<RwLock<Option<HashMap<String, DBResponse>>>>,
+        requests: Arc<RwLock<Option<HashMap<String, DBRequest>>>>,
+    ) {
+        let request_history_items = PostieApi::load_request_response_items().await.unwrap();
+        let saved_requests = PostieApi::load_saved_requests().await.unwrap();
+        let saved_responses = PostieApi::load_saved_responses().await.unwrap();
+        let requests_by_id: HashMap<String, DBRequest> = saved_requests
+            .into_iter()
+            .map(|r| (r.id.clone(), r))
+            .collect();
+        let responses_by_id: HashMap<String, DBResponse> = saved_responses
+            .into_iter()
+            .map(|r| (r.id.clone(), r))
+            .collect();
+
+        let mut request_history_item_write_guard = request_history.try_write().unwrap();
+        let mut saved_requests_write_guard = requests.try_write().unwrap();
+        let mut saved_responses_write_guard = responses.try_write().unwrap();
+        *request_history_item_write_guard = Some(request_history_items).into();
+        *saved_requests_write_guard = Some(requests_by_id);
+        *saved_responses_write_guard = Some(responses_by_id).into();
+    }
+    async fn refresh_collections(old_collections: Arc<RwLock<Option<Vec<Collection>>>>) {
+        let collections = PostieApi::load_collections().await.unwrap();
+        let mut collection_write_guard = old_collections.try_write().unwrap();
+        *collection_write_guard = Some(collections).into();
+    }
+    async fn refresh_environments(old_environments: Arc<RwLock<Option<Vec<EnvironmentFile>>>>) {
+        let envs = PostieApi::load_environments()
+            .await
+            .unwrap_or(vec![EnvironmentFile {
+                id: Uuid::new_v4().to_string(),
+                name: String::from("default"),
+                values: Some(vec![EnvironmentValue {
+                    key: String::from(""),
+                    value: String::from(""),
+                    r#type: String::from("default"),
+                    enabled: true,
+                }]),
+            }]);
+        let mut environment_write_guard = old_environments.try_write().unwrap();
+        *environment_write_guard = Some(envs).into();
+    }
+    // egui needs to run on the main thread so all async requests need to be run on a worker
+    // thread.
     fn spawn_submit(&mut self, input: HttpRequest) -> Result<(), Box<dyn Error>> {
         // TODO figure out how to impl Send for Gui so it can be passed to another thread.
         // currently getting an error. Workaround is to just clone the PostieApi
-        let result_for_worker = self.response.clone();
+        let response_for_worker = self.response.clone();
+        let request_history_for_worker = self.request_history_items.clone();
+        let saved_requests_for_worker = self.saved_requests.clone();
+        let saved_response_for_worker = self.saved_responses.clone();
         tokio::spawn(async move {
+            let mut result_write_guard = response_for_worker.try_write().unwrap();
             match Gui::submit(input).await {
                 Ok(res) => {
                     println!("Res: {:?}", res);
-                    let mut result_write_guard = result_for_worker.try_write().unwrap();
                     *result_write_guard = Some(res);
                 }
                 Err(err) => {
                     println!("Error with request: {:?}", err);
+                    *result_write_guard = None;
                 }
             };
+
+            // after response is saved, re-run db calls to refresh request/response data
+            Self::refresh_request_data(
+                request_history_for_worker,
+                saved_response_for_worker,
+                saved_requests_for_worker,
+            )
+            .await
         });
         Ok(())
     }
@@ -190,483 +273,12 @@ impl Gui {
 
 impl App for Gui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        TopBottomPanel::top("menu_panel").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.menu_button("Menu", |ui| {
-                    ui.menu_button("New", |ui| {
-                        if ui.button("Collection").clicked() {
-                            ui.close_menu();
-                        };
-                        if ui.button("Evnironment").clicked() {
-                            ui.close_menu();
-                        };
-                    });
-                    ui.menu_button("Import", |ui| {
-                        if ui.button("Collection").clicked() {
-                            if let Ok(mut import_open) = self.import_window_open.try_write() {
-                                *import_open = true;
-                            }
-                            if let Ok(mut import_mode) = self.import_mode.try_write() {
-                                *import_mode = ImportMode::COLLECTION;
-                            }
-                        };
-                        if ui.button("Environment").clicked() {
-                            if let Ok(mut import_open) = self.import_window_open.try_write() {
-                                *import_open = true;
-                            }
-                            if let Ok(mut import_mode) = self.import_mode.try_write() {
-                                *import_mode = ImportMode::ENVIRONMENT;
-                            }
-                        };
-                    });
-                    ui.menu_button("Export", |ui| {
-                        if ui.button("Collection").clicked() {
-                            ui.close_menu();
-                        };
-                        if ui.button("Environment").clicked() {
-                            ui.close_menu();
-                        };
-                    });
-                });
-            });
-        });
-        SidePanel::left("nav_panel").show(ctx, |ui| {
-            if let Ok(mut active_window) = self.active_window.try_write() {
-                if ui.button("Collections").clicked() {
-                    *active_window = ActiveWindow::COLLECTIONS;
-                }
-                if ui.button("Environment").clicked() {
-                    *active_window = ActiveWindow::ENVIRONMENT;
-                }
-                if ui.button("History").clicked() {
-                    *active_window = ActiveWindow::HISTORY;
-                }
-            }
-        });
-        if let Ok(active_window) = self.active_window.try_read() {
-            SidePanel::left("content_panel").show(ctx, |ui| match *active_window {
-                ActiveWindow::COLLECTIONS => {
-                    ui.label("Collections");
-                    let collections_clone = Rc::clone(&self.collections);
-                    let collections = collections_clone.borrow();
-                    if let Some(cols) = &*collections {
-                        for c in cols {
-                            let c_clone = c.clone();
-                            ui.collapsing(c_clone.info.name, |ui| {
-                                for i in c_clone.item {
-                                    match i {
-                                        api::domain::collection::CollectionItemOrFolder::Item(item) => {
-                                            if ui.selectable_value(&mut self.selected_request, Rc::new(RefCell::from(Some(item.clone().request))), format!("{}", item.name)).clicked() {
-                                                                    self.url = item.request.url.raw.clone();
-                                                                    self.selected_http_method = HttpMethod::from_str(&item.request.method.clone()).unwrap();
-                                                                    if let Some(body) = item.request.body {
-                                                                        if let Some(body_str) = body.raw {
-                                                                            self.body_str = body_str;
-                                                                        }
-                                                                    }
-                                                                    if let Some(headers) = item.request.header {
-                                                                        let constructed_headers: Vec<(bool, String, String)> = headers.into_iter().map(|h| {
-                                                                            (true, h.key, h.value)
-                                                                        }).collect();
-                                                                        self.headers = Rc::new(RefCell::from(constructed_headers));
-                                                                    }
-                                            }
-                                        },
-                                        // TODO - figure out how to correctly pass around Gui and
-                                        // Ui to be able to call the recursive function. Also
-                                        // figure out a way to make the recursive render function
-                                        // not return () and always return a Ui::Response. For now,
-                                        // handle rendering one level deep of folders. If a folder
-                                        // within a folder is found then a dummy request it
-                                        // substituted.
-                                        api::domain::collection::CollectionItemOrFolder::Folder(folder) => {
-                                            if ui.collapsing(folder.name, |ui| {
-                                                for folder_item in folder.item {
-                                                    match folder_item {
-                                                        api::domain::collection::CollectionItemOrFolder::Item(i) => {
-                                                            if ui.selectable_value(&mut self.selected_request, Rc::new(RefCell::from(Some(i.clone().request))), format!("{}", i.name))
-                                                                .clicked() {
-                                                                    self.url = i.request.url.raw.clone();
-                                                                    self.selected_http_method = HttpMethod::from_str(&i.request.method.clone()).unwrap();
-                                                                    if let Some(body) = i.request.body {
-                                                                        if let Some(body_str) = body.raw {
-                                                                            self.body_str = body_str;
-                                                                        }
-                                                                    }
-                                                                    if let Some(headers) = i.request.header {
-                                                                        let constructed_headers: Vec<(bool, String, String)> = headers.into_iter().map(|h| {
-                                                                            (true, h.key, h.value)
-                                                                        }).collect();
-                                                                        self.headers = Rc::new(RefCell::from(constructed_headers));
-                                                                    }
-                                                                }
-                                                        },
-                                                        api::domain::collection::CollectionItemOrFolder::Folder(f) => {
-                                                            let fallback_request = CollectionRequest {
-                                                                method: String::from("GET"),
-                                                                url: CollectionUrl {
-                                                                    raw: String::from("default"),
-                                                                    host: None,
-                                                                    path: None,
-                                                                },
-                                                                auth: None,
-                                                                header: None,
-                                                                body: None,
-                                                            };
-                                                            if ui.selectable_value(&mut self.selected_request, Rc::new(RefCell::from(Some(fallback_request))), format!("{}", f.name)).clicked() {
-                                                            }
-                                                        },
-                                                    }
-                                                }
-                                            }).header_response.clicked() {
-                                            }
-                                        },
-                                    };
-                                }
-                            });
-                        }
-                    }
-                }
-                ActiveWindow::ENVIRONMENT => {
-                    ui.label("Environments");
-                    let envs_clone = Rc::clone(&self.environments);
-                    let envs = envs_clone.borrow();
-                    if let Some(env_vec) = &*envs {
-                        for env in env_vec {
-                            ui.selectable_value(
-                                &mut self.selected_environment,
-                                Rc::new(RefCell::from(env.clone())),
-                                format!("{}", env.name),
-                            );
-                        }
-                    }
-                }
-                ActiveWindow::HISTORY => {
-                    ui.label("History");
-                    let history_items_clone = Rc::clone(&self.request_history_items);
-                    let history_items = history_items_clone.borrow();
-                    if let Some(item_vec) = &*history_items {
-                        for item in item_vec {
-                            if ui
-                                .selectable_value(
-                                    &mut self.selected_history_item,
-                                    Rc::new(RefCell::from(Some(item.clone()))),
-                                    format!("{}", item.id), // TODO - create function to get name
-                                )
-                                .clicked()
-                            {
-                                // TODO - replace url, method, request body, response body
-                                let requests_clone = self.saved_requests.borrow();
-                                let responses_clone = self.saved_responses.borrow();
-                                let requests = requests_clone.as_ref().unwrap();
-                                let responses = responses_clone.as_ref().unwrap();
-                                let historical_request = requests.get(&item.request_id).unwrap();
-                                let historical_response = responses.get(&item.response_id).unwrap();
-                                self.url = historical_request.url.clone();
-                                self.selected_http_method =
-                                    HttpMethod::from_str(&historical_request.method).unwrap();
-                                match &historical_request.body {
-                                    Some(body_json) => {
-                                        let body_str =
-                                            serde_json::from_value(body_json.clone()).unwrap();
-                                        self.body_str = body_str;
-                                    }
-                                    None => self.body_str = String::from(""),
-                                }
-                                let ui_response_clone = self.response.clone();
-                                let mut ui_response_guard = ui_response_clone.try_write().unwrap();
-                                let response_body = &historical_response.body;
-                                match response_body {
-                                    Some(body) => {
-                                        let parsed_body = match serde_json::from_str(&body) {
-                                            Ok(b) => ResponseData::JSON(b),
-                                            Err(_) => ResponseData::TEXT(body.clone()),
-                                        };
-                                        *ui_response_guard = Some(parsed_body)
-                                    },
-                                    None => *ui_response_guard = None,
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            ui.heading("Welcome to Postie!");
-            ui.horizontal(|ui| {
-                ComboBox::from_label("")
-                    .selected_text(format!("{:?}", &mut self.selected_http_method))
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::GET, "GET");
-                        ui.selectable_value(
-                            &mut self.selected_http_method,
-                            HttpMethod::POST,
-                            "POST",
-                        );
-                        ui.selectable_value(&mut self.selected_http_method, HttpMethod::PUT, "PUT");
-                        ui.selectable_value(
-                            &mut self.selected_http_method,
-                            HttpMethod::DELETE,
-                            "DELETE",
-                        );
-                        ui.selectable_value(
-                            &mut self.selected_http_method,
-                            HttpMethod::PATCH,
-                            "PATCH",
-                        );
-                        ui.selectable_value(
-                            &mut self.selected_http_method,
-                            HttpMethod::OPTIONS,
-                            "OPTIONS",
-                        );
-                        ui.selectable_value(
-                            &mut self.selected_http_method,
-                            HttpMethod::HEAD,
-                            "HEAD",
-                        );
-                    });
-                ui.label("URL:");
-                ui.text_edit_singleline(&mut self.url);
-                if ui.button("Submit").clicked() {
-                    let body = if self.selected_http_method != HttpMethod::GET {
-                        Some(serde_json::from_str(&self.body_str).expect("Body is invalid json"))
-                    } else {
-                        None
-                    };
-                    let submitted_headers = self
-                        .headers
-                        .borrow_mut()
-                        .iter()
-                        .filter(|h| h.0 == true)
-                        .map(|h| (h.1.to_owned(), h.2.to_owned()))
-                        .collect();
-                    let request = HttpRequest {
-                        id: Uuid::new_v4(),
-                        name: None,
-                        headers: Some(Gui::remove_duplicate_headers(submitted_headers)),
-                        body,
-                        method: self.selected_http_method.clone(),
-                        url: self.url.clone(),
-                        environment: self.selected_environment.borrow().clone(),
-                    };
-
-                    let _ = Gui::spawn_submit(self, request);
-                }
-            });
-            if let Ok(mut request_window_mode) = self.request_window_mode.try_write() {
-                ui.horizontal(|ui| {
-                    if ui.button("Environment").clicked() {
-                        *request_window_mode = RequestWindowMode::ENVIRONMENT;
-                    }
-                    if ui.button("Params").clicked() {
-                        *request_window_mode = RequestWindowMode::PARAMS;
-                    }
-                    if ui.button("Headers").clicked() {
-                        *request_window_mode = RequestWindowMode::HEADERS;
-                    }
-                    if ui.button("Body").clicked() {
-                        *request_window_mode = RequestWindowMode::BODY;
-                    }
-                });
-            }
-        });
-        if let Ok(request_window_mode) = self.request_window_mode.try_read() {
-            match *request_window_mode {
-                RequestWindowMode::BODY => {
-                    TopBottomPanel::top("request_panel")
-                        .resizable(true)
-                        .min_height(250.0)
-                        .show(ctx, |ui| {
-                            ScrollArea::vertical().show(ui, |ui| {
-                                ui.add(
-                                    TextEdit::multiline(&mut self.body_str)
-                                        .code_editor()
-                                        .desired_rows(20)
-                                        .lock_focus(true)
-                                        .desired_width(f32::INFINITY)
-                                        .font(TextStyle::Monospace),
-                                );
-                            });
-                        });
-                    if self.response.try_read().unwrap().is_some() {
-                        CentralPanel::default().show(ctx, |ui| {
-                            let binding = self.response.try_read().unwrap();
-                            let r = binding.as_ref().unwrap();
-                            match r {
-                                ResponseData::JSON(json) => {
-                                    ScrollArea::vertical().show(ui, |ui| {
-                                        JsonTree::new("response-json", json).show(ui);
-                                    });
-                                }
-                                ResponseData::TEXT(text) => {
-                                    ScrollArea::vertical().show(ui, |ui| {
-                                        ui.label(text);
-                                    });
-                                }
-                            };
-                        });
-                    }
-                }
-                RequestWindowMode::PARAMS => {
-                    CentralPanel::default().show(ctx, |ui| {
-                        ui.label("params");
-                    });
-                }
-                RequestWindowMode::HEADERS => {
-                    CentralPanel::default().show(ctx, |ui| {
-                        let table = TableBuilder::new(ui)
-                            .striped(true)
-                            .resizable(true)
-                            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                            .column(Column::auto())
-                            .column(Column::auto())
-                            .column(Column::auto());
-                        table
-                            .header(20.0, |mut header| {
-                                header.col(|ui| {
-                                    ui.strong("Enabled");
-                                });
-                                header.col(|ui| {
-                                    ui.strong("Key");
-                                });
-                                header.col(|ui| {
-                                    ui.strong("Value");
-                                });
-                            })
-                            .body(|mut body| {
-                                for header in self.headers.borrow_mut().iter_mut() {
-                                    body.row(30.0, |mut row| {
-                                        let (enabled, key, value) = header;
-                                        row.col(|ui| {
-                                            ui.checkbox(enabled, "");
-                                        });
-                                        row.col(|ui| {
-                                            ui.text_edit_singleline(key);
-                                        });
-                                        row.col(|ui| {
-                                            ui.text_edit_singleline(value);
-                                        });
-                                    });
-                                }
-                                body.row(30.0, |mut row| {
-                                    row.col(|ui| {
-                                        if ui.button("Add").clicked() {
-                                            self.headers.borrow_mut().push((
-                                                true,
-                                                String::from(""),
-                                                String::from(""),
-                                            ));
-                                        };
-                                    });
-                                });
-                            });
-                    });
-                }
-                RequestWindowMode::ENVIRONMENT => {
-                    CentralPanel::default().show(ctx, |ui| {
-                        let table = TableBuilder::new(ui)
-                            .striped(true)
-                            .resizable(true)
-                            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                            .column(Column::auto())
-                            .column(Column::auto())
-                            .column(Column::auto())
-                            .column(Column::auto());
-                        table
-                            .header(20.0, |mut header| {
-                                header.col(|ui| {
-                                    ui.strong("Enabled");
-                                });
-                                header.col(|ui| {
-                                    ui.strong("Key");
-                                });
-                                header.col(|ui| {
-                                    ui.strong("Value");
-                                });
-                                header.col(|ui| {
-                                    ui.strong("Type");
-                                });
-                            })
-                            .body(|mut body| {
-                                let selected_environment = self.selected_environment.borrow_mut();
-                                let mut values_ref =
-                                    RefMut::map(selected_environment, |env| &mut env.values);
-                                if let Some(values) = values_ref.as_mut() {
-                                    for env_var in values {
-                                        body.row(30.0, |mut row| {
-                                            row.col(|ui| {
-                                                ui.checkbox(&mut env_var.enabled, "");
-                                            });
-                                            row.col(|ui| {
-                                                ui.text_edit_singleline(&mut env_var.key);
-                                            });
-                                            row.col(|ui| {
-                                                ui.text_edit_singleline(&mut env_var.value);
-                                            });
-                                            row.col(|ui| {
-                                                ui.text_edit_singleline(&mut env_var.r#type);
-                                            });
-                                        });
-                                    }
-                                }
-                                body.row(30.0, |mut row| {
-                                    row.col(|ui| {
-                                        if ui.button("Add").clicked() {
-                                            if let Some(vals) = values_ref.as_mut() {
-                                                vals.push(EnvironmentValue {
-                                                    key: String::from(""),
-                                                    value: String::from(""),
-                                                    r#type: String::from("default"),
-                                                    enabled: true,
-                                                });
-                                            }
-                                        };
-                                    });
-                                });
-                            });
-                    });
-                }
-            };
-        }
-        if let Ok(mut import_window_open) = self.import_window_open.try_write() {
-            if *import_window_open == true {
-                egui::Window::new("Import Modal")
-                    .open(&mut *import_window_open)
-                    .show(ctx, |ui| {
-                        ui.label("Please copy and paste the file path to import");
-                        ui.horizontal(|ui| {
-                            ui.text_edit_singleline(&mut self.import_file_path);
-                            if ui.button("Import").clicked() {
-                                let path = self.import_file_path.to_owned();
-                                if let Ok(import_mode) = self.import_mode.try_read() {
-                                    let import_result_clone = self.import_result.clone();
-                                    match *import_mode {
-                                        ImportMode::COLLECTION => {
-                                            tokio::spawn(async move {
-                                                PostieApi::import_collection(&path).await
-                                            });
-                                        }
-                                        ImportMode::ENVIRONMENT => {
-                                            tokio::spawn(async move {
-                                                let res = PostieApi::import_environment(&path)
-                                                    .await
-                                                    .unwrap();
-                                                let mut data = import_result_clone.lock().unwrap();
-                                                *data = Some(res);
-                                            });
-                                        }
-                                    };
-                                }
-                            };
-                            let i = self.import_result.lock().unwrap();
-                            if let Some(import_res) = &*i {
-                                ui.label(import_res);
-                            }
-                        });
-                    });
-            }
-        }
+        menu_panel(self, ctx);
+        side_panel(self, ctx);
+        content_header_panel(self, ctx);
+        content_side_panel(self, ctx);
+        content_panel(self, ctx);
+        import_modal(self, ctx);
     }
 }
 
