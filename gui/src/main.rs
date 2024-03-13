@@ -8,7 +8,7 @@ use api::{
         request_item::RequestHistoryItem,
         response::DBResponse,
     },
-    HttpMethod, HttpRequest, PostieApi, ResponseData,
+    PostieApi,
 };
 use components::{
     content_header_panel::content_header_panel, content_panel::content_panel,
@@ -51,6 +51,7 @@ pub enum RequestWindowMode {
 pub enum AuthMode {
     APIKEY,
     BEARER,
+    OAUTH2,
     NONE,
 }
 impl std::fmt::Display for AuthMode {
@@ -64,7 +65,7 @@ impl std::fmt::Display for AuthMode {
  * accessing it at once. Up for thoughts on how to make this a little cleaner though.
 */
 pub struct Gui {
-    pub response: Arc<RwLock<Option<ResponseData>>>,
+    pub response: Arc<RwLock<Option<api::ResponseData>>>,
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
     pub environments: Arc<RwLock<Option<Vec<api::domain::environment::EnvironmentFile>>>>,
     pub collections: Arc<RwLock<Option<Vec<api::domain::collection::Collection>>>>,
@@ -75,11 +76,14 @@ pub struct Gui {
     pub selected_history_item: Rc<RefCell<Option<api::domain::request_item::RequestHistoryItem>>>,
     pub selected_environment: Rc<RefCell<api::domain::environment::EnvironmentFile>>,
     pub selected_collection: Rc<RefCell<Option<api::domain::collection::Collection>>>,
-    pub selected_http_method: HttpMethod,
+    pub selected_http_method: api::HttpMethod,
     pub selected_auth_mode: AuthMode,
     pub api_key: String,
     pub api_key_name: String,
     pub bearer_token: String,
+    pub oauth_response: Arc<RwLock<Option<String>>>,
+    pub oauth_config: api::OAuth2Request,
+    pub oauth_token: String,
     pub selected_request: Rc<RefCell<Option<api::domain::collection::CollectionRequest>>>,
     pub env_vars: Rc<RefCell<Vec<EnvironmentValue>>>,
     pub active_window: RwLock<ActiveWindow>,
@@ -96,17 +100,9 @@ impl Default for Gui {
         Self {
             response: Arc::new(RwLock::new(None)),
             headers: Rc::new(RefCell::new(vec![
-                (
-                    true,
-                    String::from("Content-Type"),
-                    String::from("application/json"),
-                ),
-                (true, String::from("User-Agent"), String::from("postie")),
-                (
-                    true,
-                    String::from("Cache-Control"),
-                    String::from("no-cache"),
-                ),
+                (true, "Content-Type".into(), "application/json".into()),
+                (true, "User-Agent".into(), "postie".into()),
+                (true, "Cache-Control".into(), "no-cache".into()),
             ])),
             environments: Arc::new(RwLock::new(None)),
             collections: Arc::new(RwLock::new(None)),
@@ -114,30 +110,43 @@ impl Default for Gui {
             request_history_items: Arc::new(RwLock::new(None)),
             selected_environment: Rc::new(RefCell::new(EnvironmentFile {
                 id: Uuid::new_v4().to_string(),
-                name: String::from("default"),
+                name: "default".into(),
                 values: Some(vec![EnvironmentValue {
-                    key: String::from("HOST_URL"),
-                    value: String::from("https://httpbin.org"),
-                    r#type: String::from("default"),
+                    key: "HOST_URL".into(),
+                    value: "https://httpbin.org".into(),
+                    r#type: "default".into(),
                     enabled: true,
                 }]),
             })),
             selected_collection: Rc::new(RefCell::new(None)),
             selected_history_item: Rc::new(RefCell::new(None)),
-            selected_http_method: HttpMethod::GET,
+            selected_http_method: api::HttpMethod::GET,
             selected_auth_mode: AuthMode::NONE,
             selected_request: Rc::new(RefCell::new(None)),
-            api_key_name: String::from(""),
-            api_key: String::from(""),
+            api_key_name: "".into(),
+            api_key: "".into(),
+            oauth_response: Arc::new(RwLock::new(Some("".into()))),
+            oauth_token: "".into(),
+            oauth_config: api::OAuth2Request {
+                access_token_url: "".into(),
+                refresh_url: "".into(),
+                client_id: "".into(),
+                client_secret: "".into(),
+                request: api::OAuthRequestBody {
+                    grant_type: "client_credentials".into(),
+                    scope: "".into(),
+                    audience: "".into(),
+                },
+            },
             bearer_token: String::from(""),
             saved_requests: Arc::new(RwLock::new(None)),
             saved_responses: Arc::new(RwLock::new(None)),
             active_window: RwLock::new(ActiveWindow::COLLECTIONS),
             request_window_mode: RwLock::new(RequestWindowMode::BODY),
             url: String::from("{{HOST_URL}}/json"),
-            body_str: String::from("{ \"foo\": \"bar\" }"),
+            body_str: "{ \"foo\": \"bar\" }".into(),
             import_window_open: RwLock::new(false),
-            import_file_path: String::from(""),
+            import_file_path: "".into(),
             import_mode: RwLock::new(ImportMode::COLLECTION),
             import_result: Arc::new(Mutex::new(None)),
         }
@@ -150,11 +159,11 @@ impl Gui {
             .await
             .unwrap_or(vec![EnvironmentFile {
                 id: Uuid::new_v4().to_string(),
-                name: String::from("default"),
+                name: "default".into(),
                 values: Some(vec![EnvironmentValue {
-                    key: String::from(""),
-                    value: String::from(""),
-                    r#type: String::from("default"),
+                    key: "".into(),
+                    value: "".into(),
+                    r#type: "default".into(),
                     enabled: true,
                 }]),
             }]);
@@ -177,9 +186,6 @@ impl Gui {
         default.saved_requests = Arc::new(RwLock::from(Some(requests_by_id)));
         default.saved_responses = Arc::new(RwLock::from(Some(responses_by_id)));
         default
-    }
-    async fn submit(input: HttpRequest) -> Result<ResponseData, Box<dyn Error>> {
-        PostieApi::make_request(input).await
     }
     async fn refresh_request_data(
         request_history: Arc<RwLock<Option<Vec<RequestHistoryItem>>>>,
@@ -226,9 +232,12 @@ impl Gui {
         let mut environment_write_guard = old_environments.try_write().unwrap();
         *environment_write_guard = Some(envs).into();
     }
+    async fn submit(input: api::HttpRequest) -> Result<api::ResponseData, Box<dyn Error>> {
+        PostieApi::make_request(api::PostieRequest::HTTP(input)).await
+    }
     // egui needs to run on the main thread so all async requests need to be run on a worker
     // thread.
-    fn spawn_submit(&mut self, input: HttpRequest) -> Result<(), Box<dyn Error>> {
+    fn spawn_submit(&mut self, input: api::HttpRequest) -> Result<(), Box<dyn Error>> {
         // TODO figure out how to impl Send for Gui so it can be passed to another thread.
         // currently getting an error. Workaround is to just clone the PostieApi
         let response_for_worker = self.response.clone();
@@ -237,7 +246,7 @@ impl Gui {
         let saved_response_for_worker = self.saved_responses.clone();
         tokio::spawn(async move {
             let mut result_write_guard = response_for_worker.try_write().unwrap();
-            match Gui::submit(input).await {
+            match Self::submit(input).await {
                 Ok(res) => {
                     println!("Res: {:?}", res);
                     *result_write_guard = Some(res);
@@ -269,6 +278,31 @@ impl Gui {
         }
         result
     }
+    async fn oauth_token_request(
+        input: api::OAuth2Request,
+    ) -> Result<api::ResponseData, Box<dyn Error>> {
+        let res = PostieApi::make_request(api::PostieRequest::OAUTH(input)).await?;
+        println!("{:?}", &res);
+        Ok(res)
+    }
+    //pub fn spawn_oauth_token_request(
+    //    &mut self,
+    //    input: api::OAuth2Request,
+    //) -> Result<(), Box<dyn Error>> {
+    //    let token_for_worker = self.oauth_response.clone();
+    //    tokio::spawn(async move {
+    //        let mut token_write_guard = token_for_worker.try_write().unwrap();
+    //        let res = Self::oauth_token_request(input).await;
+    //        format!("{:?}", &res);
+    //        let res_body = match res.unwrap() {
+    //            api::ResponseData::JSON(json) => json,
+    //            api::ResponseData::TEXT(_) => panic!("unexpected text response"),
+    //        };
+    //        let res_json = serde_json::from_value(res_body).unwrap();
+    //        *token_write_guard = res_json;
+    //    });
+    //    Ok(())
+    //}
 }
 
 impl App for Gui {

@@ -196,11 +196,11 @@ impl PostieDb {
                 let name: Option<String> = row.get("name");
                 let raw_body: Option<String> = row.get("body");
                 let raw_headers: String = row.get("headers");
-                let mut body: Option<serde_json::Value> = None;
+                let mut body: Option<String> = None;
                 let headers: Vec<request::RequestHeader> =
                     serde_json::from_str::<Vec<RequestHeader>>(&raw_headers).unwrap();
                 if let Some(body_str) = raw_body {
-                    body = serde_json::from_str(&body_str).unwrap()
+                    body = Some(body_str)
                 }
                 DBRequest {
                     id,

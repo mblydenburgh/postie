@@ -9,7 +9,7 @@ pub struct DBRequest {
     pub name: Option<String>,
     #[sqlx(default)]
     pub headers: Vec<RequestHeader>,
-    pub body: Option<serde_json::Value>,
+    pub body: Option<String>,
 }
 
 #[derive(

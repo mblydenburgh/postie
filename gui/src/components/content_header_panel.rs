@@ -31,7 +31,9 @@ pub fn content_header_panel(gui: &mut Gui, ctx: &egui::Context) {
             ui.text_edit_singleline(&mut gui.url);
             if ui.button("Submit").clicked() {
                 let body = if gui.selected_http_method != HttpMethod::GET {
-                    Some(serde_json::from_str(&gui.body_str).expect("Body is invalid json"))
+                    Some(api::RequestBody::JSON(
+                        serde_json::from_str(&gui.body_str).expect("Body is invalid json"),
+                    ))
                 } else {
                     None
                 };
@@ -44,16 +46,21 @@ pub fn content_header_panel(gui: &mut Gui, ctx: &egui::Context) {
                     .collect();
                 match gui.selected_auth_mode {
                     AuthMode::APIKEY => {
-                        submitted_headers.push(
-                            (String::from(gui.api_key_name.clone()), gui.api_key.clone())
-                        );
-                    },
+                        submitted_headers
+                            .push((String::from(gui.api_key_name.clone()), gui.api_key.clone()));
+                    }
                     AuthMode::BEARER => {
-                        submitted_headers.push(
-                            (String::from("Authorization"),
-                            format!("Bearer {}", gui.api_key))
-                        );
-                    },
+                        submitted_headers.push((
+                            String::from("Authorization"),
+                            format!("Bearer {}", gui.bearer_token),
+                        ));
+                    }
+                    AuthMode::OAUTH2 => {
+                        submitted_headers.push((
+                            String::from("Authorization"),
+                            format!("Bearer {}", gui.oauth_token),
+                        ));
+                    }
                     AuthMode::NONE => (),
                 };
                 let request = HttpRequest {

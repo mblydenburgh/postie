@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 api= { path = "../api/" }
+base64 = "0.22.0"
 egui = "0.26.2"
 egui_extras = "0.26.2"
 egui_json_tree = "0.4.0"
