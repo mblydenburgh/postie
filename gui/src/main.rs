@@ -8,7 +8,7 @@ use api::{
         request_item::RequestHistoryItem,
         response::DBResponse,
     },
-    PostieApi,
+    PostieApi, ResponseData,
 };
 use components::{
     content_header_panel::content_header_panel, content_panel::content_panel,
@@ -81,7 +81,7 @@ pub struct Gui {
     pub api_key: String,
     pub api_key_name: String,
     pub bearer_token: String,
-    pub oauth_response: Arc<RwLock<Option<String>>>,
+    pub oauth_response: Arc<RwLock<Option<ResponseData>>>,
     pub oauth_config: api::OAuth2Request,
     pub oauth_token: String,
     pub selected_request: Rc<RefCell<Option<api::domain::collection::CollectionRequest>>>,
@@ -94,9 +94,11 @@ pub struct Gui {
     pub import_mode: RwLock<ImportMode>,
     pub import_file_path: String,
     pub import_result: Arc<Mutex<Option<String>>>,
+    pub sender: tokio::sync::mpsc::Sender<Option<ResponseData>>,
 }
 impl Default for Gui {
     fn default() -> Self {
+        let (sender, _) = tokio::sync::mpsc::channel(10);
         Self {
             response: Arc::new(RwLock::new(None)),
             headers: Rc::new(RefCell::new(vec![
@@ -125,7 +127,7 @@ impl Default for Gui {
             selected_request: Rc::new(RefCell::new(None)),
             api_key_name: "".into(),
             api_key: "".into(),
-            oauth_response: Arc::new(RwLock::new(Some("".into()))),
+            oauth_response: Arc::new(RwLock::new(None)),
             oauth_token: "".into(),
             oauth_config: api::OAuth2Request {
                 access_token_url: "".into(),
@@ -149,9 +151,11 @@ impl Default for Gui {
             import_file_path: "".into(),
             import_mode: RwLock::new(ImportMode::COLLECTION),
             import_result: Arc::new(Mutex::new(None)),
+            sender,
         }
     }
 }
+unsafe impl Send for Gui {}
 impl Gui {
     async fn new() -> Self {
         // Initialize Postie with values from db
@@ -267,6 +271,34 @@ impl Gui {
         });
         Ok(())
     }
+    async fn oauth_token_request(
+        input: api::OAuth2Request,
+    ) -> Result<api::ResponseData, Box<dyn Error + Send>> {
+        let res = PostieApi::make_request(api::PostieRequest::OAUTH(input))
+            .await
+            .ok()
+            .unwrap();
+        println!("{:?}", &res);
+        Ok(res)
+    }
+    fn spawn_ouath_request(
+        sender: &mut tokio::sync::mpsc::Sender<Option<ResponseData>>,
+        input: api::OAuth2Request,
+    ) -> Result<(), Box<dyn Error + Send>> {
+        let sender_for_worker = sender.clone();
+        tokio::spawn(async move {
+            match Self::oauth_token_request(input).await {
+                Ok(res) => {
+                    println!("OAuth Response: {:?}", res);
+                    _ = sender_for_worker.send(Some(res)).await;
+                }
+                Err(err) => {
+                    eprintln!("Error with ouath request: {:?}", err);
+                }
+            };
+        });
+        Ok(())
+    }
     fn remove_duplicate_headers(headers: Vec<(String, String)>) -> Vec<(String, String)> {
         let mut unique_keys = HashSet::new();
         let mut result = Vec::new();
@@ -278,31 +310,6 @@ impl Gui {
         }
         result
     }
-    async fn oauth_token_request(
-        input: api::OAuth2Request,
-    ) -> Result<api::ResponseData, Box<dyn Error>> {
-        let res = PostieApi::make_request(api::PostieRequest::OAUTH(input)).await?;
-        println!("{:?}", &res);
-        Ok(res)
-    }
-    //pub fn spawn_oauth_token_request(
-    //    &mut self,
-    //    input: api::OAuth2Request,
-    //) -> Result<(), Box<dyn Error>> {
-    //    let token_for_worker = self.oauth_response.clone();
-    //    tokio::spawn(async move {
-    //        let mut token_write_guard = token_for_worker.try_write().unwrap();
-    //        let res = Self::oauth_token_request(input).await;
-    //        format!("{:?}", &res);
-    //        let res_body = match res.unwrap() {
-    //            api::ResponseData::JSON(json) => json,
-    //            api::ResponseData::TEXT(_) => panic!("unexpected text response"),
-    //        };
-    //        let res_json = serde_json::from_value(res_body).unwrap();
-    //        *token_write_guard = res_json;
-    //    });
-    //    Ok(())
-    //}
 }
 
 impl App for Gui {

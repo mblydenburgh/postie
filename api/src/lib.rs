@@ -89,11 +89,11 @@ pub struct OAuthRequestBody {
     pub audience: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct OAuthResponse {
     pub access_token: String,
     pub expires_in: i32,
-    pub token_type: String
+    pub token_type: String,
 }
 
 #[derive(Debug)]

@@ -1,6 +1,6 @@
 use std::cell::RefMut;
 
-use api::{domain::environment::EnvironmentValue, OAuthResponse, ResponseData};
+use api::{domain::environment::EnvironmentValue, ResponseData};
 use egui::{CentralPanel, ComboBox, ScrollArea, TextEdit, TextStyle, TopBottomPanel};
 use egui_extras::{Column, TableBuilder};
 use egui_json_tree::JsonTree;
@@ -8,6 +8,7 @@ use egui_json_tree::JsonTree;
 use crate::{AuthMode, Gui, RequestWindowMode};
 
 pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
+    let sender = &mut gui.sender.clone();
     if let Ok(request_window_mode) = gui.request_window_mode.try_read() {
         match *request_window_mode {
             RequestWindowMode::BODY => {
@@ -88,63 +89,96 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                             ui.text_edit_multiline(&mut gui.bearer_token);
                         }
                         AuthMode::OAUTH2 => {
-                            ui.horizontal(|ui| {
-                                ui.label("Current Token");
-                                ui.text_edit_singleline(&mut gui.oauth_token);
-                            });
-                            ui.heading("Configure New Token");
-                            ui.horizontal(|ui| {
-                                ui.label("Access Token Url");
-                                ui.text_edit_singleline(&mut gui.oauth_config.access_token_url);
-                            });
-                            ui.horizontal(|ui| {
-                                ui.label("Client ID");
-                                ui.text_edit_singleline(&mut gui.oauth_config.client_id);
-                            });
-                            ui.horizontal(|ui| {
-                                ui.label("Client Secret");
-                                ui.text_edit_singleline(&mut gui.oauth_config.client_secret);
-                            });
-                            ui.horizontal(|ui| {
-                                ui.label("Scope");
-                                ui.text_edit_singleline(&mut gui.oauth_config.request.scope);
-                            });
-                            ui.horizontal(|ui| {
-                                ui.label("Audience");
-                                ui.text_edit_singleline(&mut gui.oauth_config.request.audience);
-                            });
+                            CentralPanel::default().show(ctx, |_ui| {
+                                TopBottomPanel::top("oauth_request_panel")
+                                    .resizable(true)
+                                    .show(ctx, |ui| {
+                                        ui.heading("Configure New Token");
+                                        ui.horizontal(|ui| {
+                                            ui.label("Access Token Url");
+                                            ui.text_edit_singleline(
+                                                &mut gui.oauth_config.access_token_url,
+                                            );
+                                        });
+                                        ui.horizontal(|ui| {
+                                            ui.label("Client ID");
+                                            ui.text_edit_singleline(
+                                                &mut gui.oauth_config.client_id,
+                                            );
+                                        });
+                                        ui.horizontal(|ui| {
+                                            ui.label("Client Secret");
+                                            ui.text_edit_singleline(
+                                                &mut gui.oauth_config.client_secret,
+                                            );
+                                        });
+                                        ui.horizontal(|ui| {
+                                            ui.label("Scope");
+                                            ui.text_edit_singleline(
+                                                &mut gui.oauth_config.request.scope,
+                                            );
+                                        });
+                                        ui.horizontal(|ui| {
+                                            ui.label("Audience");
+                                            ui.text_edit_singleline(
+                                                &mut gui.oauth_config.request.audience,
+                                            );
+                                        });
 
-                            if ui.button("Request Token").clicked() {
-                                println!("requesting token");
-                                let oauth_input = api::OAuth2Request {
-                                    access_token_url: gui.oauth_config.access_token_url.clone(),
-                                    refresh_url: gui.oauth_config.refresh_url.clone(),
-                                    client_id: gui.oauth_config.client_id.clone(),
-                                    client_secret: gui.oauth_config.client_secret.clone(),
-                                    request: api::OAuthRequestBody {
-                                        grant_type: gui.oauth_config.request.grant_type.clone(),
-                                        scope: gui.oauth_config.request.scope.clone(),
-                                        audience: gui.oauth_config.request.audience.clone(),
-                                    },
-                                };
-
-                                let token_for_worker = gui.oauth_response.clone();
-                                tokio::spawn(async move {
-                                    let mut token_write_guard =
-                                        token_for_worker.try_write().unwrap();
-                                    let res = Gui::oauth_token_request(oauth_input).await;
-                                    format!("{:?}", &res);
-                                    let res_body = match res.unwrap() {
-                                        api::ResponseData::JSON(json) => json,
-                                        api::ResponseData::TEXT(_) => {
-                                            panic!("unexpected text response")
-                                        }
-                                    };
-                                    let res_json: OAuthResponse = serde_json::from_value(res_body).unwrap();
-                                    *token_write_guard = Some(res_json.access_token);
-                                });
-                            }
-
+                                        if ui.button("Request Token").clicked() {
+                                            println!("requesting token");
+                                            let oauth_input = api::OAuth2Request {
+                                                access_token_url: gui
+                                                    .oauth_config
+                                                    .access_token_url
+                                                    .clone(),
+                                                refresh_url: gui.oauth_config.refresh_url.clone(),
+                                                client_id: gui.oauth_config.client_id.clone(),
+                                                client_secret: gui
+                                                    .oauth_config
+                                                    .client_secret
+                                                    .clone(),
+                                                request: api::OAuthRequestBody {
+                                                    grant_type: gui
+                                                        .oauth_config
+                                                        .request
+                                                        .grant_type
+                                                        .clone(),
+                                                    scope: gui.oauth_config.request.scope.clone(),
+                                                    audience: gui
+                                                        .oauth_config
+                                                        .request
+                                                        .audience
+                                                        .clone(),
+                                                },
+                                            };
+                                            let _ = Gui::spawn_ouath_request(sender, oauth_input);
+                                        };
+                                    });
+                                if let Ok(token_read_guard) = gui.oauth_response.try_read() {
+                                    if let Some(response_data) = &*token_read_guard {
+                                        TopBottomPanel::bottom("ouath_response")
+                                            .resizable(true)
+                                            .show(ctx, |ui| {
+                                                match response_data {
+                                                    ResponseData::JSON(j) => {
+                                                        let token = serde_json::from_value::<
+                                                            api::OAuthResponse,
+                                                        >(
+                                                            j.clone()
+                                                        )
+                                                        .unwrap();
+                                                        ui.label(format!(
+                                                            "Retrieved token: {}",
+                                                            token.access_token
+                                                        ));
+                                                    }
+                                                    ResponseData::TEXT(t) => todo!(),
+                                                };
+                                            });
+                                    }
+                                }
+                            });
                         }
                         AuthMode::NONE => (),
                     };
