@@ -94,78 +94,66 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                                     ui.text_edit_multiline(&mut gui.bearer_token);
                                 }
                                 AuthMode::OAUTH2 => {
-                                            ui.heading("Configure New Token");
-                                            ui.horizontal(|ui| {
-                                                ui.label("Access Token Url");
-                                                ui.text_edit_singleline(
-                                                    &mut gui.oauth_config.access_token_url,
-                                                );
-                                            });
-                                            ui.horizontal(|ui| {
-                                                ui.label("Client ID");
-                                                ui.text_edit_singleline(
-                                                    &mut gui.oauth_config.client_id,
-                                                );
-                                            });
-                                            ui.horizontal(|ui| {
-                                                ui.label("Client Secret");
-                                                ui.text_edit_singleline(
-                                                    &mut gui.oauth_config.client_secret,
-                                                );
-                                            });
-                                            ui.horizontal(|ui| {
-                                                ui.label("Scope");
-                                                ui.text_edit_singleline(
-                                                    &mut gui.oauth_config.request.scope,
-                                                );
-                                            });
-                                            ui.horizontal(|ui| {
-                                                ui.label("Audience");
-                                                ui.text_edit_singleline(
-                                                    &mut gui.oauth_config.request.audience,
-                                                );
-                                            });
+                                    ui.horizontal(|ui| {
+                                        ui.label("Token Result:");
+                                        ui.text_edit_multiline(&mut gui.t);
+                                    });
+                                    ui.heading("Configure New Token");
+                                    ui.horizontal(|ui| {
+                                        ui.label("Access Token Url");
+                                        ui.text_edit_singleline(
+                                            &mut gui.oauth_config.access_token_url,
+                                        );
+                                    });
+                                    ui.horizontal(|ui| {
+                                        ui.label("Client ID");
+                                        ui.text_edit_singleline(&mut gui.oauth_config.client_id);
+                                    });
+                                    ui.horizontal(|ui| {
+                                        ui.label("Client Secret");
+                                        ui.text_edit_singleline(
+                                            &mut gui.oauth_config.client_secret,
+                                        );
+                                    });
+                                    ui.horizontal(|ui| {
+                                        ui.label("Scope");
+                                        ui.text_edit_singleline(
+                                            &mut gui.oauth_config.request.scope,
+                                        );
+                                    });
+                                    ui.horizontal(|ui| {
+                                        ui.label("Audience");
+                                        ui.text_edit_singleline(
+                                            &mut gui.oauth_config.request.audience,
+                                        );
+                                    });
 
-                                            if ui.button("Request Token").clicked() {
-                                                println!("requesting token");
-                                                let oauth_input = api::OAuth2Request {
-                                                    access_token_url: gui
-                                                        .oauth_config
-                                                        .access_token_url
-                                                        .clone(),
-                                                    refresh_url: gui
-                                                        .oauth_config
-                                                        .refresh_url
-                                                        .clone(),
-                                                    client_id: gui.oauth_config.client_id.clone(),
-                                                    client_secret: gui
-                                                        .oauth_config
-                                                        .client_secret
-                                                        .clone(),
-                                                    request: api::OAuthRequestBody {
-                                                        grant_type: gui
-                                                            .oauth_config
-                                                            .request
-                                                            .grant_type
-                                                            .clone(),
-                                                        scope: gui
-                                                            .oauth_config
-                                                            .request
-                                                            .scope
-                                                            .clone(),
-                                                        audience: gui
-                                                            .oauth_config
-                                                            .request
-                                                            .audience
-                                                            .clone(),
-                                                    },
-                                                };
-                                                let _ = Gui::spawn_ouath_request(
-                                                    sender,
-                                                    oauth_response.clone(),
-                                                    oauth_input,
-                                                );
-                                            };
+                                    if ui.button("Request Token").clicked() {
+                                        println!("requesting token");
+                                        let oauth_input = api::OAuth2Request {
+                                            access_token_url: gui
+                                                .oauth_config
+                                                .access_token_url
+                                                .clone(),
+                                            refresh_url: gui.oauth_config.refresh_url.clone(),
+                                            client_id: gui.oauth_config.client_id.clone(),
+                                            client_secret: gui.oauth_config.client_secret.clone(),
+                                            request: api::OAuthRequestBody {
+                                                grant_type: gui
+                                                    .oauth_config
+                                                    .request
+                                                    .grant_type
+                                                    .clone(),
+                                                scope: gui.oauth_config.request.scope.clone(),
+                                                audience: gui.oauth_config.request.audience.clone(),
+                                            },
+                                        };
+                                        let _ = Gui::spawn_ouath_request(
+                                            sender,
+                                            oauth_response.clone(),
+                                            oauth_input,
+                                        );
+                                    };
                                 }
                                 AuthMode::NONE => (),
                             };
@@ -190,7 +178,8 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                                                             j
                                                         )
                                                         .unwrap();
-                                                        ui.label(data.access_token);
+                                                        ui.label(data.access_token.clone());
+                                                        gui.t = data.access_token.clone();
                                                     }
                                                     ResponseData::TEXT(_t) => todo!(),
                                                 }

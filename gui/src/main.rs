@@ -97,6 +97,7 @@ pub struct Gui {
     pub sender: tokio::sync::mpsc::Sender<Option<ResponseData>>,
     pub receiver: tokio::sync::mpsc::Receiver<Option<ResponseData>>,
     pub received_token: Arc<Mutex<bool>>,
+    pub t: String,
 }
 impl Default for Gui {
     fn default() -> Self {
@@ -132,15 +133,15 @@ impl Default for Gui {
             oauth_response: Arc::new(RwLock::new(None)),
             oauth_token: "".into(),
             oauth_config: api::OAuth2Request {
-                access_token_url: "".into(),
+                access_token_url: "https://test-lmidp.libertymutual.com/as/token.oauth2".into(),
                 refresh_url: "".into(),
-                client_id: "".into(),
-                client_secret: "".into(),
+                client_id: "uscm_rdmparserclt_2".into(),
+                client_secret: "1634376a-ce4d-4b53-92ea-fab31f20aa77".into(),
                 request: api::OAuthRequestBody {
                     grant_type: "client_credentials".into(),
-                    scope: "".into(),
+                    scope: "quote".into(),
                     audience:
-                        ""
+                        "https://qp-api-gateway.test.amazon-web-services-797312992947-us-east-1/"
                             .into(),
                 },
             },
@@ -158,6 +159,7 @@ impl Default for Gui {
             sender,
             receiver,
             received_token: Arc::new(Mutex::new(false)),
+            t: "".into(),
         }
     }
 }
