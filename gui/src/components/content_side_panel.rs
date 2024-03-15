@@ -132,8 +132,6 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                                     HttpMethod::from_str(&historical_request.method).unwrap();
                                 match &historical_request.body {
                                     Some(body_json) => {
-                                        //let body_str =
-                                         //   serde_json::from_value(body_json.clone()).unwrap();
                                         gui.body_str = body_json.to_string();
                                     }
                                     None => gui.body_str = String::from(""),

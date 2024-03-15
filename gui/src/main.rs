@@ -291,16 +291,13 @@ impl Gui {
     }
     fn spawn_ouath_request(
         sender: &mut tokio::sync::mpsc::Sender<Option<ResponseData>>,
-        oauth_response: Arc<RwLock<Option<ResponseData>>>,
         input: api::OAuth2Request,
     ) -> Result<(), Box<dyn Error>> {
         let sender_for_worker = sender.clone();
-        let mut _token_write_guard = oauth_response.try_write().unwrap();
         tokio::spawn(async move {
             match Self::oauth_token_request(input).await {
                 Ok(res) => {
                     println!("OAuth Response: {:?}", res);
-                    //*token_write_guard = Some(res.clone());
                     _ = sender_for_worker.send(Some(res)).await;
                 }
                 Err(_err) => {

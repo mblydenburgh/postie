@@ -10,7 +10,6 @@ use crate::{AuthMode, Gui, RequestWindowMode};
 pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
     let sender = &mut gui.sender.clone();
     let receiver = &mut gui.receiver;
-    let oauth_response = &mut gui.oauth_response;
     if let Ok(request_window_mode) = gui.request_window_mode.try_read() {
         match *request_window_mode {
             RequestWindowMode::BODY => {
@@ -150,7 +149,6 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                                         };
                                         let _ = Gui::spawn_ouath_request(
                                             sender,
-                                            oauth_response.clone(),
                                             oauth_input,
                                         );
                                     };
