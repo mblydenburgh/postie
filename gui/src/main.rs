@@ -95,10 +95,12 @@ pub struct Gui {
     pub import_file_path: String,
     pub import_result: Arc<Mutex<Option<String>>>,
     pub sender: tokio::sync::mpsc::Sender<Option<ResponseData>>,
+    pub receiver: tokio::sync::mpsc::Receiver<Option<ResponseData>>,
+    pub received_token: Arc<Mutex<bool>>,
 }
 impl Default for Gui {
     fn default() -> Self {
-        let (sender, _) = tokio::sync::mpsc::channel(10);
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
         Self {
             response: Arc::new(RwLock::new(None)),
             headers: Rc::new(RefCell::new(vec![
@@ -130,14 +132,16 @@ impl Default for Gui {
             oauth_response: Arc::new(RwLock::new(None)),
             oauth_token: "".into(),
             oauth_config: api::OAuth2Request {
-                access_token_url: "".into(),
+                access_token_url: "https://test-lmidp.libertymutual.com/as/token.oauth2".into(),
                 refresh_url: "".into(),
-                client_id: "".into(),
-                client_secret: "".into(),
+                client_id: "uscm_rdmparserclt_2".into(),
+                client_secret: "1634376a-ce4d-4b53-92ea-fab31f20aa77".into(),
                 request: api::OAuthRequestBody {
                     grant_type: "client_credentials".into(),
-                    scope: "".into(),
-                    audience: "".into(),
+                    scope: "quote".into(),
+                    audience:
+                        "https://qp-api-gateway.test.amazon-web-services-797312992947-us-east-1/"
+                            .into(),
                 },
             },
             bearer_token: String::from(""),
@@ -152,6 +156,8 @@ impl Default for Gui {
             import_mode: RwLock::new(ImportMode::COLLECTION),
             import_result: Arc::new(Mutex::new(None)),
             sender,
+            receiver,
+            received_token: Arc::new(Mutex::new(false)),
         }
     }
 }
@@ -283,22 +289,26 @@ impl Gui {
     }
     fn spawn_ouath_request(
         sender: &mut tokio::sync::mpsc::Sender<Option<ResponseData>>,
+        oauth_response: Arc<RwLock<Option<ResponseData>>>,
         input: api::OAuth2Request,
-    ) -> Result<(), Box<dyn Error + Send>> {
+    ) -> Result<(), Box<dyn Error>> {
         let sender_for_worker = sender.clone();
+        let mut _token_write_guard = oauth_response.try_write().unwrap();
         tokio::spawn(async move {
             match Self::oauth_token_request(input).await {
                 Ok(res) => {
                     println!("OAuth Response: {:?}", res);
+                    //*token_write_guard = Some(res.clone());
                     _ = sender_for_worker.send(Some(res)).await;
                 }
-                Err(err) => {
-                    eprintln!("Error with ouath request: {:?}", err);
+                Err(_err) => {
+                    todo!()
                 }
             };
         });
         Ok(())
     }
+
     fn remove_duplicate_headers(headers: Vec<(String, String)>) -> Vec<(String, String)> {
         let mut unique_keys = HashSet::new();
         let mut result = Vec::new();

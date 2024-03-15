@@ -96,7 +96,7 @@ pub struct OAuthResponse {
     pub token_type: String,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ResponseData {
     JSON(serde_json::Value),
     TEXT(String),
@@ -216,6 +216,7 @@ impl PostieApi {
     pub async fn make_request(input: PostieRequest) -> Result<ResponseData, Box<dyn Error>> {
         let api = PostieApi::new().await;
         match input {
+            // request and save http request
             PostieRequest::HTTP(input) => {
                 println!("Submitting http request: {:?}", input);
                 let method = match input.method {
@@ -320,6 +321,7 @@ impl PostieApi {
                 };
                 Ok(response_data)
             }
+            // if making an oauth token request, dont save to db
             PostieRequest::OAUTH(input) => {
                 println!("making ouath request");
                 let auth_header_value =
@@ -341,7 +343,6 @@ impl PostieApi {
                     .headers(header_map);
                 req = req.form(&input.request);
                 let res = req.send().await?;
-                println!("boom");
                 println!("{:?}", res);
                 Ok(ResponseData::JSON(res.json().await.unwrap()))
             }
