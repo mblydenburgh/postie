@@ -2,7 +2,7 @@ use std::cell::RefMut;
 
 use api::{domain::environment::EnvironmentValue, ResponseData};
 use egui::{CentralPanel, ComboBox, ScrollArea, TextEdit, TextStyle, TopBottomPanel};
-use egui_extras::{Column, TableBuilder};
+use egui_extras::{Column, TableBuilder, StripBuilder, Strip};
 use egui_json_tree::JsonTree;
 
 use crate::{AuthMode, Gui, RequestWindowMode};
@@ -55,24 +55,6 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                         });
                     },
                 };
-                //if gui.response.try_read().expect("couldnt get gui.response lock").is_some() {
-                //    CentralPanel::default().show(ctx, |ui| {
-                //        let binding = gui.response.try_read().unwrap();
-                //        let r = binding.as_ref().unwrap();
-                //        match r {
-                //            ResponseData::JSON(json) => {
-                //                ScrollArea::vertical().show(ui, |ui| {
-                //                    JsonTree::new("response-json", json).show(ui);
-                //                });
-                //            }
-                //            ResponseData::TEXT(text) => {
-                //                ScrollArea::vertical().show(ui, |ui| {
-                //                    ui.label(text);
-                //                });
-                //            }
-                //        };
-                //    });
-                //}
             }
             RequestWindowMode::PARAMS => {
                 CentralPanel::default().show(ctx, |ui| {
@@ -120,10 +102,6 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                                     ui.text_edit_multiline(&mut gui.bearer_token);
                                 }
                                 AuthMode::OAUTH2 => {
-                                    ui.horizontal(|ui| {
-                                        ui.label("Token Result:");
-                                        ui.text_edit_multiline(&mut gui.t);
-                                    });
                                     ui.heading("Configure New Token");
                                     ui.horizontal(|ui| {
                                         ui.label("Access Token Url");
@@ -179,40 +157,41 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                                             oauth_input,
                                         );
                                     };
+                                    if &gui.oauth_token != "" {
+                                        ui.horizontal(|ui| {
+                                            ui.label("Token Result:");
+                                            ui.add(egui::Label::new(gui.oauth_token.clone()).wrap(true));
+                                        });
+                                    }
+
+                                    // listener for oauth token response and setting the String
+                                    // value in Gui to render
+                                    let mut lock = gui.received_token.lock().expect("couldnt lock");
+                                    if !*lock {
+                                        if let Ok(res) = receiver.try_recv() {
+                                            *lock = true;
+                                            if let Some(r) = res {
+                                                println!("{:?}", &r);
+                                                match r {
+                                                    ResponseData::JSON(j) => {
+                                                        let data = serde_json::from_value::<
+                                                            api::OAuthResponse,
+                                                        >(
+                                                            j
+                                                        )
+                                                        .unwrap();
+                                                        ui.label(data.access_token.clone());
+                                                        gui.oauth_token = data.access_token.clone();
+                                                    }
+                                                    ResponseData::TEXT(_t) => todo!(),
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                                 AuthMode::NONE => (),
                             };
                         });
-                    //TopBottomPanel::bottom("oauth_response")
-                    //    .resizable(true)
-                    //    .show(ctx, |_ui| {
-                    //        TopBottomPanel::bottom("oauth_token_panel")
-                    //            .resizable(true)
-                    //            .show(ctx, |ui| {
-                    //                let mut lock = gui.received_token.lock().expect("couldnt lock");
-                    //                if !*lock {
-                    //                    if let Ok(res) = receiver.try_recv() {
-                    //                        *lock = true;
-                    //                        if let Some(r) = res {
-                    //                            println!("{:?}", &r);
-                    //                            match r {
-                    //                                ResponseData::JSON(j) => {
-                    //                                    let data = serde_json::from_value::<
-                    //                                        api::OAuthResponse,
-                    //                                    >(
-                    //                                        j
-                    //                                    )
-                    //                                    .unwrap();
-                    //                                    ui.label(data.access_token.clone());
-                    //                                    gui.t = data.access_token.clone();
-                    //                                }
-                    //                                ResponseData::TEXT(_t) => todo!(),
-                    //                            }
-                    //                        }
-                    //                    }
-                    //                }
-                    //            });
-                    //    })
                 });
             }
             RequestWindowMode::HEADERS => {
