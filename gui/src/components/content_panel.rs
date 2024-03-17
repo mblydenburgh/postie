@@ -28,24 +28,51 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                             );
                         });
                     });
-                if gui.response.try_read().unwrap().is_some() {
-                    CentralPanel::default().show(ctx, |ui| {
-                        let binding = gui.response.try_read().unwrap();
-                        let r = binding.as_ref().unwrap();
-                        match r {
-                            ResponseData::JSON(json) => {
-                                ScrollArea::vertical().show(ui, |ui| {
-                                    JsonTree::new("response-json", json).show(ui);
-                                });
-                            }
-                            ResponseData::TEXT(text) => {
-                                ScrollArea::vertical().show(ui, |ui| {
-                                    ui.label(text);
-                                });
-                            }
-                        };
-                    });
-                }
+                match gui.response.try_read() {
+                    Ok(response) => {
+                        if response.is_some() {
+                            CentralPanel::default().show(ctx, |ui| {
+                                let binding = gui.response.try_read().unwrap();
+                                let r = binding.as_ref().unwrap();
+                                match r {
+                                    ResponseData::JSON(json) => {
+                                        ScrollArea::vertical().show(ui, |ui| {
+                                            JsonTree::new("response-json", json).show(ui);
+                                        });
+                                    }
+                                    ResponseData::TEXT(text) => {
+                                        ScrollArea::vertical().show(ui, |ui| {
+                                            ui.label(text);
+                                        });
+                                    }
+                                };
+                            });
+                        }
+                    },
+                    Err(_) => {
+                        CentralPanel::default().show(ctx, |ui| {
+                            ui.label("");
+                        });
+                    },
+                };
+                //if gui.response.try_read().expect("couldnt get gui.response lock").is_some() {
+                //    CentralPanel::default().show(ctx, |ui| {
+                //        let binding = gui.response.try_read().unwrap();
+                //        let r = binding.as_ref().unwrap();
+                //        match r {
+                //            ResponseData::JSON(json) => {
+                //                ScrollArea::vertical().show(ui, |ui| {
+                //                    JsonTree::new("response-json", json).show(ui);
+                //                });
+                //            }
+                //            ResponseData::TEXT(text) => {
+                //                ScrollArea::vertical().show(ui, |ui| {
+                //                    ui.label(text);
+                //                });
+                //            }
+                //        };
+                //    });
+                //}
             }
             RequestWindowMode::PARAMS => {
                 CentralPanel::default().show(ctx, |ui| {
@@ -156,36 +183,36 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                                 AuthMode::NONE => (),
                             };
                         });
-                    TopBottomPanel::bottom("oauth_response")
-                        .resizable(true)
-                        .show(ctx, |_ui| {
-                            TopBottomPanel::bottom("oauth_token_panel")
-                                .resizable(true)
-                                .show(ctx, |ui| {
-                                    let mut lock = gui.received_token.lock().expect("couldnt lock");
-                                    if !*lock {
-                                        if let Ok(res) = receiver.try_recv() {
-                                            *lock = true;
-                                            if let Some(r) = res {
-                                                println!("{:?}", &r);
-                                                match r {
-                                                    ResponseData::JSON(j) => {
-                                                        let data = serde_json::from_value::<
-                                                            api::OAuthResponse,
-                                                        >(
-                                                            j
-                                                        )
-                                                        .unwrap();
-                                                        ui.label(data.access_token.clone());
-                                                        gui.t = data.access_token.clone();
-                                                    }
-                                                    ResponseData::TEXT(_t) => todo!(),
-                                                }
-                                            }
-                                        }
-                                    }
-                                });
-                        })
+                    //TopBottomPanel::bottom("oauth_response")
+                    //    .resizable(true)
+                    //    .show(ctx, |_ui| {
+                    //        TopBottomPanel::bottom("oauth_token_panel")
+                    //            .resizable(true)
+                    //            .show(ctx, |ui| {
+                    //                let mut lock = gui.received_token.lock().expect("couldnt lock");
+                    //                if !*lock {
+                    //                    if let Ok(res) = receiver.try_recv() {
+                    //                        *lock = true;
+                    //                        if let Some(r) = res {
+                    //                            println!("{:?}", &r);
+                    //                            match r {
+                    //                                ResponseData::JSON(j) => {
+                    //                                    let data = serde_json::from_value::<
+                    //                                        api::OAuthResponse,
+                    //                                    >(
+                    //                                        j
+                    //                                    )
+                    //                                    .unwrap();
+                    //                                    ui.label(data.access_token.clone());
+                    //                                    gui.t = data.access_token.clone();
+                    //                                }
+                    //                                ResponseData::TEXT(_t) => todo!(),
+                    //                            }
+                    //                        }
+                    //                    }
+                    //                }
+                    //            });
+                    //    })
                 });
             }
             RequestWindowMode::HEADERS => {
