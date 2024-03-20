@@ -97,11 +97,10 @@ pub struct Gui {
     pub sender: tokio::sync::mpsc::Sender<Option<ResponseData>>,
     pub receiver: tokio::sync::mpsc::Receiver<Option<ResponseData>>,
     pub received_token: Arc<Mutex<bool>>,
-    pub t: String,
 }
 impl Default for Gui {
     fn default() -> Self {
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
         Self {
             response: Arc::new(RwLock::new(None)),
             headers: Rc::new(RefCell::new(vec![
@@ -158,8 +157,7 @@ impl Default for Gui {
             import_result: Arc::new(Mutex::new(None)),
             sender,
             receiver,
-            received_token: Arc::new(Mutex::new(false)),
-            t: "".into(),
+            received_token: Arc::new(Mutex::new(false))
         }
     }
 }
