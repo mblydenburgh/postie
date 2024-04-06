@@ -2,7 +2,7 @@ use std::cell::RefMut;
 
 use api::{domain::environment::EnvironmentValue, ResponseData};
 use egui::{CentralPanel, ComboBox, ScrollArea, TextEdit, TextStyle, TopBottomPanel};
-use egui_extras::{Column, TableBuilder, StripBuilder, Strip};
+use egui_extras::{Column, TableBuilder};
 use egui_json_tree::JsonTree;
 
 use crate::{AuthMode, Gui, RequestWindowMode};
