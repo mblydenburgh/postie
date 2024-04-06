@@ -108,9 +108,7 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                 }
                 ActiveWindow::HISTORY => {
                     ui.label("History");
-                    println!("printing history");
                     let history_items_clone = Arc::clone(&gui.request_history_items);
-                    //let saved_request_clone = Arc::clone(&gui.saved_requests);
                     let history_items = history_items_clone.try_write().unwrap();
                     let request_clone = gui.saved_requests.try_write().unwrap();
                     if let Some(item_vec) = &*history_items {
@@ -134,7 +132,6 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                                         .clicked()
                                 {
                                     // TODO - replace url, method, request body, response body
-                                    //let requests_clone = gui.saved_requests.try_write().unwrap();
                                     let responses_clone = gui.saved_responses.try_write().unwrap();
                                     let requests = request_clone.as_ref().unwrap();
                                     let responses = responses_clone.as_ref().unwrap();
