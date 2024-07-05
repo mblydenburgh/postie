@@ -18,3 +18,6 @@ serde_json = "1.0.113"
 tokio = { version = "1", features = ["full"] }
 uuid = { version = "1.7.0", features = ["v4", "fast-rng"] }
 anyhow = "1.0.86"
+
+[package.metadata.bundle]
+name = "postie_gui"

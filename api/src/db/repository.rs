@@ -30,10 +30,7 @@ impl PostieDb {
         }
     }
 
-    pub async fn save_request_history(
-        &mut self,
-        request: &DBRequest,
-    ) -> anyhow::Result<()> {
+    pub async fn save_request_history(&mut self, request: &DBRequest) -> anyhow::Result<()> {
         println!("got request: {:?}", request);
         let mut transaction = self.connection.begin().await?;
         let header_json = serde_json::to_string(&request.headers)?;
@@ -88,9 +85,7 @@ impl PostieDb {
         Ok(())
     }
 
-    pub async fn get_request_response_items(
-        &mut self,
-    ) -> anyhow::Result<Vec<RequestHistoryItem>> {
+    pub async fn get_request_response_items(&mut self) -> anyhow::Result<Vec<RequestHistoryItem>> {
         println!("getting all request response items");
         let rows = sqlx::query("SELECT * FROM request_history")
             .map(|row: SqliteRow| {
@@ -113,10 +108,7 @@ impl PostieDb {
         Ok(rows)
     }
 
-    pub async fn save_environment(
-        &mut self,
-        environment: EnvironmentFile,
-    ) -> anyhow::Result<()> {
+    pub async fn save_environment(&mut self, environment: EnvironmentFile) -> anyhow::Result<()> {
         let mut transaction = self.connection.begin().await?;
         let value_json = match environment.values {
             None => serde_json::json!("[]"),

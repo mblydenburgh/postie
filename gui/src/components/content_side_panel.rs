@@ -2,7 +2,10 @@ use std::{cell::RefCell, rc::Rc, str::FromStr, sync::Arc};
 
 use crate::{ActiveWindow, Gui};
 use api::{
-    domain::{collection::{CollectionRequest, CollectionUrl}, request::DBRequest},
+    domain::{
+        collection::{CollectionRequest, CollectionUrl},
+        request::DBRequest,
+    },
     HttpMethod, ResponseData,
 };
 use egui::SidePanel;
@@ -121,7 +124,7 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                                     url: "n/a".into(),
                                     name: None,
                                     headers: vec![],
-                                    body: None 
+                                    body: None
                                 }).url.clone();
                                 if ui
                                     .selectable_value(

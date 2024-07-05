@@ -1,3 +1,50 @@
-[workspace]
+[package]
+name = "Postie"
+version = "0.0.1"
+edition = "2021"
+description = "cURL application built using egui"
 
+[dependencies]
+anyhow = "1.0.86"
+api = { path = "api/" }
+base64 = "0.22.0"
+chrono = "0.4.34"
+egui = "0.26.2"
+egui_extras = "0.26.2"
+egui_json_tree = "0.4.0"
+eframe = "0.26.2"
+log = "0.4.20"
+reqwest = { version = "0.11.24", features = ["blocking", "json"] }
+serde = { version = "1.0.196", features = ["derive"] }
+serde_json = "1.0.113"
+sqlx = { version = "0.7.3", features = [ "runtime-tokio", "sqlite" ] }
+tokio = { version = "1", features = ["full"] }
+url = "2.5.0"
+uuid = { version = "1.7.0", features = ["v4", "fast-rng"] }
+
+[dev-dependencies]
+wiremock = "0.6.0"
+
+
+[lib]
+name = "Postie"
+path = "api/src/lib.rs"
+lib = true
+crate-type = ["rlib"]
+
+[[bin]]
+name = "Postie"
+path = "gui/src/main.rs"
+
+[workspace]
 members = ["api","gui"]
+
+[package.metadata.bundle]
+name = "Postie"
+identifier = "com.mblydenburgh.postie"
+version = "0.0.1"
+copyright = "Copyright (c) Michael Blydenburgh 2024. All rights reserved."
+category = "Developer Tool"
+short_description = "cURL application based off Postman"
+osx_frameworks = ["SDL2"]
+osx_url_schemes = ["com.mbldenburgh.postie"]

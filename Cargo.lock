@@ -3,6 +3,29 @@
 version = 3
 
 [[package]]
+name = "Postie"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "api",
+ "base64 0.22.1",
+ "chrono",
+ "eframe",
+ "egui",
+ "egui_extras",
+ "egui_json_tree",
+ "log",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "url",
+ "uuid",
+ "wiremock",
+]
+
+[[package]]
 name = "ab_glyph"
 version = "0.2.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
