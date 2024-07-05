@@ -11,7 +11,7 @@ use reqwest::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{borrow::Borrow, error::Error, fs, str::FromStr};
+use std::{borrow::Borrow, fs, str::FromStr};
 use uuid::Uuid;
 
 use crate::domain::{request::DBRequest, request_item::RequestHistoryItem, response::DBResponse};
@@ -136,11 +136,11 @@ impl PostieApi {
         println!("Parsing environment from json");
         serde_json::from_str(&environment_json).expect("Failed to parse environment")
     }
-    pub fn read_file(path: &str) -> Result<String, Box<dyn Error>> {
+    pub fn read_file(path: &str) -> anyhow::Result<String> {
         println!("Reading file: {}", path);
         Ok(fs::read_to_string(path)?)
     }
-    pub async fn import_collection(path: &str) -> Result<String, String> {
+    pub async fn import_collection(path: &str) -> anyhow::Result<String> {
         let mut api = PostieApi::new().await;
         let file_str = Self::read_file(path).unwrap();
         let collection = Self::parse_collection(&file_str);
@@ -154,7 +154,7 @@ impl PostieApi {
         }
     }
     // TODO - better error handling
-    pub async fn import_environment(path: &str) -> Result<String, Box<dyn Error + Send>> {
+    pub async fn import_environment(path: &str) -> anyhow::Result<String> {
         let mut api = PostieApi::new().await;
         let file_str = Self::read_file(path).unwrap();
         let environment = Self::parse_environment(&file_str);
@@ -168,34 +168,34 @@ impl PostieApi {
         }
     }
     //TODO - connect to save button on ui to overwrite changes to existing env/collection
-    pub fn save_environment(_input: Environment) -> Result<(), Box<dyn Error>> {
+    pub fn save_environment(_input: Environment) -> anyhow::Result<()> {
         Ok(())
     }
-    pub fn save_collection(_input: RequestCollection) -> Result<(), Box<dyn Error>> {
+    pub fn save_collection(_input: RequestCollection) -> anyhow::Result<()> {
         Ok(())
     }
-    pub async fn load_environments() -> Result<Vec<EnvironmentFile>, Box<dyn Error + Send>> {
+    pub async fn load_environments() -> anyhow::Result<Vec<EnvironmentFile>> {
         let mut api = PostieApi::new().await;
         let envs = api.db.get_all_environments().await.unwrap();
         Ok(envs)
     }
-    pub async fn load_collections() -> Result<Vec<Collection>, Box<dyn Error + Send>> {
+    pub async fn load_collections() -> anyhow::Result<Vec<Collection>> {
         let mut api = PostieApi::new().await;
         let collections = api.db.get_all_collections().await.unwrap();
         Ok(collections)
     }
     pub async fn load_request_response_items(
-    ) -> Result<Vec<RequestHistoryItem>, Box<dyn Error + Send>> {
+    ) -> anyhow::Result<Vec<RequestHistoryItem>> {
         let mut api = PostieApi::new().await;
         let items = api.db.get_request_response_items().await.unwrap();
         Ok(items)
     }
-    pub async fn load_saved_requests() -> Result<Vec<DBRequest>, Box<dyn Error + Send>> {
+    pub async fn load_saved_requests() -> anyhow::Result<Vec<DBRequest>> {
         let mut api = PostieApi::new().await;
         let requests = api.db.get_all_requests().await.unwrap();
         Ok(requests)
     }
-    pub async fn load_saved_responses() -> Result<Vec<DBResponse>, Box<dyn Error + Send>> {
+    pub async fn load_saved_responses() -> anyhow::Result<Vec<DBResponse>> {
         let mut api = PostieApi::new().await;
         let responses = api.db.get_all_responses().await.unwrap();
         Ok(responses)
@@ -213,7 +213,7 @@ impl PostieApi {
             raw_url
         }
     }
-    pub async fn make_request(input: PostieRequest) -> Result<ResponseData, Box<dyn Error>> {
+    pub async fn make_request(input: PostieRequest) -> anyhow::Result<ResponseData> {
         let api = PostieApi::new().await;
         match input {
             // request and save http request

@@ -1,5 +1,3 @@
-use std::error::Error;
-
 use chrono::{DateTime, Utc};
 use serde_json::from_str;
 use sqlx::{sqlite::SqliteRow, Connection, Row, SqliteConnection};
@@ -13,7 +11,7 @@ use crate::domain::{
     response::{DBResponse, ResponseHeader},
 };
 
-pub async fn initialize_db() -> Result<SqliteConnection, Box<dyn Error>> {
+pub async fn initialize_db() -> anyhow::Result<SqliteConnection> {
     println!("acquiring sqlite connection");
     let connection = SqliteConnection::connect("sqlite:postie.sqlite").await?;
     println!("{:?} sqlite connection established", connection);
@@ -35,7 +33,7 @@ impl PostieDb {
     pub async fn save_request_history(
         &mut self,
         request: &DBRequest,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> anyhow::Result<()> {
         println!("got request: {:?}", request);
         let mut transaction = self.connection.begin().await?;
         let header_json = serde_json::to_string(&request.headers)?;
@@ -66,7 +64,7 @@ impl PostieDb {
         response: &DBResponse,
         sent_at: &DateTime<Utc>,
         response_time: &u128,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> anyhow::Result<()> {
         println!("Saving request response history item");
         let mut transaction = self.connection.begin().await?;
         let id = Uuid::new_v4().to_string();
@@ -92,7 +90,7 @@ impl PostieDb {
 
     pub async fn get_request_response_items(
         &mut self,
-    ) -> Result<Vec<RequestHistoryItem>, Box<dyn Error>> {
+    ) -> anyhow::Result<Vec<RequestHistoryItem>> {
         println!("getting all request response items");
         let rows = sqlx::query("SELECT * FROM request_history")
             .map(|row: SqliteRow| {
@@ -118,7 +116,7 @@ impl PostieDb {
     pub async fn save_environment(
         &mut self,
         environment: EnvironmentFile,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> anyhow::Result<()> {
         let mut transaction = self.connection.begin().await?;
         let value_json = match environment.values {
             None => serde_json::json!("[]"),
@@ -141,7 +139,7 @@ impl PostieDb {
         Ok(())
     }
 
-    pub async fn save_collection(&mut self, collection: Collection) -> Result<(), Box<dyn Error>> {
+    pub async fn save_collection(&mut self, collection: Collection) -> anyhow::Result<()> {
         println!("Saving collection to db");
         let mut transaction = self.connection.begin().await?;
         let items_json = serde_json::to_string(&collection.item)?;
@@ -164,7 +162,7 @@ impl PostieDb {
         Ok(())
     }
 
-    pub async fn save_response(&mut self, response: &DBResponse) -> Result<(), Box<dyn Error>> {
+    pub async fn save_response(&mut self, response: &DBResponse) -> anyhow::Result<()> {
         println!("Saving response to db");
         let mut transaction = self.connection.begin().await?;
         let header_json = serde_json::to_string(&response.headers)?;
@@ -186,7 +184,7 @@ impl PostieDb {
         Ok(())
     }
 
-    pub async fn get_all_requests(&mut self) -> Result<Vec<DBRequest>, Box<dyn Error>> {
+    pub async fn get_all_requests(&mut self) -> anyhow::Result<Vec<DBRequest>> {
         println!("getting all saved requests");
         let rows = sqlx::query("SELECT * FROM request")
             .map(|row: SqliteRow| {
@@ -217,7 +215,7 @@ impl PostieDb {
         Ok(rows)
     }
 
-    pub async fn get_all_collections(&mut self) -> Result<Vec<Collection>, Box<dyn Error>> {
+    pub async fn get_all_collections(&mut self) -> anyhow::Result<Vec<Collection>> {
         println!("getting all saved collections");
         let rows = sqlx::query("SELECT * from collections")
             .map(|row: SqliteRow| {
@@ -247,7 +245,7 @@ impl PostieDb {
         Ok(rows)
     }
 
-    pub async fn get_all_responses(&mut self) -> Result<Vec<DBResponse>, Box<dyn Error>> {
+    pub async fn get_all_responses(&mut self) -> anyhow::Result<Vec<DBResponse>> {
         println!("getting all saved responses");
         let rows = sqlx::query("SELECT * from response")
             .map(|row: SqliteRow| {
@@ -276,7 +274,7 @@ impl PostieDb {
         Ok(rows)
     }
 
-    pub async fn get_all_environments(&mut self) -> Result<Vec<EnvironmentFile>, Box<dyn Error>> {
+    pub async fn get_all_environments(&mut self) -> anyhow::Result<Vec<EnvironmentFile>> {
         println!("getting all envs");
         let rows = sqlx::query("SELECT * FROM environment")
             .map(|row: SqliteRow| {

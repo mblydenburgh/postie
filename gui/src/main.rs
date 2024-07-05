@@ -10,6 +10,7 @@ use api::{
     },
     PostieApi, ResponseData,
 };
+use anyhow;
 use components::{
     content_header_panel::content_header_panel, content_panel::content_panel,
     content_side_panel::content_side_panel, import_modal::import_modal, menu_panel::menu_panel,
@@ -242,12 +243,12 @@ impl Gui {
         let mut environment_write_guard = old_environments.try_write().unwrap();
         *environment_write_guard = Some(envs).into();
     }
-    async fn submit(input: api::HttpRequest) -> Result<api::ResponseData, Box<dyn Error>> {
+    async fn submit(input: api::HttpRequest) -> anyhow::Result<api::ResponseData> {
         PostieApi::make_request(api::PostieRequest::HTTP(input)).await
     }
     // egui needs to run on the main thread so all async requests need to be run on a worker
     // thread.
-    fn spawn_submit(&mut self, input: api::HttpRequest) -> Result<(), Box<dyn Error>> {
+    fn spawn_submit(&mut self, input: api::HttpRequest) -> anyhow::Result<()> {
         // TODO figure out how to impl Send for Gui so it can be passed to another thread.
         // currently getting an error. Workaround is to just clone the PostieApi
         let response_for_worker = self.response.clone();
@@ -279,7 +280,7 @@ impl Gui {
     }
     async fn oauth_token_request(
         input: api::OAuth2Request,
-    ) -> Result<api::ResponseData, Box<dyn Error + Send>> {
+    ) -> anyhow::Result<api::ResponseData> {
         let res = PostieApi::make_request(api::PostieRequest::OAUTH(input))
             .await
             .ok()
@@ -290,7 +291,7 @@ impl Gui {
     fn spawn_ouath_request(
         sender: &mut tokio::sync::mpsc::Sender<Option<ResponseData>>,
         input: api::OAuth2Request,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> anyhow::Result<()> {
         let sender_for_worker = sender.clone();
         tokio::spawn(async move {
             match Self::oauth_token_request(input).await {

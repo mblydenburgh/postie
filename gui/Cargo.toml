@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-api= { path = "../api/" }
+api = { path = "../api/" }
 base64 = "0.22.0"
 egui = "0.26.2"
 egui_extras = "0.26.2"
@@ -17,3 +17,4 @@ serde = { version = "1.0.196", features = ["derive"] }
 serde_json = "1.0.113"
 tokio = { version = "1", features = ["full"] }
 uuid = { version = "1.7.0", features = ["v4", "fast-rng"] }
+anyhow = "1.0.86"
