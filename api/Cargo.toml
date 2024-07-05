@@ -15,6 +15,7 @@ uuid = { version = "1.7.0", features = ["v4", "fast-rng"] }
 sqlx = { version = "0.7.3", features = [ "runtime-tokio", "sqlite" ] }
 tokio = { version = "1", features = ["full"] }
 url = "2.5.0"
+anyhow = "1.0.86"
 
 [dev-dependencies]
 wiremock = "0.6.0"
