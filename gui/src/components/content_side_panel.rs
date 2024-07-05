@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc, str::FromStr, sync::Arc};
 
 use crate::{ActiveWindow, Gui};
 use api::{
-    domain::collection::{CollectionRequest, CollectionUrl},
+    domain::{collection::{CollectionRequest, CollectionUrl}, request::DBRequest},
     HttpMethod, ResponseData,
 };
 use egui::SidePanel;
@@ -110,51 +110,61 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                     ui.label("History");
                     let history_items_clone = Arc::clone(&gui.request_history_items);
                     let history_items = history_items_clone.try_write().unwrap();
+                    let request_clone = gui.saved_requests.try_write().unwrap();
                     if let Some(item_vec) = &*history_items {
                         for item in item_vec {
-                            if ui
-                                .selectable_value(
-                                    &mut gui.selected_history_item,
-                                    Rc::new(RefCell::from(Some(item.clone()))),
-                                    format!("{}", item.id), // TODO - create function to get name
-                                )
-                                .clicked()
-                            {
-                                // TODO - replace url, method, request body, response body
-                                let requests_clone = gui.saved_requests.try_write().unwrap();
-                                let responses_clone = gui.saved_responses.try_write().unwrap();
-                                let requests = requests_clone.as_ref().unwrap();
-                                let responses = responses_clone.as_ref().unwrap();
-                                let historical_request = requests.get(&item.request_id).unwrap();
-                                let historical_response = responses.get(&item.response_id).unwrap();
-                                gui.url = historical_request.url.clone();
-                                gui.selected_http_method =
-                                    HttpMethod::from_str(&historical_request.method).unwrap();
-                                match &historical_request.body {
-                                    Some(body_json) => {
-                                        gui.body_str = body_json.to_string();
+                            let history_reqs = request_clone.as_ref().unwrap();
+                                let id = &item.clone().request_id;
+                                let req_name = history_reqs.get(id).unwrap_or(&DBRequest {
+                                    id: id.clone(),
+                                    method: "GET".into(),
+                                    url: "n/a".into(),
+                                    name: None,
+                                    headers: vec![],
+                                    body: None 
+                                }).url.clone();
+                                if ui
+                                    .selectable_value(
+                                        &mut gui.selected_history_item,
+                                        Rc::new(RefCell::from(Some(item.clone()))),
+                                        format!("{:?}", req_name), // TODO - create function to get name
+                                    )
+                                        .clicked()
+                                {
+                                    // TODO - replace url, method, request body, response body
+                                    let responses_clone = gui.saved_responses.try_write().unwrap();
+                                    let requests = request_clone.as_ref().unwrap();
+                                    let responses = responses_clone.as_ref().unwrap();
+                                    let historical_request = requests.get(&item.request_id).unwrap();
+                                    let historical_response = responses.get(&item.response_id).unwrap();
+                                    gui.url = historical_request.url.clone();
+                                    gui.selected_http_method =
+                                        HttpMethod::from_str(&historical_request.method).unwrap();
+                                    match &historical_request.body {
+                                        Some(body_json) => {
+                                            gui.body_str = body_json.to_string();
+                                        }
+                                        None => gui.body_str = String::from(""),
                                     }
-                                    None => gui.body_str = String::from(""),
+                                    let ui_response_clone = gui.response.clone();
+                                    let mut ui_response_guard = ui_response_clone.try_write().unwrap();
+                                    let response_body = &historical_response.body;
+                                    match response_body {
+                                        Some(body) => {
+                                            let json_val = serde_json::json!(&body);
+                                            println!("val: {}", json_val);
+                                            let parsed_body = match serde_json::from_str(&body) {
+                                                Ok(b) => ResponseData::JSON(b),
+                                                Err(e) => {
+                                                    println!("{}", e);
+                                                    ResponseData::TEXT(body.clone())
+                                                },
+                                            };
+                                            *ui_response_guard = Some(parsed_body)
+                                        },
+                                        None => *ui_response_guard = None,
+                                    }
                                 }
-                                let ui_response_clone = gui.response.clone();
-                                let mut ui_response_guard = ui_response_clone.try_write().unwrap();
-                                let response_body = &historical_response.body;
-                                match response_body {
-                                    Some(body) => {
-                                        let json_val = serde_json::json!(&body);
-                                        println!("val: {}", json_val);
-                                        let parsed_body = match serde_json::from_str(&body) {
-                                            Ok(b) => ResponseData::JSON(b),
-                                            Err(e) => {
-                                                println!("{}", e);
-                                                ResponseData::TEXT(body.clone())
-                                            },
-                                        };
-                                        *ui_response_guard = Some(parsed_body)
-                                    },
-                                    None => *ui_response_guard = None,
-                                }
-                            }
                         }
                     }
                 }
