@@ -6,3 +6,6 @@
 postie.sqlite-*
 postie.sqlite
 .idea/
+
+*.dmg
+*.DS_Store

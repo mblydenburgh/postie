@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use chrono::{DateTime, Utc};
 use serde_json::from_str;
 use sqlx::{sqlite::SqliteRow, Connection, Row, SqliteConnection};
@@ -13,7 +15,18 @@ use crate::domain::{
 
 pub async fn initialize_db() -> anyhow::Result<SqliteConnection> {
     println!("acquiring sqlite connection");
-    let connection = SqliteConnection::connect("sqlite:postie.sqlite").await?;
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 2 {
+        println!("Usage: {} <sqlite db file>", args[0]);
+        std::process::exit(1);
+    }
+    let db_path = &args[1];
+    println!("db path: {}", db_path);
+    if !Path::new(db_path).exists() {
+        println!("db file does not exist");
+        std::process::exit(1);
+    }
+    let connection = SqliteConnection::connect(db_path).await?;
     println!("{:?} sqlite connection established", connection);
 
     Ok(connection)
@@ -26,7 +39,7 @@ pub struct PostieDb {
 impl PostieDb {
     pub async fn new() -> Self {
         PostieDb {
-            connection: initialize_db().await.ok().unwrap(),
+            connection: initialize_db().await.ok().expect("could not establish database connection"),
         }
     }
 
