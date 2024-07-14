@@ -9,7 +9,7 @@ save collections and environments.
 
 ## Current State
 Currently in order to run, Rust must be installed as well as setting up the initial SQLite database (see Database Utils).
-The end goal is to have a fully packaged mac application (sorry Windows, for now) that is able to be downloaded and ran.
+Right now there is a fully packaged mac application (sorry Windows, for now) that is able to be built from source.
 ### Supported
 - Submitting GET, POST, PUT, PATCH, DELETE requests
 - POST and PUT requests only support application/json body
@@ -18,6 +18,7 @@ The end goal is to have a fully packaged mac application (sorry Windows, for now
 - Importing postman colellections
 - Importing postman environments
 - Request history is loading on application start to show previous requests & responses
+- Native mac application
 
 ### Not yet supported
 - Creating new collections from scratch
@@ -28,8 +29,15 @@ The end goal is to have a fully packaged mac application (sorry Windows, for now
 - XML request body and response
 - Pre-request scripts
 - Request history, imported files do not reflect on ui until next application start
-- Native mac application
 - Cloud database and user profiles
+
+## Building and running
+To build the application from source, run the following commands:
+```shell
+cargo build --release
+./scripts/bundle.sh
+```
+This will create a .dmg file in the `target/release` directory that can be run on a mac.
 
 ## Database Utils
 
