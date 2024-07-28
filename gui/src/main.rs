@@ -1,5 +1,6 @@
 pub mod components;
 
+use anyhow;
 use api::{
     domain::{
         collection::Collection,
@@ -10,7 +11,6 @@ use api::{
     },
     PostieApi, ResponseData,
 };
-use anyhow;
 use components::{
     content_header_panel::content_header_panel, content_panel::content_panel,
     content_side_panel::content_side_panel, import_modal::import_modal, menu_panel::menu_panel,
@@ -21,7 +21,6 @@ use serde::{Deserialize, Serialize};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    error::Error,
     rc::Rc,
     sync::{Arc, Mutex},
 };
@@ -140,9 +139,7 @@ impl Default for Gui {
                 request: api::OAuthRequestBody {
                     grant_type: "client_credentials".into(),
                     scope: "".into(),
-                    audience:
-                        ""
-                            .into(),
+                    audience: "".into(),
                 },
             },
             bearer_token: String::from(""),
@@ -158,7 +155,7 @@ impl Default for Gui {
             import_result: Arc::new(Mutex::new(None)),
             sender,
             receiver,
-            received_token: Arc::new(Mutex::new(false))
+            received_token: Arc::new(Mutex::new(false)),
         }
     }
 }
@@ -278,9 +275,7 @@ impl Gui {
         });
         Ok(())
     }
-    async fn oauth_token_request(
-        input: api::OAuth2Request,
-    ) -> anyhow::Result<api::ResponseData> {
+    async fn oauth_token_request(input: api::OAuth2Request) -> anyhow::Result<api::ResponseData> {
         let res = PostieApi::make_request(api::PostieRequest::OAUTH(input))
             .await
             .ok()

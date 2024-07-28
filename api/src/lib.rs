@@ -184,8 +184,7 @@ impl PostieApi {
         let collections = api.db.get_all_collections().await.unwrap();
         Ok(collections)
     }
-    pub async fn load_request_response_items(
-    ) -> anyhow::Result<Vec<RequestHistoryItem>> {
+    pub async fn load_request_response_items() -> anyhow::Result<Vec<RequestHistoryItem>> {
         let mut api = PostieApi::new().await;
         let items = api.db.get_request_response_items().await.unwrap();
         Ok(items)

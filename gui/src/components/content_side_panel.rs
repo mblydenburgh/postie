@@ -2,15 +2,19 @@ use std::{cell::RefCell, rc::Rc, str::FromStr, sync::Arc};
 
 use crate::{ActiveWindow, Gui};
 use api::{
-    domain::{collection::{CollectionRequest, CollectionUrl}, request::DBRequest},
+    domain::{
+        collection::{CollectionRequest, CollectionUrl},
+        request::DBRequest,
+    },
     HttpMethod, ResponseData,
 };
-use egui::SidePanel;
+use egui::{ScrollArea, SidePanel};
 
 pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
     if let Ok(active_window) = gui.active_window.try_read() {
         SidePanel::left("content_panel").show(ctx, |ui| match *active_window {
                 ActiveWindow::COLLECTIONS => {
+                    ScrollArea::vertical().show(ui, |ui| {
                     ui.label("Collections");
                     let collections_clone = Arc::clone(&gui.collections);
                     let collections = collections_clone.try_write().unwrap();
@@ -91,29 +95,33 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                             });
                         }
                     }
+                    });
                 }
                 ActiveWindow::ENVIRONMENT => {
-                    ui.label("Environments");
-                    let envs_clone = Arc::clone(&gui.environments);
-                    let envs = envs_clone.try_write().unwrap();
-                    if let Some(env_vec) = &*envs {
-                        for env in env_vec {
-                            ui.selectable_value(
-                                &mut gui.selected_environment,
-                                Rc::new(RefCell::from(env.clone())),
-                                format!("{}", env.name),
-                            );
+                    ScrollArea::vertical().show(ui, |ui| {
+                        ui.label("Environments");
+                        let envs_clone = Arc::clone(&gui.environments);
+                        let envs = envs_clone.try_write().unwrap();
+                        if let Some(env_vec) = &*envs {
+                            for env in env_vec {
+                                ui.selectable_value(
+                                    &mut gui.selected_environment,
+                                    Rc::new(RefCell::from(env.clone())),
+                                    format!("{}", env.name),
+                                );
+                            }
                         }
-                    }
+                    });
                 }
                 ActiveWindow::HISTORY => {
-                    ui.label("History");
-                    let history_items_clone = Arc::clone(&gui.request_history_items);
-                    let history_items = history_items_clone.try_write().unwrap();
-                    let request_clone = gui.saved_requests.try_write().unwrap();
-                    if let Some(item_vec) = &*history_items {
-                        for item in item_vec {
-                            let history_reqs = request_clone.as_ref().unwrap();
+                    ScrollArea::vertical().show(ui, |ui| {
+                        ui.label("History");
+                        let history_items_clone = Arc::clone(&gui.request_history_items);
+                        let history_items = history_items_clone.try_write().unwrap();
+                        let request_clone = gui.saved_requests.try_write().unwrap();
+                        if let Some(item_vec) = &*history_items {
+                            for item in item_vec {
+                                let history_reqs = request_clone.as_ref().unwrap();
                                 let id = &item.clone().request_id;
                                 let req_name = history_reqs.get(id).unwrap_or(&DBRequest {
                                     id: id.clone(),
@@ -121,7 +129,7 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                                     url: "n/a".into(),
                                     name: None,
                                     headers: vec![],
-                                    body: None 
+                                    body: None
                                 }).url.clone();
                                 if ui
                                     .selectable_value(
@@ -165,8 +173,9 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                                         None => *ui_response_guard = None,
                                     }
                                 }
+                            }
                         }
-                    }
+                    });
                 }
             });
     }
