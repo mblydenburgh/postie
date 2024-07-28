@@ -16,17 +16,18 @@ use crate::domain::{
 pub async fn initialize_db() -> anyhow::Result<SqliteConnection> {
     println!("acquiring sqlite connection");
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 2 {
-        println!("Usage: {} <sqlite db file>", args[0]);
-        std::process::exit(1);
-    }
-    let db_path = &args[1];
-    println!("db path: {}", db_path);
-    if !Path::new(db_path).exists() {
-        println!("db file does not exist");
-        std::process::exit(1);
-    }
-    let connection = SqliteConnection::connect(db_path).await?;
+    //if args.len() != 2 {
+    //    println!("Usage: {} <sqlite db file>", args[0]);
+    //    std::process::exit(1);
+    //}
+    //let db_path = &args[1];
+    //println!("db path: {}", db_path);
+    //if !Path::new(db_path).exists() {
+    //    println!("db file does not exist");
+    //    std::process::exit(1);
+    //}
+    let connection = SqliteConnection::connect("sqlite:postie.sqlite").await?;
+    //let connection = SqliteConnection::connect(db_path).await?;
     println!("{:?} sqlite connection established", connection);
 
     Ok(connection)
@@ -39,14 +40,14 @@ pub struct PostieDb {
 impl PostieDb {
     pub async fn new() -> Self {
         PostieDb {
-            connection: initialize_db().await.ok().expect("could not establish database connection"),
+            connection: initialize_db()
+                .await
+                .ok()
+                .expect("could not establish database connection"),
         }
     }
 
-    pub async fn save_request_history(
-        &mut self,
-        request: &DBRequest,
-    ) -> anyhow::Result<()> {
+    pub async fn save_request_history(&mut self, request: &DBRequest) -> anyhow::Result<()> {
         println!("got request: {:?}", request);
         let mut transaction = self.connection.begin().await?;
         let header_json = serde_json::to_string(&request.headers)?;
@@ -101,9 +102,7 @@ impl PostieDb {
         Ok(())
     }
 
-    pub async fn get_request_response_items(
-        &mut self,
-    ) -> anyhow::Result<Vec<RequestHistoryItem>> {
+    pub async fn get_request_response_items(&mut self) -> anyhow::Result<Vec<RequestHistoryItem>> {
         println!("getting all request response items");
         let rows = sqlx::query("SELECT * FROM request_history")
             .map(|row: SqliteRow| {
@@ -126,10 +125,7 @@ impl PostieDb {
         Ok(rows)
     }
 
-    pub async fn save_environment(
-        &mut self,
-        environment: EnvironmentFile,
-    ) -> anyhow::Result<()> {
+    pub async fn save_environment(&mut self, environment: EnvironmentFile) -> anyhow::Result<()> {
         let mut transaction = self.connection.begin().await?;
         let value_json = match environment.values {
             None => serde_json::json!("[]"),

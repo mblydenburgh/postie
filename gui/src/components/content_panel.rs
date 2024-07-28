@@ -48,12 +48,12 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                                 };
                             });
                         }
-                    },
+                    }
                     Err(_) => {
                         CentralPanel::default().show(ctx, |ui| {
                             ui.label("");
                         });
-                    },
+                    }
                 };
             }
             RequestWindowMode::PARAMS => {
@@ -152,15 +152,15 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                                                 audience: gui.oauth_config.request.audience.clone(),
                                             },
                                         };
-                                        let _ = Gui::spawn_ouath_request(
-                                            sender,
-                                            oauth_input,
-                                        );
+                                        let _ = Gui::spawn_ouath_request(sender, oauth_input);
                                     };
                                     if &gui.oauth_token != "" {
                                         ui.horizontal(|ui| {
                                             ui.label("Token Result:");
-                                            ui.add(egui::Label::new(gui.oauth_token.clone()).wrap(true));
+                                            ui.add(
+                                                egui::Label::new(gui.oauth_token.clone())
+                                                    .wrap(true),
+                                            );
                                         });
                                     }
 
