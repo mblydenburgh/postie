@@ -6,7 +6,6 @@ use crate::{AuthMode, Gui, RequestWindowMode};
 
 pub fn content_header_panel(gui: &mut Gui, ctx: &egui::Context) {
     TopBottomPanel::top("top_panel").show(ctx, |ui| {
-        ui.heading("Welcome to Postie!");
         ui.horizontal(|ui| {
             ComboBox::from_label("")
                 .selected_text(format!("{:?}", gui.selected_http_method))
@@ -28,7 +27,7 @@ pub fn content_header_panel(gui: &mut Gui, ctx: &egui::Context) {
                     ui.selectable_value(&mut gui.selected_http_method, HttpMethod::HEAD, "HEAD");
                 });
             ui.label("URL:");
-            ui.text_edit_singleline(&mut gui.url);
+            ui.add(egui::TextEdit::singleline(&mut gui.url).desired_width(400.0));
             if ui.button("Submit").clicked() {
                 let body = if gui.selected_http_method != HttpMethod::GET {
                     Some(api::RequestBody::JSON(

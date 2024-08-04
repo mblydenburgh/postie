@@ -98,8 +98,10 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                                     ui.text_edit_singleline(&mut gui.api_key_name);
                                 }
                                 AuthMode::BEARER => {
-                                    ui.label("Enter Bearer Token");
-                                    ui.text_edit_multiline(&mut gui.bearer_token);
+                                    ScrollArea::vertical().show(ui, |ui| {
+                                        ui.label("Enter Bearer Token");
+                                        ui.add(TextEdit::multiline(&mut gui.bearer_token).desired_rows(25));
+                                    });
                                 }
                                 AuthMode::OAUTH2 => {
                                     ui.heading("Configure New Token");

@@ -15,7 +15,7 @@ set -e
 
 RUST_BINARY_NAME=gui
 APP_BIN_NAME=Postie
-VERSION=0.0.1
+VERSION=0.0.3
 MACOS_APP_DIR=$APP_BIN_NAME.app
 MACOS_APP_BIN_PATH=$MACOS_APP_DIR/Contents/MacOS/$RUST_BINARY_NAME
 
@@ -29,7 +29,7 @@ chmod +x $MACOS_APP_BIN_PATH
 chmod -R 775 $MACOS_APP_DIR
 chown -R $(whoami) $MACOS_APP_DIR
 
-# echo "Copying database file"
+echo "Copying database file"
 cp -r postie.sqlite $MACOS_APP_DIR/Contents/MacOS/postie.sqlite
 chmod -R 777 $MACOS_APP_DIR/Contents/MacOS/postie.sqlite
 
