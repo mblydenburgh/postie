@@ -90,6 +90,7 @@ pub struct Gui {
     pub request_window_mode: RwLock<RequestWindowMode>,
     pub url: String,
     pub body_str: String,
+    pub res_status: Arc<RwLock<String>>,
     pub import_window_open: RwLock<bool>,
     pub import_mode: RwLock<ImportMode>,
     pub import_file_path: String,
@@ -97,6 +98,7 @@ pub struct Gui {
     pub sender: tokio::sync::mpsc::Sender<Option<ResponseData>>,
     pub receiver: tokio::sync::mpsc::Receiver<Option<ResponseData>>,
     pub received_token: Arc<Mutex<bool>>,
+    pub is_requesting: Arc<RwLock<Option<bool>>>,
 }
 impl Default for Gui {
     fn default() -> Self {
@@ -147,8 +149,9 @@ impl Default for Gui {
             saved_responses: Arc::new(RwLock::new(None)),
             active_window: RwLock::new(ActiveWindow::COLLECTIONS),
             request_window_mode: RwLock::new(RequestWindowMode::BODY),
-            url: String::from("{{HOST_URL}}/json"),
-            body_str: "{ \"foo\": \"bar\" }".into(),
+            url: "".into(),
+            body_str: "".into(),
+            res_status: Arc::new(RwLock::new("".into())),
             import_window_open: RwLock::new(false),
             import_file_path: "".into(),
             import_mode: RwLock::new(ImportMode::COLLECTION),
@@ -156,6 +159,7 @@ impl Default for Gui {
             sender,
             receiver,
             received_token: Arc::new(Mutex::new(false)),
+            is_requesting: Arc::new(RwLock::new(None))
         }
     }
 }
@@ -240,7 +244,7 @@ impl Gui {
         let mut environment_write_guard = old_environments.try_write().unwrap();
         *environment_write_guard = Some(envs).into();
     }
-    async fn submit(input: api::HttpRequest) -> anyhow::Result<api::ResponseData> {
+    async fn submit(input: api::HttpRequest) -> anyhow::Result<api::Response> {
         PostieApi::make_request(api::PostieRequest::HTTP(input)).await
     }
     // egui needs to run on the main thread so all async requests need to be run on a worker
@@ -252,16 +256,26 @@ impl Gui {
         let request_history_for_worker = self.request_history_items.clone();
         let saved_requests_for_worker = self.saved_requests.clone();
         let saved_response_for_worker = self.saved_responses.clone();
+        let is_requesting_for_worker = self.is_requesting.clone();
+        let res_status_for_worker = self.res_status.clone();
         tokio::spawn(async move {
             let mut result_write_guard = response_for_worker.try_write().unwrap();
+            let mut is_requesting_write_guard = is_requesting_for_worker.try_write().unwrap();
+            let mut res_status_write_guard = res_status_for_worker.try_write().unwrap();
+            // TODO - figure out why ui doesnt recognize when set to true, only when request is
+            // complete and set to false.
+            *is_requesting_write_guard = Some(true);
             match Self::submit(input).await {
                 Ok(res) => {
                     println!("Res: {:?}", res);
-                    *result_write_guard = Some(res);
+                    *result_write_guard = Some(res.data);
+                    *res_status_write_guard = res.status;
+                    *is_requesting_write_guard = Some(false);
                 }
                 Err(err) => {
                     println!("Error with request: {:?}", err);
                     *result_write_guard = None;
+                    *is_requesting_write_guard = Some(false);
                 }
             };
 
@@ -281,7 +295,7 @@ impl Gui {
             .ok()
             .unwrap();
         println!("{:?}", &res);
-        Ok(res)
+        Ok(res.data)
     }
     fn spawn_ouath_request(
         sender: &mut tokio::sync::mpsc::Sender<Option<ResponseData>>,

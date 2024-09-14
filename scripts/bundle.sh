@@ -15,7 +15,7 @@ set -e
 
 RUST_BINARY_NAME=gui
 APP_BIN_NAME=Postie
-VERSION=0.0.3
+VERSION=0.0.5
 MACOS_APP_DIR=$APP_BIN_NAME.app
 MACOS_APP_BIN_PATH=$MACOS_APP_DIR/Contents/MacOS/$RUST_BINARY_NAME
 
@@ -32,6 +32,9 @@ chown -R $(whoami) $MACOS_APP_DIR
 echo "Copying database file"
 cp -r postie.sqlite $MACOS_APP_DIR/Contents/MacOS/postie.sqlite
 chmod -R 777 $MACOS_APP_DIR/Contents/MacOS/postie.sqlite
+
+echo "Copying resources"
+cp -r ./scripts/resources $MACOS_APP_DIR/Contents/Resources
 
 # Note: CFBundleExecutable is the name of the launch script, not the binary
 echo "Creating Info.plist"
@@ -60,6 +63,8 @@ cat > $MACOS_APP_DIR/Contents/Info.plist <<EOF
   <string>$APP_BIN_NAME</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
+  <key>CFBundleIconFile</key>
+  <string>postie.png</string>
 </dict>
 </plist>
 EOF

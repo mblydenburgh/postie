@@ -97,6 +97,12 @@ pub struct OAuthResponse {
 }
 
 #[derive(Clone, Debug)]
+pub struct Response {
+    pub status: String,
+    pub data: ResponseData
+}
+
+#[derive(Clone, Debug)]
 pub enum ResponseData {
     JSON(serde_json::Value),
     TEXT(String),
@@ -212,7 +218,7 @@ impl PostieApi {
             raw_url
         }
     }
-    pub async fn make_request(input: PostieRequest) -> anyhow::Result<ResponseData> {
+    pub async fn make_request(input: PostieRequest) -> anyhow::Result<Response> {
         let api = PostieApi::new().await;
         match input {
             // request and save http request
@@ -263,9 +269,10 @@ impl PostieApi {
                         "expected application/json text/html, or text/plain, got {}",
                         res_type
                     );
-                    return Ok(ResponseData::JSON(
-                        json!({"err": "unsupported response type!"}),
-                    ));
+                    return Ok(Response{
+                        data: ResponseData::JSON(json!({"err": "unsupported response type!"})),
+                        status: res_status.to_string()
+                    });
                 }
 
                 let request_headers = input
@@ -318,7 +325,7 @@ impl PostieApi {
                 } else {
                     ResponseData::TEXT(res_text)
                 };
-                Ok(response_data)
+                Ok(Response{ data: response_data, status: res_status.to_string() })
             }
             // if making an oauth token request, dont save to db
             PostieRequest::OAUTH(input) => {
@@ -343,7 +350,8 @@ impl PostieApi {
                 req = req.form(&input.request);
                 let res = req.send().await?;
                 println!("{:?}", res);
-                Ok(ResponseData::JSON(res.json().await.unwrap()))
+                let status = res.status().to_string();
+                Ok(Response{ data: ResponseData::JSON(res.json().await.unwrap()), status })
             }
         }
     }
