@@ -1,14 +1,20 @@
 use std::ops::Deref;
 
 use egui::TopBottomPanel;
+use uuid::Uuid;
 
-use crate::{Gui, ImportMode};
+use crate::{Gui, ImportMode, Tab};
 
 pub fn menu_panel(gui: &mut Gui, ctx: &egui::Context) {
     TopBottomPanel::top("menu_panel").show(ctx, |ui| {
         ui.horizontal(|ui| {
             ui.menu_button("Menu", |ui| {
                 ui.menu_button("New", |ui| {
+                    if ui.button("Request").clicked() {
+                        let mut tabs = gui.tabs.try_write().unwrap();
+                        let new_tab = Tab::default();
+                        tabs.insert(Uuid::new_v4().to_string(), new_tab);
+                    }
                     if ui.button("Collection").clicked() {
                         ui.close_menu();
                     };
@@ -66,5 +72,22 @@ pub fn menu_panel(gui: &mut Gui, ctx: &egui::Context) {
             }
         });
 
+    });
+    TopBottomPanel::top("tabs panel").show(ctx, |ui| {
+        let tabs = gui.tabs.try_read().unwrap();
+        ui.horizontal(|ui| {
+            tabs.iter().for_each(|tab| {
+                let name = if tab.1.url == "" {
+                    "New Tab".to_string()
+                } else {
+                    tab.1.url.clone()
+                };
+                if ui.button(&name).clicked() {
+                    gui.url = tab.1.url.clone();
+                    gui.selected_http_method = tab.1.method.clone();
+                    gui.body_str = tab.1.body.clone();
+                }
+            });
+        });
     });
 }

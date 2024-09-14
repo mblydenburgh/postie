@@ -47,7 +47,7 @@ pub enum RequestWindowMode {
     ENVIRONMENT,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AuthMode {
     APIKEY,
     BEARER,
@@ -59,6 +59,35 @@ impl std::fmt::Display for AuthMode {
         write!(f, "{:?}", self)
     }
 }
+
+#[derive(Clone, PartialEq)]
+pub struct Tab {
+    pub id: String,
+    pub url: String,
+    pub body: String,
+    pub headers: Vec<(String, String)>,
+    pub method: api::HttpMethod,
+    pub auth_mode: AuthMode,
+    pub api_key: Option<String>,
+    pub status: Option<String>,
+    pub bearer_token: Option<String>,
+}
+impl Default for Tab {
+    fn default() -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            url: "".into(),
+            body: "".into(),
+            headers: vec![],
+            method: api::HttpMethod::GET,
+            auth_mode: AuthMode::NONE,
+            api_key: None,
+            status: None,
+            bearer_token: None,
+        }
+    }
+}
+
 
 /* Holds all ui state, I found that keeping each property separate makes updating easier as you
  * dont need to worry about passing around a single reference to all parts of the ui that are
@@ -99,10 +128,15 @@ pub struct Gui {
     pub receiver: tokio::sync::mpsc::Receiver<Option<ResponseData>>,
     pub received_token: Arc<Mutex<bool>>,
     pub is_requesting: Arc<RwLock<Option<bool>>>,
+    pub tabs: Arc<RwLock<HashMap<String, Tab>>>,
+    pub active_tab: Arc<RwLock<Tab>>,
 }
 impl Default for Gui {
     fn default() -> Self {
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        let mut tabs = HashMap::new();
+        let defaut_tab_id = Uuid::new_v4().to_string();
+        tabs.insert(defaut_tab_id.clone(), Tab::default());
         Self {
             response: Arc::new(RwLock::new(None)),
             headers: Rc::new(RefCell::new(vec![
@@ -159,7 +193,9 @@ impl Default for Gui {
             sender,
             receiver,
             received_token: Arc::new(Mutex::new(false)),
-            is_requesting: Arc::new(RwLock::new(None))
+            is_requesting: Arc::new(RwLock::new(None)),
+            tabs: Arc::new(RwLock::new(tabs.clone())),
+            active_tab: Arc::new(RwLock::new(tabs.get(&defaut_tab_id).unwrap().clone())),
         }
     }
 }
@@ -258,13 +294,45 @@ impl Gui {
         let saved_response_for_worker = self.saved_responses.clone();
         let is_requesting_for_worker = self.is_requesting.clone();
         let res_status_for_worker = self.res_status.clone();
+        let active_tab_for_worker = self.active_tab.clone();
+        let tabs_for_worker = self.tabs.clone();
         tokio::spawn(async move {
             let mut result_write_guard = response_for_worker.try_write().unwrap();
             let mut is_requesting_write_guard = is_requesting_for_worker.try_write().unwrap();
             let mut res_status_write_guard = res_status_for_worker.try_write().unwrap();
+            let mut active_tab_write_guard = active_tab_for_worker.try_write().unwrap();
+            let mut tabs_write_guard = tabs_for_worker.try_write().unwrap();
             // TODO - figure out why ui doesnt recognize when set to true, only when request is
             // complete and set to false.
             *is_requesting_write_guard = Some(true);
+            let updated_tab = Tab {
+                id: active_tab_write_guard.id.clone(),
+                url: input.url.clone(),
+                body: match input.body.clone() {
+                    Some(b) => {
+                        match b {
+                            api::RequestBody::JSON(s) => serde_json::to_string(&s).unwrap(),
+                            api::RequestBody::FORM(s) => s,
+                        }
+                    },
+                    None => "".into(),
+                },
+                status: None,
+                headers: input
+                    .headers
+                    .clone()
+                    .unwrap_or(vec![])
+                    .into_iter()
+                    .map(|(k, v)| (k, v))
+                    .collect(),
+                method: input.method.clone(),
+                api_key: None,
+                bearer_token: None,
+                auth_mode: AuthMode::NONE,
+            };
+
+            *active_tab_write_guard = updated_tab.clone();
+            tabs_write_guard.insert(active_tab_write_guard.id.clone(), updated_tab.clone());
             match Self::submit(input).await {
                 Ok(res) => {
                     println!("Res: {:?}", res);

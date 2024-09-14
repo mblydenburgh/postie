@@ -21,10 +21,9 @@ pub async fn initialize_db() -> anyhow::Result<SqliteConnection> {
         std::process::exit(1);
     }
     let db_path = &args[1];
-    println!("db path: {}", db_path);
+    // if path does not exist, assume running locally and default to local copy
     if !Path::new(db_path).exists() {
-        println!("db file does not exist");
-        std::process::exit(1);
+        return Ok(SqliteConnection::connect("sqlite:postie.sqlite").await?)
     }
     let connection = SqliteConnection::connect(db_path).await?;
     println!("{:?} sqlite connection established", connection);
