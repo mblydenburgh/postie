@@ -23,12 +23,13 @@ Right now there is a fully packaged mac application (sorry Windows, for now) tha
 ### Not yet supported
 - Creating new collections from scratch
 - Infinite levels of collection nesting, currently only support one level of folder nesting
+- Multiple request tabs open at once
+- Request tabs persist between application restarts
 - Exporting saved colellections
 - Exporting saved environments
 - File upload request bodies
 - XML request body and response
 - Pre-request scripts
-- Request history, imported files do not reflect on ui until next application start
 - Cloud database and user profiles
 
 ## Building and running
