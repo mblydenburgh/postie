@@ -3,7 +3,7 @@ pub mod domain;
 
 use chrono::prelude::*;
 use db::repository;
-use domain::collection::Collection;
+use domain::{collection::Collection, tab::Tab};
 use domain::environment::EnvironmentFile;
 use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
@@ -189,6 +189,11 @@ impl PostieApi {
         let mut api = PostieApi::new().await;
         let collections = api.db.get_all_collections().await.unwrap();
         Ok(collections)
+    }
+    pub async fn load_tabs() -> anyhow::Result<Vec<Tab>> {
+        let mut api = PostieApi::new().await;
+        let tabs = api.db.get_all_tabs().await.unwrap();
+        Ok(tabs)
     }
     pub async fn load_request_response_items() -> anyhow::Result<Vec<RequestHistoryItem>> {
         let mut api = PostieApi::new().await;

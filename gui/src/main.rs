@@ -5,9 +5,10 @@ use api::{
     domain::{
         collection::Collection,
         environment::{EnvironmentFile, EnvironmentValue},
-        request::DBRequest,
+        request::{DBRequest, RequestHeaders},
         request_item::RequestHistoryItem,
         response::DBResponse,
+        tab::Tab,
     },
     PostieApi, ResponseData,
 };
@@ -60,35 +61,6 @@ impl std::fmt::Display for AuthMode {
     }
 }
 
-#[derive(Clone, PartialEq)]
-pub struct Tab {
-    pub id: String,
-    pub url: String,
-    pub body: String,
-    pub headers: Vec<(String, String)>,
-    pub method: api::HttpMethod,
-    pub auth_mode: AuthMode,
-    pub api_key: Option<String>,
-    pub status: Option<String>,
-    pub bearer_token: Option<String>,
-}
-impl Default for Tab {
-    fn default() -> Self {
-        Self {
-            id: Uuid::new_v4().to_string(),
-            url: "".into(),
-            body: "".into(),
-            headers: vec![],
-            method: api::HttpMethod::GET,
-            auth_mode: AuthMode::NONE,
-            api_key: None,
-            status: None,
-            bearer_token: None,
-        }
-    }
-}
-
-
 /* Holds all ui state, I found that keeping each property separate makes updating easier as you
  * dont need to worry about passing around a single reference to all parts of the ui that are
  * accessing it at once. Up for thoughts on how to make this a little cleaner though.
@@ -129,14 +101,11 @@ pub struct Gui {
     pub received_token: Arc<Mutex<bool>>,
     pub is_requesting: Arc<RwLock<Option<bool>>>,
     pub tabs: Arc<RwLock<HashMap<String, Tab>>>,
-    pub active_tab: Arc<RwLock<Tab>>,
+    pub active_tab: Arc<RwLock<Option<Tab>>>,
 }
 impl Default for Gui {
     fn default() -> Self {
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
-        let mut tabs = HashMap::new();
-        let defaut_tab_id = Uuid::new_v4().to_string();
-        tabs.insert(defaut_tab_id.clone(), Tab::default());
         Self {
             response: Arc::new(RwLock::new(None)),
             headers: Rc::new(RefCell::new(vec![
@@ -194,8 +163,8 @@ impl Default for Gui {
             receiver,
             received_token: Arc::new(Mutex::new(false)),
             is_requesting: Arc::new(RwLock::new(None)),
-            tabs: Arc::new(RwLock::new(tabs.clone())),
-            active_tab: Arc::new(RwLock::new(tabs.get(&defaut_tab_id).unwrap().clone())),
+            tabs: Arc::new(RwLock::new(HashMap::new())),
+            active_tab: Arc::new(RwLock::new(None)),
         }
     }
 }
@@ -215,6 +184,7 @@ impl Gui {
                     enabled: true,
                 }]),
             }]);
+        let saved_tabs = PostieApi::load_tabs().await.unwrap();
         let collections = PostieApi::load_collections().await.unwrap();
         let request_history_items = PostieApi::load_request_response_items().await.unwrap();
         let saved_requests = PostieApi::load_saved_requests().await.unwrap();
@@ -227,12 +197,15 @@ impl Gui {
             .into_iter()
             .map(|r| (r.id.clone(), r))
             .collect();
+        let tabs_by_id: HashMap<String, Tab> =
+            saved_tabs.into_iter().map(|r| (r.id.clone(), r)).collect();
         let mut default = Gui::default();
         default.environments = Arc::new(RwLock::from(Some(envs)));
         default.collections = Arc::new(RwLock::from(Some(collections)));
         default.request_history_items = Arc::new(RwLock::from(Some(request_history_items)));
         default.saved_requests = Arc::new(RwLock::from(Some(requests_by_id)));
         default.saved_responses = Arc::new(RwLock::from(Some(responses_by_id)));
+        default.tabs = Arc::new(RwLock::new(tabs_by_id));
         default
     }
     async fn refresh_request_data(
@@ -306,33 +279,33 @@ impl Gui {
             // complete and set to false.
             *is_requesting_write_guard = Some(true);
             let updated_tab = Tab {
-                id: active_tab_write_guard.id.clone(),
+                id: String::from(&*active_tab_write_guard.clone().unwrap().id),
                 url: input.url.clone(),
-                body: match input.body.clone() {
-                    Some(b) => {
-                        match b {
-                            api::RequestBody::JSON(s) => serde_json::to_string(&s).unwrap(),
-                            api::RequestBody::FORM(s) => s,
-                        }
+                req_body: match input.body.clone() {
+                    Some(b) => match b {
+                        api::RequestBody::JSON(s) => serde_json::to_string(&s).unwrap(),
+                        api::RequestBody::FORM(s) => s,
                     },
                     None => "".into(),
                 },
-                status: None,
-                headers: input
+                res_status: None,
+                req_headers: input
                     .headers
                     .clone()
                     .unwrap_or(vec![])
                     .into_iter()
                     .map(|(k, v)| (k, v))
                     .collect(),
+                res_body: "".into(),
+                res_headers: RequestHeaders(vec![]),
                 method: input.method.clone(),
-                api_key: None,
-                bearer_token: None,
-                auth_mode: AuthMode::NONE,
             };
+            println!("Updated Tab");
 
-            *active_tab_write_guard = updated_tab.clone();
-            tabs_write_guard.insert(active_tab_write_guard.id.clone(), updated_tab.clone());
+            *active_tab_write_guard = Some(updated_tab.clone());
+            if let Some(tab) = tabs_write_guard.get_mut(&updated_tab.id) {
+                *tab = updated_tab.clone();
+            }
             match Self::submit(input).await {
                 Ok(res) => {
                     println!("Res: {:?}", res);
@@ -394,6 +367,12 @@ impl Gui {
             }
         }
         result
+    }
+
+    fn set_gui_values_for_tab(&mut self, tab: &Tab) {
+        self.url = tab.url.clone();
+        self.body_str = tab.req_body.clone();
+        self.selected_http_method = tab.method.clone();
     }
 }
 

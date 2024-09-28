@@ -80,9 +80,9 @@ pub fn content_header_panel(gui: &mut Gui, ctx: &egui::Context) {
                 if ui.button("Environment").clicked() {
                     *request_window_mode = RequestWindowMode::ENVIRONMENT;
                 }
-                if ui.button("Params").clicked() {
+                /*if ui.button("Params").clicked() {
                     *request_window_mode = RequestWindowMode::PARAMS;
-                }
+                }*/
                 if ui.button("Auth").clicked() {
                     *request_window_mode = RequestWindowMode::AUTHORIZATION;
                 }
