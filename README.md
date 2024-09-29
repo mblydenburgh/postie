@@ -19,6 +19,7 @@ Right now there is a fully packaged mac application (sorry Windows, for now) tha
 - Importing postman environments
 - Request history is loading on application start to show previous requests & responses
 - Native mac application
+- Manage multiple requests at once with tabs
 
 ### Not yet supported
 - Creating new collections from scratch
