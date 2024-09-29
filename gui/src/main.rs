@@ -307,6 +307,24 @@ impl Gui {
         });
         Ok(())
     }
+    async fn delete_tab(id: Uuid) {
+        PostieApi::delete_tab(id).await.unwrap();
+    }
+    fn spawn_delete_tab(&mut self, id: Uuid) {
+        let tabs_for_worker = self.tabs.clone();
+        let saved_requests_for_worker = self.saved_requests.clone();
+        let saved_response_for_worker = self.saved_responses.clone();
+        let request_history_for_worker = self.request_history_items.clone();
+        tokio::spawn(async move {
+            Self::delete_tab(id).await;
+            Self::refresh_request_data(
+                request_history_for_worker,
+                saved_response_for_worker,
+                saved_requests_for_worker,
+                tabs_for_worker,
+            ).await;
+        });
+    }
     async fn oauth_token_request(input: api::OAuth2Request) -> anyhow::Result<api::ResponseData> {
         let res = PostieApi::make_request(api::PostieRequest::OAUTH(input))
             .await

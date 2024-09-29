@@ -401,11 +401,11 @@ impl PostieDb {
         Ok(rows)
     }
 
-    pub async fn add_new_tab(&mut self, tab: Tab) -> anyhow::Result<()> {
-        todo!()
-    }
-
-    pub async fn delete_tab(&mut self, tab_id: &str) -> anyhow::Result<()> {
-        todo!()
+    pub async fn delete_tab(&mut self, tab_id: Uuid) -> anyhow::Result<()> {
+        let id = tab_id.to_string();
+        sqlx::query!("DELETE FROM tabs WHERE id = $1", id)
+            .execute(&mut self.connection)
+            .await?;
+        Ok(())
     }
 }

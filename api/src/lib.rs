@@ -377,4 +377,9 @@ impl PostieApi {
             }
         }
     }
+    pub async fn delete_tab(tab_id: Uuid) -> anyhow::Result<()> {
+        let mut db = repository::PostieDb::new().await;
+        db.delete_tab(tab_id).await?;
+        Ok(())
+    }
 }
