@@ -8,6 +8,7 @@ use api::{
         request::DBRequest,
         request_item::RequestHistoryItem,
         response::DBResponse,
+        tab::Tab,
     },
     PostieApi, ResponseData,
 };
@@ -47,7 +48,7 @@ pub enum RequestWindowMode {
     ENVIRONMENT,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AuthMode {
     APIKEY,
     BEARER,
@@ -99,6 +100,8 @@ pub struct Gui {
     pub receiver: tokio::sync::mpsc::Receiver<Option<ResponseData>>,
     pub received_token: Arc<Mutex<bool>>,
     pub is_requesting: Arc<RwLock<Option<bool>>>,
+    pub tabs: Arc<RwLock<HashMap<String, Tab>>>,
+    pub active_tab: Arc<RwLock<Option<Tab>>>,
 }
 impl Default for Gui {
     fn default() -> Self {
@@ -159,7 +162,9 @@ impl Default for Gui {
             sender,
             receiver,
             received_token: Arc::new(Mutex::new(false)),
-            is_requesting: Arc::new(RwLock::new(None))
+            is_requesting: Arc::new(RwLock::new(None)),
+            tabs: Arc::new(RwLock::new(HashMap::new())),
+            active_tab: Arc::new(RwLock::new(None)),
         }
     }
 }
@@ -179,6 +184,7 @@ impl Gui {
                     enabled: true,
                 }]),
             }]);
+        let saved_tabs = PostieApi::load_tabs().await.unwrap();
         let collections = PostieApi::load_collections().await.unwrap();
         let request_history_items = PostieApi::load_request_response_items().await.unwrap();
         let saved_requests = PostieApi::load_saved_requests().await.unwrap();
@@ -191,22 +197,28 @@ impl Gui {
             .into_iter()
             .map(|r| (r.id.clone(), r))
             .collect();
+        let tabs_by_id: HashMap<String, Tab> =
+            saved_tabs.into_iter().map(|r| (r.id.clone(), r)).collect();
         let mut default = Gui::default();
         default.environments = Arc::new(RwLock::from(Some(envs)));
         default.collections = Arc::new(RwLock::from(Some(collections)));
         default.request_history_items = Arc::new(RwLock::from(Some(request_history_items)));
         default.saved_requests = Arc::new(RwLock::from(Some(requests_by_id)));
         default.saved_responses = Arc::new(RwLock::from(Some(responses_by_id)));
+        default.tabs = Arc::new(RwLock::new(tabs_by_id.clone()));
+        default.active_tab = Arc::new(RwLock::new(Some(tabs_by_id.values().next().unwrap().clone())));
         default
     }
     async fn refresh_request_data(
         request_history: Arc<RwLock<Option<Vec<RequestHistoryItem>>>>,
         responses: Arc<RwLock<Option<HashMap<String, DBResponse>>>>,
         requests: Arc<RwLock<Option<HashMap<String, DBRequest>>>>,
+        tabs: Arc<RwLock<HashMap<String, Tab>>>
     ) {
         let request_history_items = PostieApi::load_request_response_items().await.unwrap();
         let saved_requests = PostieApi::load_saved_requests().await.unwrap();
         let saved_responses = PostieApi::load_saved_responses().await.unwrap();
+        let saved_tabs = PostieApi::load_tabs().await.unwrap();
         let requests_by_id: HashMap<String, DBRequest> = saved_requests
             .into_iter()
             .map(|r| (r.id.clone(), r))
@@ -219,9 +231,12 @@ impl Gui {
         let mut request_history_item_write_guard = request_history.try_write().unwrap();
         let mut saved_requests_write_guard = requests.try_write().unwrap();
         let mut saved_responses_write_guard = responses.try_write().unwrap();
+        let mut tabs_write_guard = tabs.try_write().unwrap();
         *request_history_item_write_guard = Some(request_history_items).into();
         *saved_requests_write_guard = Some(requests_by_id);
         *saved_responses_write_guard = Some(responses_by_id).into();
+        let tabs_by_id = saved_tabs.into_iter().map(|r| (r.id.clone(), r)).collect();
+        *tabs_write_guard = tabs_by_id;
     }
     async fn refresh_collections(old_collections: Arc<RwLock<Option<Vec<Collection>>>>) {
         let collections = PostieApi::load_collections().await.unwrap();
@@ -258,6 +273,7 @@ impl Gui {
         let saved_response_for_worker = self.saved_responses.clone();
         let is_requesting_for_worker = self.is_requesting.clone();
         let res_status_for_worker = self.res_status.clone();
+        let tabs_for_worker = self.tabs.clone();
         tokio::spawn(async move {
             let mut result_write_guard = response_for_worker.try_write().unwrap();
             let mut is_requesting_write_guard = is_requesting_for_worker.try_write().unwrap();
@@ -265,6 +281,7 @@ impl Gui {
             // TODO - figure out why ui doesnt recognize when set to true, only when request is
             // complete and set to false.
             *is_requesting_write_guard = Some(true);
+
             match Self::submit(input).await {
                 Ok(res) => {
                     println!("Res: {:?}", res);
@@ -284,10 +301,29 @@ impl Gui {
                 request_history_for_worker,
                 saved_response_for_worker,
                 saved_requests_for_worker,
+                tabs_for_worker,
             )
             .await
         });
         Ok(())
+    }
+    async fn delete_tab(id: Uuid) {
+        PostieApi::delete_tab(id).await.unwrap();
+    }
+    fn spawn_delete_tab(&mut self, id: Uuid) {
+        let tabs_for_worker = self.tabs.clone();
+        let saved_requests_for_worker = self.saved_requests.clone();
+        let saved_response_for_worker = self.saved_responses.clone();
+        let request_history_for_worker = self.request_history_items.clone();
+        tokio::spawn(async move {
+            Self::delete_tab(id).await;
+            Self::refresh_request_data(
+                request_history_for_worker,
+                saved_response_for_worker,
+                saved_requests_for_worker,
+                tabs_for_worker,
+            ).await;
+        });
     }
     async fn oauth_token_request(input: api::OAuth2Request) -> anyhow::Result<api::ResponseData> {
         let res = PostieApi::make_request(api::PostieRequest::OAUTH(input))
@@ -326,6 +362,26 @@ impl Gui {
             }
         }
         result
+    }
+
+    fn set_active_tab(&mut self, id: &str) {
+        let tabs = self.tabs.try_read().unwrap();
+        let active_tab = tabs.get(id).unwrap().clone();
+        let mut active_tab_write_guard = self.active_tab.try_write().unwrap();
+        *active_tab_write_guard = Some(active_tab);
+    }
+
+    fn set_gui_values_from_active_tab(&mut self) {
+        let active_tab = self.active_tab.try_read().unwrap();
+        println!("Active Tab: {:?}", active_tab);
+        if let Some(active_tab) = active_tab.as_ref() {
+            self.url = active_tab.url.clone();
+            self.body_str = active_tab.req_body.clone();
+            self.selected_http_method = active_tab.method.clone();
+            self.res_status = Arc::new(RwLock::new(active_tab.res_status.clone().unwrap_or("".into())));
+            let response_data = ResponseData::JSON(serde_json::from_str(&active_tab.res_body).unwrap_or(serde_json::Value::Null));
+            self.response = Arc::new(RwLock::new(Some(response_data)));
+        }
     }
 }
 

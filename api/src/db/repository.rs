@@ -8,9 +8,9 @@ use uuid::Uuid;
 use crate::domain::{
     collection::{Collection, CollectionAuth, CollectionInfo, CollectionItemOrFolder},
     environment::EnvironmentFile,
-    request::{self, DBRequest, RequestHeader},
+    request::{self, DBRequest, RequestHeader, RequestHeaders},
     request_item::RequestHistoryItem,
-    response::{DBResponse, ResponseHeader},
+    response::{DBResponse, ResponseHeader}, tab::Tab,
 };
 
 pub async fn initialize_db() -> anyhow::Result<SqliteConnection> {
@@ -21,10 +21,9 @@ pub async fn initialize_db() -> anyhow::Result<SqliteConnection> {
         std::process::exit(1);
     }
     let db_path = &args[1];
-    println!("db path: {}", db_path);
+    // if path does not exist, assume running locally and default to local copy
     if !Path::new(db_path).exists() {
-        println!("db file does not exist");
-        std::process::exit(1);
+        return Ok(SqliteConnection::connect("sqlite:postie.sqlite").await?)
     }
     let connection = SqliteConnection::connect(db_path).await?;
     println!("{:?} sqlite connection established", connection);
@@ -192,6 +191,35 @@ impl PostieDb {
         Ok(())
     }
 
+    pub async fn save_tab(&mut self, tab: &Tab) -> anyhow::Result<()> {
+        println!("Saving tab to db: {:#?}", tab);
+        let method = tab.method.to_string();
+        let req_headers = serde_json::to_string(&tab.req_headers).unwrap();
+        let res_headers = serde_json::to_string(&tab.res_headers).unwrap();
+        let mut transaction = self.connection.begin().await?;
+        _ = sqlx::query!(
+            r#"
+            INSERT INTO tabs (id, method, url, req_body, req_headers, res_status, res_body, res_headers)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (id) DO UPDATE SET 
+            method = $2, url = $3, req_body = $4, req_headers = $5, res_status = $6, res_body = $7, res_headers = $8
+            "#,
+            tab.id,
+            method,
+            tab.url,
+            tab.req_body,
+            req_headers,
+            tab.res_status,
+            tab.res_body,
+            res_headers
+        )
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+        transaction.commit().await?;
+        Ok(())
+    }
+
     pub async fn get_all_requests(&mut self) -> anyhow::Result<Vec<DBRequest>> {
         println!("getting all saved requests");
         let rows = sqlx::query("SELECT * FROM request")
@@ -326,5 +354,58 @@ impl PostieDb {
             println!("row: {:?}", &row);
         }
         Ok(rows)
+    }
+
+    pub async fn get_all_tabs(&mut self) -> anyhow::Result<Vec<Tab>> {
+        println!("getting all tabs");
+        let rows = sqlx::query("SELECT * FROM tabs")
+            .map(|row: SqliteRow| {
+                let id: String = row.get("id");
+                let url: String = row.get("url");
+                let raw_req_body: Option<String> = row.get("req_body");
+                let raw_res_body: Option<String> = row.get("res_body");
+                let method: String = row.get("method");
+                let res_status: Option<String> = row.get("res_status");
+                let raw_req_headers: String = row.get("req_headers");
+                println!("raw_req_headers: {:?}", raw_req_headers);
+                let mut req_body: Option<String> = None;
+                let mut res_body: String = "".into();
+                let headers: RequestHeaders =
+                    serde_json::from_str::<RequestHeaders>(&raw_req_headers).unwrap_or(RequestHeaders(vec![]));
+                if let Some(body_str) = raw_req_body {
+                    req_body = Some(body_str)
+                }
+                if let Some(body) = raw_res_body {
+                    res_body = body
+                }
+                Tab {
+                    id,
+                    url,
+                    req_body: req_body.unwrap_or_default(),
+                    method: match method.as_str() {
+                        "GET" => crate::HttpMethod::GET,
+                        "POST" => crate::HttpMethod::POST,
+                        "PUT" => crate::HttpMethod::PUT,
+                        "DELETE" => crate::HttpMethod::DELETE,
+                        _ => crate::HttpMethod::GET,
+                    },
+                    res_status,
+                    req_headers: headers,
+                    res_body,
+                    res_headers: RequestHeaders(vec![]),
+                }
+            })
+            .fetch_all(&mut self.connection)
+            .await
+            .unwrap();
+        Ok(rows)
+    }
+
+    pub async fn delete_tab(&mut self, tab_id: Uuid) -> anyhow::Result<()> {
+        let id = tab_id.to_string();
+        sqlx::query!("DELETE FROM tabs WHERE id = $1", id)
+            .execute(&mut self.connection)
+            .await?;
+        Ok(())
     }
 }
