@@ -213,10 +213,12 @@ impl Gui {
         request_history: Arc<RwLock<Option<Vec<RequestHistoryItem>>>>,
         responses: Arc<RwLock<Option<HashMap<String, DBResponse>>>>,
         requests: Arc<RwLock<Option<HashMap<String, DBRequest>>>>,
+        tabs: Arc<RwLock<HashMap<String, Tab>>>
     ) {
         let request_history_items = PostieApi::load_request_response_items().await.unwrap();
         let saved_requests = PostieApi::load_saved_requests().await.unwrap();
         let saved_responses = PostieApi::load_saved_responses().await.unwrap();
+        let saved_tabs = PostieApi::load_tabs().await.unwrap();
         let requests_by_id: HashMap<String, DBRequest> = saved_requests
             .into_iter()
             .map(|r| (r.id.clone(), r))
@@ -229,9 +231,12 @@ impl Gui {
         let mut request_history_item_write_guard = request_history.try_write().unwrap();
         let mut saved_requests_write_guard = requests.try_write().unwrap();
         let mut saved_responses_write_guard = responses.try_write().unwrap();
+        let mut tabs_write_guard = tabs.try_write().unwrap();
         *request_history_item_write_guard = Some(request_history_items).into();
         *saved_requests_write_guard = Some(requests_by_id);
         *saved_responses_write_guard = Some(responses_by_id).into();
+        let tabs_by_id = saved_tabs.into_iter().map(|r| (r.id.clone(), r)).collect();
+        *tabs_write_guard = tabs_by_id;
     }
     async fn refresh_collections(old_collections: Arc<RwLock<Option<Vec<Collection>>>>) {
         let collections = PostieApi::load_collections().await.unwrap();
@@ -268,6 +273,7 @@ impl Gui {
         let saved_response_for_worker = self.saved_responses.clone();
         let is_requesting_for_worker = self.is_requesting.clone();
         let res_status_for_worker = self.res_status.clone();
+        let tabs_for_worker = self.tabs.clone();
         tokio::spawn(async move {
             let mut result_write_guard = response_for_worker.try_write().unwrap();
             let mut is_requesting_write_guard = is_requesting_for_worker.try_write().unwrap();
@@ -295,6 +301,7 @@ impl Gui {
                 request_history_for_worker,
                 saved_response_for_worker,
                 saved_requests_for_worker,
+                tabs_for_worker,
             )
             .await
         });
