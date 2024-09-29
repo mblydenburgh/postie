@@ -192,7 +192,7 @@ impl PostieDb {
     }
 
     pub async fn save_tab(&mut self, tab: &Tab) -> anyhow::Result<()> {
-        println!("Saving tab to db");
+        println!("Saving tab to db: {:#?}", tab);
         let method = tab.method.to_string();
         let req_headers = serde_json::to_string(&tab.req_headers).unwrap();
         let res_headers = serde_json::to_string(&tab.res_headers).unwrap();
@@ -201,6 +201,8 @@ impl PostieDb {
             r#"
             INSERT INTO tabs (id, method, url, req_body, req_headers, res_status, res_body, res_headers)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (id) DO UPDATE SET 
+            method = $2, url = $3, req_body = $4, req_headers = $5, res_status = $6, res_body = $7, res_headers = $8
             "#,
             tab.id,
             method,
@@ -361,15 +363,20 @@ impl PostieDb {
                 let id: String = row.get("id");
                 let url: String = row.get("url");
                 let raw_req_body: Option<String> = row.get("req_body");
+                let raw_res_body: Option<String> = row.get("res_body");
                 let method: String = row.get("method");
                 let res_status: Option<String> = row.get("res_status");
                 let raw_req_headers: String = row.get("req_headers");
                 println!("raw_req_headers: {:?}", raw_req_headers);
                 let mut req_body: Option<String> = None;
+                let mut res_body: String = "".into();
                 let headers: RequestHeaders =
                     serde_json::from_str::<RequestHeaders>(&raw_req_headers).unwrap_or(RequestHeaders(vec![]));
                 if let Some(body_str) = raw_req_body {
                     req_body = Some(body_str)
+                }
+                if let Some(body) = raw_res_body {
+                    res_body = body
                 }
                 Tab {
                     id,
@@ -384,7 +391,7 @@ impl PostieDb {
                     },
                     res_status,
                     req_headers: headers,
-                    res_body: "".into(),
+                    res_body,
                     res_headers: RequestHeaders(vec![]),
                 }
             })

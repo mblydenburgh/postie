@@ -83,6 +83,8 @@ pub fn menu_panel(gui: &mut Gui, ctx: &egui::Context) {
                         tab.1.url.clone()
                     };
                     if ui.button(&name).clicked() {
+                        gui.set_active_tab(&tab.1.id.clone());
+                        gui.set_gui_values_from_active_tab();
                         gui.url = tab.1.url.clone();
                         gui.selected_http_method = tab.1.method.clone();
                         gui.body_str = tab.1.res_body.clone();

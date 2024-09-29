@@ -5,7 +5,7 @@ use api::{
     domain::{
         collection::Collection,
         environment::{EnvironmentFile, EnvironmentValue},
-        request::{DBRequest, RequestHeaders},
+        request::DBRequest,
         request_item::RequestHistoryItem,
         response::DBResponse,
         tab::Tab,
@@ -205,7 +205,8 @@ impl Gui {
         default.request_history_items = Arc::new(RwLock::from(Some(request_history_items)));
         default.saved_requests = Arc::new(RwLock::from(Some(requests_by_id)));
         default.saved_responses = Arc::new(RwLock::from(Some(responses_by_id)));
-        default.tabs = Arc::new(RwLock::new(tabs_by_id));
+        default.tabs = Arc::new(RwLock::new(tabs_by_id.clone()));
+        default.active_tab = Arc::new(RwLock::new(Some(tabs_by_id.values().next().unwrap().clone())));
         default
     }
     async fn refresh_request_data(
@@ -267,45 +268,14 @@ impl Gui {
         let saved_response_for_worker = self.saved_responses.clone();
         let is_requesting_for_worker = self.is_requesting.clone();
         let res_status_for_worker = self.res_status.clone();
-        let active_tab_for_worker = self.active_tab.clone();
-        let tabs_for_worker = self.tabs.clone();
         tokio::spawn(async move {
             let mut result_write_guard = response_for_worker.try_write().unwrap();
             let mut is_requesting_write_guard = is_requesting_for_worker.try_write().unwrap();
             let mut res_status_write_guard = res_status_for_worker.try_write().unwrap();
-            let mut active_tab_write_guard = active_tab_for_worker.try_write().unwrap();
-            let mut tabs_write_guard = tabs_for_worker.try_write().unwrap();
             // TODO - figure out why ui doesnt recognize when set to true, only when request is
             // complete and set to false.
             *is_requesting_write_guard = Some(true);
-            let updated_tab = Tab {
-                id: String::from(&*active_tab_write_guard.clone().unwrap().id),
-                url: input.url.clone(),
-                req_body: match input.body.clone() {
-                    Some(b) => match b {
-                        api::RequestBody::JSON(s) => serde_json::to_string(&s).unwrap(),
-                        api::RequestBody::FORM(s) => s,
-                    },
-                    None => "".into(),
-                },
-                res_status: None,
-                req_headers: input
-                    .headers
-                    .clone()
-                    .unwrap_or(vec![])
-                    .into_iter()
-                    .map(|(k, v)| (k, v))
-                    .collect(),
-                res_body: "".into(),
-                res_headers: RequestHeaders(vec![]),
-                method: input.method.clone(),
-            };
-            println!("Updated Tab");
 
-            *active_tab_write_guard = Some(updated_tab.clone());
-            if let Some(tab) = tabs_write_guard.get_mut(&updated_tab.id) {
-                *tab = updated_tab.clone();
-            }
             match Self::submit(input).await {
                 Ok(res) => {
                     println!("Res: {:?}", res);
@@ -369,10 +339,24 @@ impl Gui {
         result
     }
 
-    fn set_gui_values_for_tab(&mut self, tab: &Tab) {
-        self.url = tab.url.clone();
-        self.body_str = tab.req_body.clone();
-        self.selected_http_method = tab.method.clone();
+    fn set_active_tab(&mut self, id: &str) {
+        let tabs = self.tabs.try_read().unwrap();
+        let active_tab = tabs.get(id).unwrap().clone();
+        let mut active_tab_write_guard = self.active_tab.try_write().unwrap();
+        *active_tab_write_guard = Some(active_tab);
+    }
+
+    fn set_gui_values_from_active_tab(&mut self) {
+        let active_tab = self.active_tab.try_read().unwrap();
+        println!("Active Tab: {:?}", active_tab);
+        if let Some(active_tab) = active_tab.as_ref() {
+            self.url = active_tab.url.clone();
+            self.body_str = active_tab.req_body.clone();
+            self.selected_http_method = active_tab.method.clone();
+            self.res_status = Arc::new(RwLock::new(active_tab.res_status.clone().unwrap_or("".into())));
+            let response_data = ResponseData::JSON(serde_json::from_str(&active_tab.res_body).unwrap_or(serde_json::Value::Null));
+            self.response = Arc::new(RwLock::new(Some(response_data)));
+        }
     }
 }
 

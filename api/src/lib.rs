@@ -3,6 +3,7 @@ pub mod domain;
 
 use chrono::prelude::*;
 use db::repository;
+use domain::request::RequestHeaders;
 use domain::{collection::Collection, tab::Tab};
 use domain::environment::EnvironmentFile;
 use reqwest::{
@@ -58,6 +59,7 @@ pub enum PostieRequest {
 
 #[derive(Debug)]
 pub struct HttpRequest {
+    pub tab_id: Uuid,
     pub id: Uuid,
     pub name: Option<String>,
     pub method: HttpMethod,
@@ -248,7 +250,7 @@ impl PostieApi {
                     }
                 };
 
-                let url = Self::substitute_variables_in_url(&input.environment, input.url.clone());
+                let url = Self::substitute_variables_in_url(&input.environment.clone(), input.url.clone());
                 let mut req = api.client.request(method, url).headers(headers.clone());
                 if let Some(ref request_body) = input.body {
                     req = match request_body.clone() {
@@ -301,7 +303,7 @@ impl PostieApi {
                     body,
                     name: input.name.clone(),
                     method: input.method.to_string(),
-                    url: input.url,
+                    url: input.url.clone(),
                     headers: request_headers,
                 };
                 let _ = db.save_request_history(&db_request).await?;
@@ -330,6 +332,21 @@ impl PostieApi {
                 } else {
                     ResponseData::TEXT(res_text)
                 };
+                let res_body = match &response_data {
+                    ResponseData::JSON(j) => j.to_string(),
+                    ResponseData::TEXT(t) => t.to_string(),
+                };
+                let updated_tab = Tab{
+                    id: input.tab_id.to_string(),
+                    method: input.method.clone(),
+                    url: input.url.clone(),
+                    req_body: "".into(),
+                    req_headers: RequestHeaders(vec![]),
+                    res_status: Some(res_status.to_string()),
+                    res_body,
+                    res_headers: RequestHeaders(vec![]),
+                };
+                let _ = db.save_tab(&updated_tab).await?;
                 Ok(Response{ data: response_data, status: res_status.to_string() })
             }
             // if making an oauth token request, dont save to db
