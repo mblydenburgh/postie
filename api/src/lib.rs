@@ -113,11 +113,6 @@ pub enum ResponseData {
     TEXT(String),
 }
 
-pub struct Environment {
-    pub name: String,
-    pub variables: Vec<(String, String)>,
-}
-
 pub struct PostieApi {
     pub client: reqwest::Client,
     pub collection: Option<String>,
@@ -173,9 +168,15 @@ impl PostieApi {
             }
         }
     }
-    //TODO - connect to save button on ui to overwrite changes to existing env/collection
-    pub fn save_environment(_input: Environment) -> anyhow::Result<()> {
-        Ok(())
+    pub async fn save_environment(input: EnvironmentFile) -> anyhow::Result<()> {
+        let mut api = PostieApi::new().await;
+        match api.db.save_environment(input).await {
+            Ok(_) => Ok(()),
+            Err(_) => {
+                println!("Error saving environment");
+                Ok(())
+            }
+        }
     }
     pub async fn save_collection(input: Collection) -> anyhow::Result<()> {
         let mut api = PostieApi::new().await;

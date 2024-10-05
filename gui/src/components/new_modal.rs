@@ -35,12 +35,29 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                                                 .unwrap();
                                         });
                                         _ = tokio::spawn(async move {
-                                            let sleep = time::Duration::from_millis(100);
+                                            let sleep = time::Duration::from_millis(50);
                                             thread::sleep(sleep);
                                             Gui::refresh_collections(collections_for_worker).await;
                                         });
                                     }
-                                    ImportMode::ENVIRONMENT => {}
+                                    ImportMode::ENVIRONMENT => {
+                                        let blank_env = api::domain::environment::EnvironmentFile {
+                                            id: Uuid::new_v4().to_string(),
+                                            name: gui.new_name.clone(),
+                                            values: None,
+                                        };
+                                        let envs_for_worker = gui.environments.clone();
+                                        let _ = tokio::spawn(async move {
+                                            let _ = PostieApi::save_environment(blank_env)
+                                                .await
+                                                .unwrap();
+                                        });
+                                        _ = tokio::spawn(async move {
+                                            let sleep = time::Duration::from_millis(50);
+                                            thread::sleep(sleep);
+                                            Gui::refresh_environments(envs_for_worker).await;
+                                        });
+                                    }
                                 }
                             }
                         }
