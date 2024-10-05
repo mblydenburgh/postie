@@ -1,6 +1,7 @@
 use std::{thread, time};
 
 use api::PostieApi;
+use uuid::Uuid;
 
 use crate::{Gui, ImportMode};
 
@@ -17,25 +18,29 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                             if let Ok(new_window_mode) = gui.new_window_mode.try_read() {
                                 match *new_window_mode {
                                     ImportMode::COLLECTION => {
-                                        let blank_collection = api::RequestCollection {
-                                            name: gui.new_name.clone(),
-                                            requests: vec![],
-                                        };
+                                        let blank_collection =
+                                            api::domain::collection::Collection {
+                                                info: api::domain::collection::CollectionInfo {
+                                                    id: Uuid::new_v4().to_string(),
+                                                    name: gui.new_name.clone(),
+                                                    description: None,
+                                                },
+                                                item: vec![],
+                                                auth: None,
+                                            };
                                         let collections_for_worker = gui.collections.clone();
                                         let _ = tokio::spawn(async move {
                                             let _ = PostieApi::save_collection(blank_collection)
                                                 .await
                                                 .unwrap();
-
                                         });
                                         _ = tokio::spawn(async move {
                                             let sleep = time::Duration::from_millis(100);
                                             thread::sleep(sleep);
                                             Gui::refresh_collections(collections_for_worker).await;
                                         });
-                                    },
-                                    ImportMode::ENVIRONMENT => {
                                     }
+                                    ImportMode::ENVIRONMENT => {}
                                 }
                             }
                         }

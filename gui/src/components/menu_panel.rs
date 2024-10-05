@@ -75,38 +75,36 @@ pub fn menu_panel(gui: &mut Gui, ctx: &egui::Context) {
                                 }
                             }
                         }
-                        None => {
-                        }
+                        None => {}
                     }
                 }
             }
         });
-
     });
     TopBottomPanel::top("tabs panel").show(ctx, |ui| {
         let tabs_clone = Arc::clone(&gui.tabs);
         let tabs = tabs_clone.try_read().unwrap();
         ui.horizontal(|ui| {
-                for tab in &*tabs {
-                    let name = if tab.1.url == "" {
-                        "Unsent Request".to_string()
-                    } else {
-                        tab.1.url.clone()
-                    };
-                    ui.horizontal(|ui| {
-                        if ui.button("X").clicked() {
-                            let id = Uuid::from_str(&tab.1.id).unwrap();
-                            gui.spawn_delete_tab(id);
-                        }
-                        if ui.button(&name).clicked() {
-                            gui.set_active_tab(&tab.1.id.clone());
-                            gui.set_gui_values_from_active_tab();
-                            gui.url = tab.1.url.clone();
-                            gui.selected_http_method = tab.1.method.clone();
-                            gui.body_str = tab.1.res_body.clone();
-                        }
-                    });
-                }
+            for tab in &*tabs {
+                let name = if tab.1.url == "" {
+                    "Unsent Request".to_string()
+                } else {
+                    tab.1.url.clone()
+                };
+                ui.horizontal(|ui| {
+                    if ui.button("X").clicked() {
+                        let id = Uuid::from_str(&tab.1.id).unwrap();
+                        gui.spawn_delete_tab(id);
+                    }
+                    if ui.button(&name).clicked() {
+                        gui.set_active_tab(&tab.1.id.clone());
+                        gui.set_gui_values_from_active_tab();
+                        gui.url = tab.1.url.clone();
+                        gui.selected_http_method = tab.1.method.clone();
+                        gui.body_str = tab.1.res_body.clone();
+                    }
+                });
+            }
         });
     });
 }

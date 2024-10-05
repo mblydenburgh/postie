@@ -10,7 +10,8 @@ use crate::domain::{
     environment::EnvironmentFile,
     request::{self, DBRequest, RequestHeader, RequestHeaders},
     request_item::RequestHistoryItem,
-    response::{DBResponse, ResponseHeader}, tab::Tab,
+    response::{DBResponse, ResponseHeader},
+    tab::Tab,
 };
 
 pub async fn initialize_db() -> anyhow::Result<SqliteConnection> {
@@ -23,7 +24,7 @@ pub async fn initialize_db() -> anyhow::Result<SqliteConnection> {
     let db_path = &args[1];
     // if path does not exist, assume running locally and default to local copy
     if !Path::new(db_path).exists() {
-        return Ok(SqliteConnection::connect("sqlite:postie.sqlite").await?)
+        return Ok(SqliteConnection::connect("sqlite:postie.sqlite").await?);
     }
     let connection = SqliteConnection::connect(db_path).await?;
     println!("{:?} sqlite connection established", connection);
@@ -371,7 +372,8 @@ impl PostieDb {
                 let mut req_body: Option<String> = None;
                 let mut res_body: String = "".into();
                 let headers: RequestHeaders =
-                    serde_json::from_str::<RequestHeaders>(&raw_req_headers).unwrap_or(RequestHeaders(vec![]));
+                    serde_json::from_str::<RequestHeaders>(&raw_req_headers)
+                        .unwrap_or(RequestHeaders(vec![]));
                 if let Some(body_str) = raw_req_body {
                     req_body = Some(body_str)
                 }

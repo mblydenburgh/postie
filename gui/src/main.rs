@@ -13,7 +13,9 @@ use api::{
     PostieApi, ResponseData,
 };
 use components::{
-    content_header_panel::content_header_panel, content_panel::content_panel, content_side_panel::content_side_panel, import_modal::import_modal, menu_panel::menu_panel, new_modal::new_modal, side_panel::side_panel
+    content_header_panel::content_header_panel, content_panel::content_panel,
+    content_side_panel::content_side_panel, import_modal::import_modal, menu_panel::menu_panel,
+    new_modal::new_modal, side_panel::side_panel,
 };
 use eframe::{egui, App, NativeOptions};
 use serde::{Deserialize, Serialize};
@@ -210,14 +212,16 @@ impl Gui {
         default.saved_requests = Arc::new(RwLock::from(Some(requests_by_id)));
         default.saved_responses = Arc::new(RwLock::from(Some(responses_by_id)));
         default.tabs = Arc::new(RwLock::new(tabs_by_id.clone()));
-        default.active_tab = Arc::new(RwLock::new(Some(tabs_by_id.values().next().unwrap().clone())));
+        default.active_tab = Arc::new(RwLock::new(Some(
+            tabs_by_id.values().next().unwrap().clone(),
+        )));
         default
     }
     async fn refresh_request_data(
         request_history: Arc<RwLock<Option<Vec<RequestHistoryItem>>>>,
         responses: Arc<RwLock<Option<HashMap<String, DBResponse>>>>,
         requests: Arc<RwLock<Option<HashMap<String, DBRequest>>>>,
-        tabs: Arc<RwLock<HashMap<String, Tab>>>
+        tabs: Arc<RwLock<HashMap<String, Tab>>>,
     ) {
         let request_history_items = PostieApi::load_request_response_items().await.unwrap();
         let saved_requests = PostieApi::load_saved_requests().await.unwrap();
@@ -326,17 +330,8 @@ impl Gui {
                 saved_response_for_worker,
                 saved_requests_for_worker,
                 tabs_for_worker,
-            ).await;
-        });
-    }
-    async fn save_collection(input: api::RequestCollection) {
-        PostieApi::save_collection(input).await.unwrap();
-    }
-    fn spawn_save_collection(&mut self, input: api::RequestCollection) {
-        let collections_for_worker = self.collections.clone();
-        tokio::spawn(async move {
-            Self::save_collection(input).await;
-            Self::refresh_collections(collections_for_worker).await;
+            )
+            .await;
         });
     }
     async fn oauth_token_request(input: api::OAuth2Request) -> anyhow::Result<api::ResponseData> {
@@ -392,8 +387,12 @@ impl Gui {
             self.url = active_tab.url.clone();
             self.body_str = active_tab.req_body.clone();
             self.selected_http_method = active_tab.method.clone();
-            self.res_status = Arc::new(RwLock::new(active_tab.res_status.clone().unwrap_or("".into())));
-            let response_data = ResponseData::JSON(serde_json::from_str(&active_tab.res_body).unwrap_or(serde_json::Value::Null));
+            self.res_status = Arc::new(RwLock::new(
+                active_tab.res_status.clone().unwrap_or("".into()),
+            ));
+            let response_data = ResponseData::JSON(
+                serde_json::from_str(&active_tab.res_body).unwrap_or(serde_json::Value::Null),
+            );
             self.response = Arc::new(RwLock::new(Some(response_data)));
         }
     }

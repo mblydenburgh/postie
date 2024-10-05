@@ -3,10 +3,12 @@ pub mod domain;
 
 use chrono::prelude::*;
 use db::repository;
-use domain::collection::{CollectionInfo, CollectionItem, CollectionItemOrFolder, CollectionRequest};
+use domain::collection::{
+    CollectionInfo, CollectionItem, CollectionItemOrFolder, CollectionRequest,
+};
+use domain::environment::EnvironmentFile;
 use domain::request::RequestHeaders;
 use domain::{collection::Collection, tab::Tab};
-use domain::environment::EnvironmentFile;
 use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
     Method,
@@ -102,18 +104,13 @@ pub struct OAuthResponse {
 #[derive(Clone, Debug)]
 pub struct Response {
     pub status: String,
-    pub data: ResponseData
+    pub data: ResponseData,
 }
 
 #[derive(Clone, Debug)]
 pub enum ResponseData {
     JSON(serde_json::Value),
     TEXT(String),
-}
-
-pub struct RequestCollection {
-    pub name: String,
-    pub requests: Vec<HttpRequest>,
 }
 
 pub struct Environment {
@@ -180,18 +177,9 @@ impl PostieApi {
     pub fn save_environment(_input: Environment) -> anyhow::Result<()> {
         Ok(())
     }
-    pub async fn save_collection(input: RequestCollection) -> anyhow::Result<()> {
+    pub async fn save_collection(input: Collection) -> anyhow::Result<()> {
         let mut api = PostieApi::new().await;
-        let collection = Collection {
-            info: CollectionInfo {
-                id: Uuid::new_v4().to_string(),
-                name: input.name,
-                description: None,
-            },
-            item: vec![],
-            auth: None,
-        };
-        match api.db.save_collection(collection).await {
+        match api.db.save_collection(input).await {
             Ok(_) => Ok(()),
             Err(_) => {
                 println!("Error saving collection");
@@ -267,7 +255,10 @@ impl PostieApi {
                     }
                 };
 
-                let url = Self::substitute_variables_in_url(&input.environment.clone(), input.url.clone());
+                let url = Self::substitute_variables_in_url(
+                    &input.environment.clone(),
+                    input.url.clone(),
+                );
                 let mut req = api.client.request(method, url).headers(headers.clone());
                 if let Some(ref request_body) = input.body {
                     req = match request_body.clone() {
@@ -293,9 +284,9 @@ impl PostieApi {
                         "expected application/json text/html, or text/plain, got {}",
                         res_type
                     );
-                    return Ok(Response{
+                    return Ok(Response {
                         data: ResponseData::JSON(json!({"err": "unsupported response type!"})),
-                        status: res_status.to_string()
+                        status: res_status.to_string(),
                     });
                 }
 
@@ -353,7 +344,7 @@ impl PostieApi {
                     ResponseData::JSON(j) => j.to_string(),
                     ResponseData::TEXT(t) => t.to_string(),
                 };
-                let updated_tab = Tab{
+                let updated_tab = Tab {
                     id: input.tab_id.to_string(),
                     method: input.method.clone(),
                     url: input.url.clone(),
@@ -364,7 +355,10 @@ impl PostieApi {
                     res_headers: RequestHeaders(vec![]),
                 };
                 let _ = db.save_tab(&updated_tab).await?;
-                Ok(Response{ data: response_data, status: res_status.to_string() })
+                Ok(Response {
+                    data: response_data,
+                    status: res_status.to_string(),
+                })
             }
             // if making an oauth token request, dont save to db
             PostieRequest::OAUTH(input) => {
@@ -390,7 +384,10 @@ impl PostieApi {
                 let res = req.send().await?;
                 println!("{:?}", res);
                 let status = res.status().to_string();
-                Ok(Response{ data: ResponseData::JSON(res.json().await.unwrap()), status })
+                Ok(Response {
+                    data: ResponseData::JSON(res.json().await.unwrap()),
+                    status,
+                })
             }
         }
     }

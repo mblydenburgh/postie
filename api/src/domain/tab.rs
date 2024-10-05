@@ -1,8 +1,7 @@
 use uuid::Uuid;
 
-use crate::HttpMethod;
 use super::request::RequestHeaders;
-
+use crate::HttpMethod;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tab {

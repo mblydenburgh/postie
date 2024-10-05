@@ -100,7 +100,10 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                                 AuthMode::BEARER => {
                                     ScrollArea::vertical().show(ui, |ui| {
                                         ui.label("Enter Bearer Token");
-                                        ui.add(TextEdit::multiline(&mut gui.bearer_token).desired_rows(25));
+                                        ui.add(
+                                            TextEdit::multiline(&mut gui.bearer_token)
+                                                .desired_rows(25),
+                                        );
                                     });
                                 }
                                 AuthMode::OAUTH2 => {

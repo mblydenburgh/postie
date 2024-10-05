@@ -39,12 +39,14 @@ pub fn content_header_panel(gui: &mut Gui, ctx: &egui::Context) {
                     None
                 };
                 // take headers from gui.headers and convert to Vec<(String, String)>
-                let mut submitted_headers: Vec<(String, String)> = (*gui.headers
+                let mut submitted_headers: Vec<(String, String)> = (*gui
+                    .headers
                     .borrow()
                     .iter()
                     .filter(|h| h.0 == true)
                     .map(|h| (h.1.to_owned(), h.2.to_owned()))
-                    .collect::<Vec<(String, String)>>()).to_vec();
+                    .collect::<Vec<(String, String)>>())
+                .to_vec();
                 match gui.selected_auth_mode {
                     AuthMode::APIKEY => {
                         submitted_headers
@@ -64,10 +66,10 @@ pub fn content_header_panel(gui: &mut Gui, ctx: &egui::Context) {
                     }
                     AuthMode::NONE => (),
                 };
-                 
 
                 let active_tab_guard = gui.active_tab.borrow_mut();
-                let tab_id = if let Some(active_tab) = active_tab_guard.try_read().unwrap().as_ref() {
+                let tab_id = if let Some(active_tab) = active_tab_guard.try_read().unwrap().as_ref()
+                {
                     Uuid::parse_str(&active_tab.id).unwrap()
                 } else {
                     Uuid::new_v4()
