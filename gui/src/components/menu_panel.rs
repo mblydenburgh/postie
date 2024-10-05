@@ -16,10 +16,20 @@ pub fn menu_panel(gui: &mut Gui, ctx: &egui::Context) {
                         tabs.insert(new_tab.id.clone(), new_tab);
                     }
                     if ui.button("Collection").clicked() {
-                        ui.close_menu();
+                        if let Ok(mut new_model_open) = gui.new_window_open.try_write() {
+                            *new_model_open = true;
+                        }
+                        if let Ok(mut new_model_mode) = gui.new_window_mode.try_write() {
+                            *new_model_mode = ImportMode::COLLECTION;
+                        }
                     };
                     if ui.button("Evnironment").clicked() {
-                        ui.close_menu();
+                        if let Ok(mut new_model_open) = gui.new_window_open.try_write() {
+                            *new_model_open = true;
+                        }
+                        if let Ok(mut new_model_mode) = gui.new_window_mode.try_write() {
+                            *new_model_mode = ImportMode::ENVIRONMENT;
+                        }
                     };
                 });
                 ui.menu_button("Import", |ui| {

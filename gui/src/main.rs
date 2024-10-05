@@ -13,9 +13,7 @@ use api::{
     PostieApi, ResponseData,
 };
 use components::{
-    content_header_panel::content_header_panel, content_panel::content_panel,
-    content_side_panel::content_side_panel, import_modal::import_modal, menu_panel::menu_panel,
-    side_panel::side_panel,
+    content_header_panel::content_header_panel, content_panel::content_panel, content_side_panel::content_side_panel, import_modal::import_modal, menu_panel::menu_panel, new_modal::new_modal, side_panel::side_panel
 };
 use eframe::{egui, App, NativeOptions};
 use serde::{Deserialize, Serialize};
@@ -93,6 +91,9 @@ pub struct Gui {
     pub body_str: String,
     pub res_status: Arc<RwLock<String>>,
     pub import_window_open: RwLock<bool>,
+    pub new_window_open: RwLock<bool>,
+    pub new_window_mode: RwLock<ImportMode>,
+    pub new_name: String,
     pub import_mode: RwLock<ImportMode>,
     pub import_file_path: String,
     pub import_result: Arc<Mutex<Option<String>>>,
@@ -156,6 +157,9 @@ impl Default for Gui {
             body_str: "".into(),
             res_status: Arc::new(RwLock::new("".into())),
             import_window_open: RwLock::new(false),
+            new_window_open: RwLock::new(false),
+            new_window_mode: RwLock::new(ImportMode::COLLECTION),
+            new_name: "".into(),
             import_file_path: "".into(),
             import_mode: RwLock::new(ImportMode::COLLECTION),
             import_result: Arc::new(Mutex::new(None)),
@@ -325,6 +329,16 @@ impl Gui {
             ).await;
         });
     }
+    async fn save_collection(input: api::RequestCollection) {
+        PostieApi::save_collection(input).await.unwrap();
+    }
+    fn spawn_save_collection(&mut self, input: api::RequestCollection) {
+        let collections_for_worker = self.collections.clone();
+        tokio::spawn(async move {
+            Self::save_collection(input).await;
+            Self::refresh_collections(collections_for_worker).await;
+        });
+    }
     async fn oauth_token_request(input: api::OAuth2Request) -> anyhow::Result<api::ResponseData> {
         let res = PostieApi::make_request(api::PostieRequest::OAUTH(input))
             .await
@@ -393,6 +407,7 @@ impl App for Gui {
         content_side_panel(self, ctx);
         content_panel(self, ctx);
         import_modal(self, ctx);
+        new_modal(self, ctx);
     }
 }
 

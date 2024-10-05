@@ -3,6 +3,7 @@ pub mod domain;
 
 use chrono::prelude::*;
 use db::repository;
+use domain::collection::{CollectionInfo, CollectionItem, CollectionItemOrFolder, CollectionRequest};
 use domain::request::RequestHeaders;
 use domain::{collection::Collection, tab::Tab};
 use domain::environment::EnvironmentFile;
@@ -179,8 +180,24 @@ impl PostieApi {
     pub fn save_environment(_input: Environment) -> anyhow::Result<()> {
         Ok(())
     }
-    pub fn save_collection(_input: RequestCollection) -> anyhow::Result<()> {
-        Ok(())
+    pub async fn save_collection(input: RequestCollection) -> anyhow::Result<()> {
+        let mut api = PostieApi::new().await;
+        let collection = Collection {
+            info: CollectionInfo {
+                id: Uuid::new_v4().to_string(),
+                name: input.name,
+                description: None,
+            },
+            item: vec![],
+            auth: None,
+        };
+        match api.db.save_collection(collection).await {
+            Ok(_) => Ok(()),
+            Err(_) => {
+                println!("Error saving collection");
+                Ok(())
+            }
+        }
     }
     pub async fn load_environments() -> anyhow::Result<Vec<EnvironmentFile>> {
         let mut api = PostieApi::new().await;
