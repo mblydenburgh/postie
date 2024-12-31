@@ -3,9 +3,6 @@ pub mod domain;
 
 use chrono::prelude::*;
 use db::repository;
-use domain::collection::{
-    CollectionInfo, CollectionItem, CollectionItemOrFolder, CollectionRequest,
-};
 use domain::environment::EnvironmentFile;
 use domain::request::RequestHeaders;
 use domain::{collection::Collection, tab::Tab};

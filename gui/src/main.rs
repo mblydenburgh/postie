@@ -13,17 +13,12 @@ use api::{
     PostieApi, ResponseData,
 };
 use components::{
-    content_header_panel::content_header_panel, content_panel::content_panel,
-    content_side_panel::content_side_panel, import_modal::import_modal, menu_panel::menu_panel,
-    new_modal::new_modal, side_panel::side_panel,
+    content_header_panel::content_header_panel, content_panel::content_panel, content_side_panel::content_side_panel, import_modal::import_modal, menu_panel::menu_panel, new_modal::new_modal, save_window::save_window, side_panel::side_panel
 };
 use eframe::{egui, App, NativeOptions};
 use serde::{Deserialize, Serialize};
 use std::{
-    cell::RefCell,
-    collections::{HashMap, HashSet},
-    rc::Rc,
-    sync::{Arc, Mutex},
+    cell::RefCell, collections::{HashMap, HashSet}, rc::Rc, sync::{Arc, Mutex}
 };
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -96,6 +91,7 @@ pub struct Gui {
     pub new_window_open: RwLock<bool>,
     pub new_window_mode: RwLock<ImportMode>,
     pub new_name: String,
+    pub save_window_open: RwLock<bool>,
     pub import_mode: RwLock<ImportMode>,
     pub import_file_path: String,
     pub import_result: Arc<Mutex<Option<String>>>,
@@ -161,6 +157,7 @@ impl Default for Gui {
             import_window_open: RwLock::new(false),
             new_window_open: RwLock::new(false),
             new_window_mode: RwLock::new(ImportMode::COLLECTION),
+            save_window_open: RwLock::new(false),
             new_name: "".into(),
             import_file_path: "".into(),
             import_mode: RwLock::new(ImportMode::COLLECTION),
@@ -407,6 +404,7 @@ impl App for Gui {
         content_panel(self, ctx);
         import_modal(self, ctx);
         new_modal(self, ctx);
+        save_window(self, ctx);
     }
 }
 
