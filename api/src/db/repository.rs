@@ -149,7 +149,7 @@ impl PostieDb {
     }
 
     pub async fn save_collection(&mut self, collection: Collection) -> anyhow::Result<()> {
-        println!("Saving collection to db");
+        println!("Saving collection {:#?} to db", collection.info);
         let mut transaction = self.connection.begin().await?;
         let items_json = serde_json::to_string(&collection.item)?;
         let auth_json = serde_json::to_string(&collection.auth)?;

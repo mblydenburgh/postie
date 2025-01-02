@@ -151,16 +151,17 @@ impl PostieApi {
             }
         }
     }
-    pub async fn add_request_to_collection(id: &str, req: &HttpRequest) -> anyhow::Result<()> {
+    pub async fn add_request_to_collection(id: &str, req: &HttpRequest, folder_name: &str) -> anyhow::Result<()> {
         let mut api = PostieApi::new().await;
-        println!("finding collection ${id} to update");
+        println!("finding collection {id} to update");
         let collections = api.db.get_all_collections().await?;
-        for collection in collections {
+        for mut collection in collections {
             if collection.info.id == id {
-                println!("updating");
-                for item in &collection.item {
-                    if let CollectionItemOrFolder::Folder(mut folder) = item.clone() {
-                        if folder.name == String::from("") {
+                println!("adding request to {folder_name}");
+                for item in &mut collection.item {
+                    if let CollectionItemOrFolder::Folder(ref mut folder) = item {
+                        if folder.name == folder_name {
+                            println!("found matching folder name, updating collection");
                             let mut res: Vec<CollectionRequestHeader> = vec![];
                             let headers: Vec<CollectionRequestHeader> = req.headers.clone().map(|headers| {
                                 for h in headers {
@@ -201,7 +202,6 @@ impl PostieApi {
                     item: updated_items,
                     auth: collection.auth,
                 };
-                println!("passing updated collection to db");
                 api.db.save_collection(updated).await?;
             }
         }

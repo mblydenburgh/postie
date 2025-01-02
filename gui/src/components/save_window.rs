@@ -22,9 +22,9 @@ pub fn save_window(gui: &mut Gui, ctx: &egui::Context) {
                     if let Some(cols) = collections.clone() {
                         let selected_collection = cols.clone().first().unwrap().clone();
                         let mut selected_request_folder =
-                            match selected_collection.item.first().unwrap() {
+                            match selected_collection.item.first().unwrap().clone() {
                                 CollectionItemOrFolder::Folder(folder) => folder,
-                                CollectionItemOrFolder::Item(_) => &CollectionFolder {
+                                CollectionItemOrFolder::Item(_) => CollectionFolder {
                                     name: "Root".to_string(),
                                     item: vec![],
                                 },
@@ -48,7 +48,7 @@ pub fn save_window(gui: &mut Gui, ctx: &egui::Context) {
                                         CollectionItemOrFolder::Folder(folder) => {
                                             ui.selectable_value(
                                                 &mut selected_request_folder,
-                                                folder,
+                                                folder.clone(),
                                                 folder.name.clone(),
                                             );
                                         }
@@ -95,9 +95,11 @@ pub fn save_window(gui: &mut Gui, ctx: &egui::Context) {
                                             values: None,
                                         },
                                     };
+                                    let folder_name = selected_request_folder.clone().name;
                                     let _ = PostieApi::add_request_to_collection(
                                         &selected_collection.info.id,
                                         &request,
+                                        &folder_name
                                     )
                                     .await;
                                 });
