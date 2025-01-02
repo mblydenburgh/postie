@@ -4,8 +4,8 @@ pub mod domain;
 use chrono::prelude::*;
 use db::repository;
 use domain::environment::EnvironmentFile;
-use domain::request::RequestHeaders;
-use domain::{collection::Collection, tab::Tab};
+use domain::request::{RequestHeader, RequestHeaders};
+use domain::{collection::{Collection, CollectionItemOrFolder, CollectionItem, CollectionRequest, CollectionUrl, CollectionRequestHeader}, tab::Tab};
 use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
     Method,
@@ -57,7 +57,7 @@ pub enum PostieRequest {
     OAUTH(OAuth2Request),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HttpRequest {
     pub tab_id: Uuid,
     pub id: Uuid,
@@ -151,11 +151,60 @@ impl PostieApi {
             }
         }
     }
-    pub async fn add_request_to_collection(
-        id: &str,
-        _req: HttpRequest,
-    ) -> anyhow::Result<()> {
-        println!("updating collection ${id} with request");
+    pub async fn add_request_to_collection(id: &str, req: &HttpRequest) -> anyhow::Result<()> {
+        let mut api = PostieApi::new().await;
+        println!("finding collection ${id} to update");
+        let collections = api.db.get_all_collections().await?;
+        for collection in collections {
+            if collection.info.id == id {
+                println!("updating");
+                for item in &collection.item {
+                    if let CollectionItemOrFolder::Folder(mut folder) = item.clone() {
+                        if folder.name == String::from("") {
+                            let mut res: Vec<CollectionRequestHeader> = vec![];
+                            let headers: Vec<CollectionRequestHeader> = req.headers.clone().map(|headers| {
+                                for h in headers {
+                                    res.push(CollectionRequestHeader {
+                                        key: h.0,
+                                        value: h.1,
+                                        r#type: String::from("")
+                                    });
+                                }
+                                res
+                            }).unwrap();
+                            folder.item.push(
+                                CollectionItemOrFolder::Item(CollectionItem{
+                                    name: req.clone().url,
+                                    request: CollectionRequest {
+                                        auth: None,
+                                        body: Some(domain::collection::RequestBody{
+                                            mode: String::from(""),
+                                            raw: None,
+                                            options: None,
+                                        }),
+                                        header: Some(headers),
+                                        method: req.method.to_string(),
+                                        url: CollectionUrl{
+                                            raw: req.clone().url,
+                                            path: None,
+                                            host: None,
+                                        },
+                                    },
+                                })
+                            );
+                        }
+                    }
+                }
+                let updated_items = collection.item;
+                let updated = Collection {
+                    info: collection.info,
+                    item: updated_items,
+                    auth: collection.auth,
+                };
+                println!("passing updated collection to db");
+                api.db.save_collection(updated).await?;
+            }
+        }
         Ok(())
     }
     // TODO - better error handling

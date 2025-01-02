@@ -7,7 +7,6 @@ use api::{
     },
     HttpRequest, PostieApi, RequestBody,
 };
-use egui::TextBuffer;
 use uuid::Uuid;
 
 use crate::Gui;
@@ -84,7 +83,9 @@ pub fn save_window(gui: &mut Gui, ctx: &egui::Context) {
                                         method: active_tab.method.clone(),
                                         url: active_tab.url.clone(),
                                         headers: Some(headers),
-                                        body: match serde_json::from_str(&active_tab.req_body.clone().as_str()) {
+                                        body: match serde_json::from_str(
+                                            &active_tab.req_body.clone().as_str(),
+                                        ) {
                                             Ok(body) => Some(RequestBody::JSON(body)),
                                             Err(_) => None,
                                         },
@@ -96,7 +97,7 @@ pub fn save_window(gui: &mut Gui, ctx: &egui::Context) {
                                     };
                                     let _ = PostieApi::add_request_to_collection(
                                         &selected_collection.info.id,
-                                        request,
+                                        &request,
                                     )
                                     .await;
                                 });

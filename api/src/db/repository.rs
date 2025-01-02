@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use anyhow::Error;
 use chrono::{DateTime, Utc};
 use serde_json::from_str;
 use sqlx::{sqlite::SqliteRow, Connection, Row, SqliteConnection};
@@ -7,7 +8,7 @@ use uuid::Uuid;
 
 use crate::domain::{
     collection::{Collection, CollectionAuth, CollectionInfo, CollectionItemOrFolder},
-    environment::EnvironmentFile,
+    environment::{EnvironmentFile, EnvironmentValue},
     request::{self, DBRequest, RequestHeader, RequestHeaders},
     request_item::RequestHistoryItem,
     response::{DBResponse, ResponseHeader},
