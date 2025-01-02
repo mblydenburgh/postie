@@ -151,6 +151,13 @@ impl PostieApi {
             }
         }
     }
+    pub async fn add_request_to_collection(
+        id: &str,
+        _req: HttpRequest,
+    ) -> anyhow::Result<()> {
+        println!("updating collection ${id} with request");
+        Ok(())
+    }
     // TODO - better error handling
     pub async fn import_environment(path: &str) -> anyhow::Result<String> {
         let mut api = PostieApi::new().await;

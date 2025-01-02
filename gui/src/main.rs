@@ -13,12 +13,17 @@ use api::{
     PostieApi, ResponseData,
 };
 use components::{
-    content_header_panel::content_header_panel, content_panel::content_panel, content_side_panel::content_side_panel, import_modal::import_modal, menu_panel::menu_panel, new_modal::new_modal, save_window::save_window, side_panel::side_panel
+    content_header_panel::content_header_panel, content_panel::content_panel,
+    content_side_panel::content_side_panel, import_modal::import_modal, menu_panel::menu_panel,
+    new_modal::new_modal, save_window::save_window, side_panel::side_panel,
 };
 use eframe::{egui, App, NativeOptions};
 use serde::{Deserialize, Serialize};
 use std::{
-    cell::RefCell, collections::{HashMap, HashSet}, rc::Rc, sync::{Arc, Mutex}
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    rc::Rc,
+    sync::{Arc, Mutex},
 };
 use tokio::sync::RwLock;
 use uuid::Uuid;

@@ -154,7 +154,7 @@ impl PostieDb {
         let auth_json = serde_json::to_string(&collection.auth)?;
         _ = sqlx::query!(
             r#"
-            INSERT INTO collections (id, name, description, item, auth)
+            INSERT OR REPLACE INTO collections (id, name, description, item, auth)
             VALUES ($1, $2, $3, $4, $5)
             "#,
             collection.info.id,
