@@ -14,25 +14,34 @@ This will be improved in the future but if you wish to persist your saved data, 
 in your currently used .app.
 ### Supported
 - Submitting GET, POST, PUT, PATCH, DELETE requests
+- Authentication types:
+  - Bearer Token
+  - OAuth 2.0
+  - API Key (via header)
+  - Unauthenticated
 - POST and PUT requests only support application/json body
-- Valid handling of responses with Content-Type of application/json, text/html, text/plain
+  - 
+- Response Types:
+  - application/json
+  - text/html
+  - text/plain
 - Environments with variable substition
 - Importing postman colellections
 - Importing postman environments
 - Request history is loading on application start to show previous requests & responses
 - Native mac application
 - Manage multiple requests at once with tabs
+- Saving requests to existing collections
 
 ### Not yet supported
 - Creating new collections from scratch
 - Infinite levels of collection nesting, currently only support one level of folder nesting
-- Multiple request tabs open at once
 - Tab data persists before hitting submit button on an unsent request
 - Exporting saved colellections
 - Exporting saved environments
 - File upload request bodies
-- XML request body and response (i see you soap people)
-- Pre-request scripts (rust or js)
+- Other Response Types not listed above (xml coming next!)
+- Pre-request scripts (in rust or js)
 - Data hosting (either cloud or self hosted via git)
 
 ## Building and running
@@ -60,3 +69,4 @@ To generate a new database file, run the following commands:
 * `sqlx migrate run` - runs all pending migrations
 
 You can then use any SQLite editor to open the `postie.sqlite` file to run queries.
+
