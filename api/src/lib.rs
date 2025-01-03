@@ -160,7 +160,7 @@ impl PostieApi {
     pub async fn add_request_to_collection(
         id: &str,
         req: HttpRequest,
-        folder_name: &str,
+        folder_name: String,
     ) -> anyhow::Result<()> {
         let mut api = PostieApi::new().await;
         println!("finding collection {id} to update");

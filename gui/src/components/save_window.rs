@@ -1,10 +1,7 @@
 use std::str::FromStr;
 
 use api::{
-    domain::{
-        collection::CollectionItemOrFolder,
-        environment::EnvironmentFile,
-    },
+    domain::{collection::CollectionItemOrFolder, environment::EnvironmentFile},
     HttpRequest, PostieApi, RequestBody,
 };
 use uuid::Uuid;
@@ -74,6 +71,7 @@ pub fn save_window(gui: &mut Gui, ctx: &egui::Context) {
                                 let selected_collection_id =
                                     selected_collection.clone().unwrap().info.id.clone();
 
+                                let selected_folder_value = selected_folder.clone();
                                 tokio::spawn(async move {
                                     let headers: Vec<(String, String)> = active_tab
                                         .req_headers
@@ -101,7 +99,7 @@ pub fn save_window(gui: &mut Gui, ctx: &egui::Context) {
                                     let _ = PostieApi::add_request_to_collection(
                                         &selected_collection_id,
                                         request,
-                                        "Azure User",
+                                        selected_folder_value.unwrap(),
                                     )
                                     .await;
                                 });
