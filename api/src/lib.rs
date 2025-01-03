@@ -5,7 +5,13 @@ use chrono::prelude::*;
 use db::repository;
 use domain::environment::EnvironmentFile;
 use domain::request::{RequestHeader, RequestHeaders};
-use domain::{collection::{Collection, CollectionItemOrFolder, CollectionItem, CollectionRequest, CollectionUrl, CollectionRequestHeader}, tab::Tab};
+use domain::{
+    collection::{
+        Collection, CollectionItem, CollectionItemOrFolder, CollectionRequest,
+        CollectionRequestHeader, CollectionUrl,
+    },
+    tab::Tab,
+};
 use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
     Method,
@@ -151,7 +157,11 @@ impl PostieApi {
             }
         }
     }
-    pub async fn add_request_to_collection(id: &str, req: &HttpRequest, folder_name: &str) -> anyhow::Result<()> {
+    pub async fn add_request_to_collection(
+        id: &str,
+        req: HttpRequest,
+        folder_name: &str,
+    ) -> anyhow::Result<()> {
         let mut api = PostieApi::new().await;
         println!("finding collection {id} to update");
         let collections = api.db.get_all_collections().await?;
@@ -163,36 +173,40 @@ impl PostieApi {
                         if folder.name == folder_name {
                             println!("found matching folder name, updating collection");
                             let mut res: Vec<CollectionRequestHeader> = vec![];
-                            let headers: Vec<CollectionRequestHeader> = req.headers.clone().map(|headers| {
-                                for h in headers {
-                                    res.push(CollectionRequestHeader {
-                                        key: h.0,
-                                        value: h.1,
-                                        r#type: String::from("")
-                                    });
-                                }
-                                res
-                            }).unwrap();
-                            folder.item.push(
-                                CollectionItemOrFolder::Item(CollectionItem{
+                            let headers: Vec<CollectionRequestHeader> = req
+                                .headers
+                                .clone()
+                                .map(|headers| {
+                                    for h in headers {
+                                        res.push(CollectionRequestHeader {
+                                            key: h.0,
+                                            value: h.1,
+                                            r#type: String::from(""),
+                                        });
+                                    }
+                                    res
+                                })
+                                .unwrap();
+                            folder
+                                .item
+                                .push(CollectionItemOrFolder::Item(CollectionItem {
                                     name: req.clone().url,
                                     request: CollectionRequest {
                                         auth: None,
-                                        body: Some(domain::collection::RequestBody{
+                                        body: Some(domain::collection::RequestBody {
                                             mode: String::from(""),
                                             raw: None,
                                             options: None,
                                         }),
                                         header: Some(headers),
                                         method: req.method.to_string(),
-                                        url: CollectionUrl{
+                                        url: CollectionUrl {
                                             raw: req.clone().url,
                                             path: None,
                                             host: None,
                                         },
                                     },
-                                })
-                            );
+                                }));
                         }
                     }
                 }
