@@ -77,7 +77,8 @@ pub fn save_window(gui: &mut Gui, ctx: &egui::Context) {
                                 let selected_collection_id =
                                     selected_collection.clone().unwrap().info.id.clone();
 
-                                let selected_folder_value = selected_folder.clone();
+                                let selected_folder_value_for_worker = selected_folder.clone();
+                                let collections_for_worker = gui.collections.clone();
                                 tokio::spawn(async move {
                                     let headers: Vec<(String, String)> = active_tab
                                         .req_headers
@@ -105,9 +106,10 @@ pub fn save_window(gui: &mut Gui, ctx: &egui::Context) {
                                     let _ = PostieApi::add_request_to_collection(
                                         &selected_collection_id,
                                         request,
-                                        selected_folder_value.unwrap(),
+                                        selected_folder_value_for_worker.unwrap(),
                                     )
                                     .await;
+                                    let _ = Gui::refresh_collections(collections_for_worker).await;
                                 });
                             }
                         }
