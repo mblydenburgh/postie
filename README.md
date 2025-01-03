@@ -20,7 +20,6 @@ in your currently used .app.
   - API Key (via header)
   - Unauthenticated
 - POST and PUT requests only support application/json body
-  - 
 - Response Types:
   - application/json
   - text/html
