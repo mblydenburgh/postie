@@ -23,7 +23,7 @@ pub fn menu_panel(gui: &mut Gui, ctx: &egui::Context) {
                             *new_model_mode = ImportMode::COLLECTION;
                         }
                     };
-                    if ui.button("Evnironment").clicked() {
+                    if ui.button("Environment").clicked() {
                         if let Ok(mut new_model_open) = gui.new_window_open.try_write() {
                             *new_model_open = true;
                         }
@@ -31,6 +31,13 @@ pub fn menu_panel(gui: &mut Gui, ctx: &egui::Context) {
                             *new_model_mode = ImportMode::ENVIRONMENT;
                         }
                     };
+                });
+                ui.menu_button("Save", |ui| {
+                    if ui.button("Request").clicked() {
+                        if let Ok(mut save_window_open) = gui.save_window_open.try_write() {
+                            *save_window_open = true;
+                        }
+                    }
                 });
                 ui.menu_button("Import", |ui| {
                     if ui.button("Collection").clicked() {

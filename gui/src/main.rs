@@ -15,7 +15,7 @@ use api::{
 use components::{
     content_header_panel::content_header_panel, content_panel::content_panel,
     content_side_panel::content_side_panel, import_modal::import_modal, menu_panel::menu_panel,
-    new_modal::new_modal, side_panel::side_panel,
+    new_modal::new_modal, save_window::save_window, side_panel::side_panel,
 };
 use eframe::{egui, App, NativeOptions};
 use serde::{Deserialize, Serialize};
@@ -79,6 +79,8 @@ pub struct Gui {
     pub selected_collection: Rc<RefCell<Option<api::domain::collection::Collection>>>,
     pub selected_http_method: api::HttpMethod,
     pub selected_auth_mode: AuthMode,
+    pub selected_save_window_collection: Option<api::domain::collection::Collection>,
+    pub selected_save_window_folder: Option<String>,
     pub api_key: String,
     pub api_key_name: String,
     pub bearer_token: String,
@@ -96,6 +98,7 @@ pub struct Gui {
     pub new_window_open: RwLock<bool>,
     pub new_window_mode: RwLock<ImportMode>,
     pub new_name: String,
+    pub save_window_open: RwLock<bool>,
     pub import_mode: RwLock<ImportMode>,
     pub import_file_path: String,
     pub import_result: Arc<Mutex<Option<String>>>,
@@ -134,6 +137,8 @@ impl Default for Gui {
             selected_history_item: Rc::new(RefCell::new(None)),
             selected_http_method: api::HttpMethod::GET,
             selected_auth_mode: AuthMode::NONE,
+            selected_save_window_collection: None,
+            selected_save_window_folder: None,
             selected_request: Rc::new(RefCell::new(None)),
             api_key_name: "".into(),
             api_key: "".into(),
@@ -161,6 +166,7 @@ impl Default for Gui {
             import_window_open: RwLock::new(false),
             new_window_open: RwLock::new(false),
             new_window_mode: RwLock::new(ImportMode::COLLECTION),
+            save_window_open: RwLock::new(false),
             new_name: "".into(),
             import_file_path: "".into(),
             import_mode: RwLock::new(ImportMode::COLLECTION),
@@ -407,6 +413,7 @@ impl App for Gui {
         content_panel(self, ctx);
         import_modal(self, ctx);
         new_modal(self, ctx);
+        save_window(self, ctx);
     }
 }
 

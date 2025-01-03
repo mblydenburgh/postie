@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use anyhow::Error;
 use chrono::{DateTime, Utc};
 use serde_json::from_str;
 use sqlx::{sqlite::SqliteRow, Connection, Row, SqliteConnection};
@@ -7,7 +8,7 @@ use uuid::Uuid;
 
 use crate::domain::{
     collection::{Collection, CollectionAuth, CollectionInfo, CollectionItemOrFolder},
-    environment::EnvironmentFile,
+    environment::{EnvironmentFile, EnvironmentValue},
     request::{self, DBRequest, RequestHeader, RequestHeaders},
     request_item::RequestHistoryItem,
     response::{DBResponse, ResponseHeader},
@@ -148,13 +149,13 @@ impl PostieDb {
     }
 
     pub async fn save_collection(&mut self, collection: Collection) -> anyhow::Result<()> {
-        println!("Saving collection to db");
+        println!("Saving collection {:#?} to db", collection.info);
         let mut transaction = self.connection.begin().await?;
         let items_json = serde_json::to_string(&collection.item)?;
         let auth_json = serde_json::to_string(&collection.auth)?;
         _ = sqlx::query!(
             r#"
-            INSERT INTO collections (id, name, description, item, auth)
+            INSERT OR REPLACE INTO collections (id, name, description, item, auth)
             VALUES ($1, $2, $3, $4, $5)
             "#,
             collection.info.id,

@@ -32,3 +32,35 @@ impl FromIterator<(String, String)> for RequestHeaders {
         h
     }
 }
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct RequestHeadersIterator<'a> {
+    headers: &'a [RequestHeader],
+    index: usize,
+}
+
+impl<'a> Iterator for RequestHeadersIterator<'a> {
+    type Item = &'a RequestHeader;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.headers.len() {
+            let result = &self.headers[self.index];
+            self.index += 1;
+            Some(result)
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a RequestHeaders {
+    type Item = &'a RequestHeader;
+    type IntoIter = RequestHeadersIterator<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        RequestHeadersIterator {
+            headers: &self.0,
+            index: 0,
+        }
+    }
+}

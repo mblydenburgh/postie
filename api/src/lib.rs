@@ -3,12 +3,15 @@ pub mod domain;
 
 use chrono::prelude::*;
 use db::repository;
-use domain::collection::{
-    CollectionInfo, CollectionItem, CollectionItemOrFolder, CollectionRequest,
-};
 use domain::environment::EnvironmentFile;
-use domain::request::RequestHeaders;
-use domain::{collection::Collection, tab::Tab};
+use domain::request::{RequestHeader, RequestHeaders};
+use domain::{
+    collection::{
+        Collection, CollectionItem, CollectionItemOrFolder, CollectionRequest,
+        CollectionRequestHeader, CollectionUrl,
+    },
+    tab::Tab,
+};
 use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
     Method,
@@ -60,7 +63,7 @@ pub enum PostieRequest {
     OAUTH(OAuth2Request),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HttpRequest {
     pub tab_id: Uuid,
     pub id: Uuid,
@@ -153,6 +156,70 @@ impl PostieApi {
                 Ok(String::from("Error saving collection"))
             }
         }
+    }
+    pub async fn add_request_to_collection(
+        id: &str,
+        req: HttpRequest,
+        folder_name: String,
+    ) -> anyhow::Result<()> {
+        let mut api = PostieApi::new().await;
+        println!("finding collection {id} to update");
+        let collections = api.db.get_all_collections().await?;
+        for mut collection in collections {
+            if collection.info.id == id {
+                println!("adding request to {folder_name}");
+                for item in &mut collection.item {
+                    if let CollectionItemOrFolder::Folder(ref mut folder) = item {
+                        if folder.name == folder_name {
+                            println!("found matching folder name, updating collection");
+                            let mut res: Vec<CollectionRequestHeader> = vec![];
+                            let headers: Vec<CollectionRequestHeader> = req
+                                .headers
+                                .clone()
+                                .map(|headers| {
+                                    for h in headers {
+                                        res.push(CollectionRequestHeader {
+                                            key: h.0,
+                                            value: h.1,
+                                            r#type: String::from(""),
+                                        });
+                                    }
+                                    res
+                                })
+                                .unwrap();
+                            folder
+                                .item
+                                .push(CollectionItemOrFolder::Item(CollectionItem {
+                                    name: req.clone().url,
+                                    request: CollectionRequest {
+                                        auth: None,
+                                        body: Some(domain::collection::RequestBody {
+                                            mode: String::from(""),
+                                            raw: None,
+                                            options: None,
+                                        }),
+                                        header: Some(headers),
+                                        method: req.method.to_string(),
+                                        url: CollectionUrl {
+                                            raw: req.clone().url,
+                                            path: None,
+                                            host: None,
+                                        },
+                                    },
+                                }));
+                        }
+                    }
+                }
+                let updated_items = collection.item;
+                let updated = Collection {
+                    info: collection.info,
+                    item: updated_items,
+                    auth: collection.auth,
+                };
+                api.db.save_collection(updated).await?;
+            }
+        }
+        Ok(())
     }
     // TODO - better error handling
     pub async fn import_environment(path: &str) -> anyhow::Result<String> {
