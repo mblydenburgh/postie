@@ -40,6 +40,12 @@ pub enum ImportMode {
     ENVIRONMENT,
 }
 #[derive(Serialize, Deserialize)]
+pub enum NewWindowMode {
+    COLLECTION,
+    ENVIRONMENT,
+    FOLDER,
+}
+#[derive(Serialize, Deserialize)]
 pub enum RequestWindowMode {
     AUTHORIZATION,
     PARAMS,
@@ -96,7 +102,7 @@ pub struct Gui {
     pub res_status: Arc<RwLock<String>>,
     pub import_window_open: RwLock<bool>,
     pub new_window_open: RwLock<bool>,
-    pub new_window_mode: RwLock<ImportMode>,
+    pub new_window_mode: RwLock<NewWindowMode>,
     pub new_name: String,
     pub save_window_open: RwLock<bool>,
     pub import_mode: RwLock<ImportMode>,
@@ -165,7 +171,7 @@ impl Default for Gui {
             res_status: Arc::new(RwLock::new("".into())),
             import_window_open: RwLock::new(false),
             new_window_open: RwLock::new(false),
-            new_window_mode: RwLock::new(ImportMode::COLLECTION),
+            new_window_mode: RwLock::new(NewWindowMode::COLLECTION),
             save_window_open: RwLock::new(false),
             new_name: "".into(),
             import_file_path: "".into(),

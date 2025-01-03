@@ -42,13 +42,11 @@ pub fn save_window(gui: &mut Gui, ctx: &egui::Context) {
                         if let Some(collection) = &selected_collection {
                             egui::ComboBox::from_label("Folder to add request to")
                                 .selected_text(
-                                    selected_folder.as_ref().map_or("Select a folder".to_string(), |f| {
-                                        f.clone()
-                                    })
+                                    selected_folder
+                                        .as_ref()
+                                        .map_or("Select a folder".to_string(), |f| f.clone()),
                                 )
-                                .show_ui(
-                                ui,
-                                |ui| {
+                                .show_ui(ui, |ui| {
                                     for item in collection.item.iter() {
                                         match item {
                                             CollectionItemOrFolder::Folder(folder) => {
@@ -61,8 +59,7 @@ pub fn save_window(gui: &mut Gui, ctx: &egui::Context) {
                                             CollectionItemOrFolder::Item(_) => {}
                                         }
                                     }
-                                },
-                            );
+                                });
                         }
 
                         if ui.button("Save").clicked() {

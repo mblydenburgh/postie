@@ -13,35 +13,38 @@ Note: currently when you update a version of the app, all data will be lost sinc
 This will be improved in the future but if you wish to persist your saved data, first save a backup copy of the .sqlite file 
 in your currently used .app.
 ### Supported
+- Native mac application
 - Submitting GET, POST, PUT, PATCH, DELETE requests
+  - POST and PUT requests only support application/json body
+- Response Types:
+  - application/json
+  - text/html
+  - text/plain
 - Authentication types:
   - Bearer Token
   - OAuth 2.0
   - API Key (via header)
   - Unauthenticated
-- POST and PUT requests only support application/json body
-- Response Types:
-  - application/json
-  - text/html
-  - text/plain
 - Environments with variable substition
 - Importing postman colellections
 - Importing postman environments
-- Request history is loading on application start to show previous requests & responses
-- Native mac application
-- Manage multiple requests at once with tabs
+- Creating new collections from scratch
 - Saving requests to existing collections
+- Request history is persisted and previous request/responses can be viewed again
+- Manage multiple requests at once with tabs
 
 ### Not yet supported
-- Creating new collections from scratch
 - Infinite levels of collection nesting, currently only support one level of folder nesting
 - Tab data persists before hitting submit button on an unsent request
+  - currently in order for a tab to persist, the request needs to be submitted or else the tab will be lost
 - Exporting saved colellections
 - Exporting saved environments
+- Deletion of imported collections and environments
+- Deletion of collection folders
 - File upload request bodies
 - Other Response Types not listed above (xml coming next!)
 - Pre-request scripts (in rust or js)
-- Data hosting (either cloud or self hosted via git)
+- Cloud hosting of sqlite tables (very future if at all)
 
 ## Building and running
 If you wish to run the application source locallyh, ensure that have a sqlite database set up (see Database Utils) and run the following command:

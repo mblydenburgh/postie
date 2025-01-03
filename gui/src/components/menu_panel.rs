@@ -3,7 +3,7 @@ use std::{ops::Deref, str::FromStr, sync::Arc};
 use egui::TopBottomPanel;
 use uuid::Uuid;
 
-use crate::{Gui, ImportMode, Tab};
+use crate::{Gui, ImportMode, NewWindowMode, Tab};
 
 pub fn menu_panel(gui: &mut Gui, ctx: &egui::Context) {
     TopBottomPanel::top("menu_panel").show(ctx, |ui| {
@@ -20,7 +20,15 @@ pub fn menu_panel(gui: &mut Gui, ctx: &egui::Context) {
                             *new_model_open = true;
                         }
                         if let Ok(mut new_model_mode) = gui.new_window_mode.try_write() {
-                            *new_model_mode = ImportMode::COLLECTION;
+                            *new_model_mode = NewWindowMode::COLLECTION;
+                        }
+                    };
+                    if ui.button("Collection Folder").clicked() {
+                        if let Ok(mut new_model_open) = gui.new_window_open.try_write() {
+                            *new_model_open = true;
+                        }
+                        if let Ok(mut new_model_mode) = gui.new_window_mode.try_write() {
+                            *new_model_mode = NewWindowMode::FOLDER;
                         }
                     };
                     if ui.button("Environment").clicked() {
@@ -28,7 +36,7 @@ pub fn menu_panel(gui: &mut Gui, ctx: &egui::Context) {
                             *new_model_open = true;
                         }
                         if let Ok(mut new_model_mode) = gui.new_window_mode.try_write() {
-                            *new_model_mode = ImportMode::ENVIRONMENT;
+                            *new_model_mode = NewWindowMode::ENVIRONMENT;
                         }
                     };
                 });
