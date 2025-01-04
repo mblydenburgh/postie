@@ -212,7 +212,7 @@ impl PostieApi {
             // request and save http request
             PostieRequest::HTTP(input) => {
                 println!("Submitting http request: {:?}", input);
-                let method = utilities::request::convert_http_method(input.method.clone());
+                let method = reqwest::Method::from(input.method.clone());
 
                 let mut headers = HeaderMap::new();
                 if let Some(h) = input.headers.clone() {

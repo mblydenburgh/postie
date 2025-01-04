@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use crate::domain::{environment, request};
 
+use reqwest;
 use serde::{Deserialize, Serialize};
 use sqlx;
 use uuid::Uuid;
@@ -101,6 +102,20 @@ impl FromStr for HttpMethod {
             "OPTIONS" => Ok(HttpMethod::OPTIONS),
             "HEAD" => Ok(HttpMethod::HEAD),
             _ => Err(HttpMethodParseError),
+        }
+    }
+}
+
+impl From<HttpMethod> for reqwest::Method {
+    fn from(value: HttpMethod) -> Self {
+        match value {
+            HttpMethod::GET => reqwest::Method::GET,
+            HttpMethod::POST => reqwest::Method::POST,
+            HttpMethod::PUT => reqwest::Method::PUT,
+            HttpMethod::PATCH => reqwest::Method::PATCH,
+            HttpMethod::DELETE => reqwest::Method::DELETE,
+            HttpMethod::HEAD => reqwest::Method::HEAD,
+            HttpMethod::OPTIONS => reqwest::Method::OPTIONS,
         }
     }
 }
