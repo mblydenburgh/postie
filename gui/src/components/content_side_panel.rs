@@ -26,7 +26,7 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                                 for i in c_clone.item {
                                     match i {
                                         api::domain::collection::CollectionItemOrFolder::Item(item) => {
-                                            if ui.selectable_value(&mut gui.selected_request, Rc::new(RefCell::from(Some(item.clone().request))), format!("{}", item.name)).clicked() {
+                                            if ui.selectable_value(&mut gui.selected_request, Rc::new(RefCell::from(Some(item.clone().request))), item.name.to_string()).clicked() {
                                                                     gui.url = item.request.url.raw.clone();
                                                                     gui.selected_http_method = HttpMethod::from_str(&item.request.method.clone()).unwrap();
                                                                     if let Some(body) = item.request.body {
@@ -54,7 +54,7 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                                                 for folder_item in folder.item {
                                                     match folder_item {
                                                         api::domain::collection::CollectionItemOrFolder::Item(i) => {
-                                                            if ui.selectable_value(&mut gui.selected_request, Rc::new(RefCell::from(Some(i.clone().request))), format!("{}", i.name))
+                                                            if ui.selectable_value(&mut gui.selected_request, Rc::new(RefCell::from(Some(i.clone().request))), i.name.to_string())
                                                                 .clicked() {
                                                                     gui.url = i.request.url.raw.clone();
                                                                     gui.selected_http_method = HttpMethod::from_str(&i.request.method.clone()).unwrap();
@@ -83,7 +83,7 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                                                                 header: None,
                                                                 body: None,
                                                             };
-                                                            if ui.selectable_value(&mut gui.selected_request, Rc::new(RefCell::from(Some(fallback_request))), format!("{}", f.name)).clicked() {
+                                                            if ui.selectable_value(&mut gui.selected_request, Rc::new(RefCell::from(Some(fallback_request))), f.name.to_string()).clicked() {
                                                             }
                                                         },
                                                     }
@@ -108,7 +108,7 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                                 ui.selectable_value(
                                     &mut gui.selected_environment,
                                     Rc::new(RefCell::from(env.clone())),
-                                    format!("{}", env.name),
+                                    env.name.to_string(),
                                 );
                             }
                         }
@@ -162,7 +162,7 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                                         Some(body) => {
                                             let json_val = serde_json::json!(&body);
                                             println!("val: {}", json_val);
-                                            let parsed_body = match serde_json::from_str(&body) {
+                                            let parsed_body = match serde_json::from_str(body) {
                                                 Ok(b) => ResponseData::JSON(b),
                                                 Err(e) => {
                                                     println!("{}", e);

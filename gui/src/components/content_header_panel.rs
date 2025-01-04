@@ -43,14 +43,14 @@ pub fn content_header_panel(gui: &mut Gui, ctx: &egui::Context) {
                     .headers
                     .borrow()
                     .iter()
-                    .filter(|h| h.0 == true)
+                    .filter(|h| h.0)
                     .map(|h| (h.1.to_owned(), h.2.to_owned()))
                     .collect::<Vec<(String, String)>>())
                 .to_vec();
                 match gui.selected_auth_mode {
                     ui::AuthMode::APIKEY => {
                         submitted_headers
-                            .push((String::from(gui.api_key_name.clone()), gui.api_key.clone()));
+                            .push((gui.api_key_name.clone(), gui.api_key.clone()));
                     }
                     ui::AuthMode::BEARER => {
                         submitted_headers.push((

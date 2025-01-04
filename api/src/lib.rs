@@ -64,11 +64,11 @@ impl PostieApi {
     }
     pub fn parse_collection(collection_json: &str) -> Collection {
         println!("Parsing collection from json");
-        serde_json::from_str(&collection_json).expect("Failed to parse collection")
+        serde_json::from_str(collection_json).expect("Failed to parse collection")
     }
     pub fn parse_environment(environment_json: &str) -> EnvironmentFile {
         println!("Parsing environment from json");
-        serde_json::from_str(&environment_json).expect("Failed to parse environment")
+        serde_json::from_str(environment_json).expect("Failed to parse environment")
     }
     pub fn read_file(path: &str) -> anyhow::Result<String> {
         println!("Reading file: {}", path);
@@ -239,7 +239,7 @@ impl PostieApi {
                 let mut headers = HeaderMap::new();
                 if let Some(h) = input.headers.clone() {
                     for (key, value) in h {
-                        let header_name = HeaderName::from_bytes(&key.as_bytes()).unwrap();
+                        let header_name = HeaderName::from_bytes(key.as_bytes()).unwrap();
                         let header_value = HeaderValue::from_str(&value).unwrap();
                         headers.insert(header_name, header_value);
                     }
@@ -262,7 +262,7 @@ impl PostieApi {
                 let res = req.send().await?;
                 let response_time = sent_at.elapsed().as_millis();
                 let res_headers = res.headers().clone();
-                let res_status = res.status().clone();
+                let res_status = res.status();
                 let res_type = res_headers.get("content-type").unwrap().to_str().unwrap();
                 let res_text = res.text().await?;
                 if !res_type.starts_with("application/json")
@@ -308,13 +308,13 @@ impl PostieApi {
                     url: input.url.clone(),
                     headers: request_headers,
                 };
-                let _ = db.save_request_history(&db_request).await?;
+                db.save_request_history(&db_request).await?;
                 let response_headers: Vec<domain::response::ResponseHeader> = res_headers
                     .borrow()
                     .into_iter()
                     .map(|(key, value)| domain::response::ResponseHeader {
-                        key: String::from(HeaderName::as_str(&key)),
-                        value: String::from(HeaderValue::to_str(&value).unwrap()),
+                        key: String::from(HeaderName::as_str(key)),
+                        value: String::from(HeaderValue::to_str(value).unwrap()),
                     })
                     .collect();
                 let db_response = DBResponse {
@@ -324,8 +324,8 @@ impl PostieApi {
                     headers: response_headers,
                     body: Some(res_text.clone()),
                 };
-                let _ = db.save_response(&db_response).await?;
-                let _ = db
+                db.save_response(&db_response).await?;
+                db
                     .save_request_response_item(&db_request, &db_response, &now, &response_time)
                     .await?;
                 let res_data = match res_type {
@@ -363,7 +363,7 @@ impl PostieApi {
                     res_body,
                     res_headers: RequestHeaders(vec![]),
                 };
-                let _ = db.save_tab(&updated_tab).await?;
+                db.save_tab(&updated_tab).await?;
                 Ok(Response {
                     data: res_data,
                     status: res_status.to_string(),

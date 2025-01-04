@@ -11,9 +11,9 @@ use crate::Gui;
 
 pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
     if let Ok(mut new_window_open) = gui.new_window_open.try_write() {
-        if *new_window_open == true {
+        if *new_window_open {
             egui::Window::new("Create new")
-                .open(&mut *new_window_open)
+                .open(&mut new_window_open)
                 .show(ctx, |ui| {
                     ui.horizontal(|ui| {
                         ui.label("Enter name: ");
@@ -60,7 +60,7 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                                             };
                                         let collections_for_worker = gui.collections.clone();
                                         let _ = tokio::spawn(async move {
-                                            let _ = PostieApi::save_collection(blank_collection)
+                                            PostieApi::save_collection(blank_collection)
                                                 .await
                                                 .unwrap();
                                         });
@@ -78,7 +78,7 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                                         };
                                         let envs_for_worker = gui.environments.clone();
                                         let _ = tokio::spawn(async move {
-                                            let _ = PostieApi::save_environment(blank_env)
+                                            PostieApi::save_environment(blank_env)
                                                 .await
                                                 .unwrap();
                                         });
@@ -111,7 +111,7 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                                                 auth: collection_for_worker.auth,
                                             };
 
-                                            let _ = PostieApi::save_collection(updated_collection)
+                                            PostieApi::save_collection(updated_collection)
                                                 .await
                                                 .unwrap();
 

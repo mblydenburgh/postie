@@ -1,6 +1,5 @@
 pub mod components;
 
-use anyhow;
 use api::{
     domain::{
         collection::Collection,
@@ -176,7 +175,7 @@ impl Gui {
             .into_iter()
             .map(|r| (r.id.clone(), r))
             .collect();
-        let tabs_by_id: HashMap<String, Tab> = if saved_tabs.len() > 0 {
+        let tabs_by_id: HashMap<String, Tab> = if !saved_tabs.is_empty() {
             saved_tabs.into_iter().map(|r| (r.id.clone(), r)).collect()
         } else {
             let default_tab = Tab {
@@ -228,16 +227,16 @@ impl Gui {
         let mut saved_requests_write_guard = requests.try_write().unwrap();
         let mut saved_responses_write_guard = responses.try_write().unwrap();
         let mut tabs_write_guard = tabs.try_write().unwrap();
-        *request_history_item_write_guard = Some(request_history_items).into();
+        *request_history_item_write_guard = Some(request_history_items);
         *saved_requests_write_guard = Some(requests_by_id);
-        *saved_responses_write_guard = Some(responses_by_id).into();
+        *saved_responses_write_guard = Some(responses_by_id);
         let tabs_by_id = saved_tabs.into_iter().map(|r| (r.id.clone(), r)).collect();
         *tabs_write_guard = tabs_by_id;
     }
     async fn refresh_collections(old_collections: Arc<RwLock<Option<Vec<Collection>>>>) {
         let collections = PostieApi::load_collections().await.unwrap();
         let mut collection_write_guard = old_collections.try_write().unwrap();
-        *collection_write_guard = Some(collections).into();
+        *collection_write_guard = Some(collections);
     }
     async fn refresh_environments(old_environments: Arc<RwLock<Option<Vec<EnvironmentFile>>>>) {
         let envs = PostieApi::load_environments()
@@ -253,7 +252,7 @@ impl Gui {
                 }]),
             }]);
         let mut environment_write_guard = old_environments.try_write().unwrap();
-        *environment_write_guard = Some(envs).into();
+        *environment_write_guard = Some(envs);
     }
     async fn submit(input: HttpRequest) -> anyhow::Result<api::Response> {
         PostieApi::make_request(PostieRequest::HTTP(input)).await

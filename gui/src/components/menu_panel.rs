@@ -103,7 +103,7 @@ pub fn menu_panel(gui: &mut Gui, ctx: &egui::Context) {
         let tabs = tabs_clone.try_read().unwrap();
         ui.horizontal(|ui| {
             for tab in &*tabs {
-                let name = if tab.1.url == "" {
+                let name = if tab.1.url.is_empty() {
                     "Unsent Request".to_string()
                 } else {
                     tab.1.url.clone()

@@ -169,7 +169,7 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                                         };
                                         let _ = Gui::spawn_ouath_request(sender, oauth_input);
                                     };
-                                    if &gui.oauth_token != "" {
+                                    if !gui.oauth_token.is_empty() {
                                         ui.horizontal(|ui| {
                                             ui.label("Token Result:");
                                             ui.add(
