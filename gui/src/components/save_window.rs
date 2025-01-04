@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
 use api::{
-    domain::{collection::CollectionItemOrFolder, environment::EnvironmentFile},
-    HttpRequest, PostieApi, RequestBody,
+    domain::{collection::CollectionItemOrFolder, environment::EnvironmentFile, request::{HttpRequest, RequestBody}},
+    PostieApi,
 };
 use uuid::Uuid;
 

@@ -1,18 +1,18 @@
-use std::{cell::RefMut, fmt::Pointer};
+use std::cell::RefMut;
 
-use api::{domain::environment::EnvironmentValue, ResponseData};
+use api::{domain::environment::EnvironmentValue, domain::request,domain::ui, ResponseData};
 use egui::{CentralPanel, ComboBox, ScrollArea, TextEdit, TextStyle, TopBottomPanel};
 use egui_extras::{Column, TableBuilder};
 use egui_json_tree::JsonTree;
 
-use crate::{AuthMode, Gui, RequestWindowMode};
+use crate::Gui;
 
 pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
     let sender = &mut gui.sender.clone();
     let receiver = &mut gui.receiver;
     if let Ok(request_window_mode) = gui.request_window_mode.try_read() {
         match *request_window_mode {
-            RequestWindowMode::BODY => {
+            ui::RequestWindowMode::BODY => {
                 TopBottomPanel::top("request_panel")
                     .resizable(true)
                     .min_height(250.0)
@@ -49,12 +49,12 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                                         ScrollArea::vertical().show(ui, |ui| {
                                             ui.label(x);
                                         });
-                                    },
+                                    }
                                     ResponseData::UNKNOWN(text) => {
                                         ScrollArea::vertical().show(ui, |ui| {
                                             ui.label(text);
                                         });
-                                    },
+                                    }
                                 };
                             });
                         }
@@ -66,12 +66,12 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                     }
                 };
             }
-            RequestWindowMode::PARAMS => {
+            ui::RequestWindowMode::PARAMS => {
                 CentralPanel::default().show(ctx, |ui| {
                     ui.label("params");
                 });
             }
-            RequestWindowMode::AUTHORIZATION => {
+            ui::RequestWindowMode::AUTHORIZATION => {
                 CentralPanel::default().show(ctx, |_ui| {
                     TopBottomPanel::top("oauth_request")
                         .resizable(true)
@@ -81,33 +81,33 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                                 .show_ui(ui, |ui| {
                                     ui.selectable_value(
                                         &mut gui.selected_auth_mode,
-                                        AuthMode::BEARER,
+                                        ui::AuthMode::BEARER,
                                         "Bearer",
                                     );
                                     ui.selectable_value(
                                         &mut gui.selected_auth_mode,
-                                        AuthMode::APIKEY,
+                                        ui::AuthMode::APIKEY,
                                         "Api Key",
                                     );
                                     ui.selectable_value(
                                         &mut gui.selected_auth_mode,
-                                        AuthMode::OAUTH2,
+                                        ui::AuthMode::OAUTH2,
                                         "OAuth2",
                                     );
                                     ui.selectable_value(
                                         &mut gui.selected_auth_mode,
-                                        AuthMode::NONE,
+                                        ui::AuthMode::NONE,
                                         "None",
                                     );
                                 });
                             match gui.selected_auth_mode {
-                                AuthMode::APIKEY => {
+                                ui::AuthMode::APIKEY => {
                                     ui.label("Api Key Value");
                                     ui.text_edit_multiline(&mut gui.api_key);
                                     ui.label("Header Name");
                                     ui.text_edit_singleline(&mut gui.api_key_name);
                                 }
-                                AuthMode::BEARER => {
+                                ui::AuthMode::BEARER => {
                                     ScrollArea::vertical().show(ui, |ui| {
                                         ui.label("Enter Bearer Token");
                                         ui.add(
@@ -116,7 +116,7 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                                         );
                                     });
                                 }
-                                AuthMode::OAUTH2 => {
+                                ui::AuthMode::OAUTH2 => {
                                     ui.heading("Configure New Token");
                                     ui.horizontal(|ui| {
                                         ui.label("Access Token Url");
@@ -149,7 +149,7 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
 
                                     if ui.button("Request Token").clicked() {
                                         println!("requesting token");
-                                        let oauth_input = api::OAuth2Request {
+                                        let oauth_input = request::OAuth2Request {
                                             access_token_url: gui
                                                 .oauth_config
                                                 .access_token_url
@@ -157,7 +157,7 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                                             refresh_url: gui.oauth_config.refresh_url.clone(),
                                             client_id: gui.oauth_config.client_id.clone(),
                                             client_secret: gui.oauth_config.client_secret.clone(),
-                                            request: api::OAuthRequestBody {
+                                            request: request::OAuthRequestBody {
                                                 grant_type: gui
                                                     .oauth_config
                                                     .request
@@ -204,12 +204,12 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                                         }
                                     }
                                 }
-                                AuthMode::NONE => (),
+                                ui::AuthMode::NONE => (),
                             };
                         });
                 });
             }
-            RequestWindowMode::HEADERS => {
+            ui::RequestWindowMode::HEADERS => {
                 CentralPanel::default().show(ctx, |ui| {
                     let table = TableBuilder::new(ui)
                         .striped(true)
@@ -259,7 +259,7 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                         });
                 });
             }
-            RequestWindowMode::ENVIRONMENT => {
+            ui::RequestWindowMode::ENVIRONMENT => {
                 CentralPanel::default().show(ctx, |ui| {
                     let table = TableBuilder::new(ui)
                         .striped(true)

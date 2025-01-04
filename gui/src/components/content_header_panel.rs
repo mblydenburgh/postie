@@ -1,10 +1,10 @@
 use std::borrow::BorrowMut;
 
-use api::{HttpMethod, HttpRequest};
+use api::domain::{request, ui};
 use egui::{ComboBox, TopBottomPanel};
 use uuid::Uuid;
 
-use crate::{AuthMode, Gui, RequestWindowMode};
+use crate::Gui;
 
 pub fn content_header_panel(gui: &mut Gui, ctx: &egui::Context) {
     TopBottomPanel::top("top_panel").show(ctx, |ui| {
@@ -12,27 +12,27 @@ pub fn content_header_panel(gui: &mut Gui, ctx: &egui::Context) {
             ComboBox::from_label("")
                 .selected_text(format!("{:?}", gui.selected_http_method))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut gui.selected_http_method, HttpMethod::GET, "GET");
-                    ui.selectable_value(&mut gui.selected_http_method, HttpMethod::POST, "POST");
-                    ui.selectable_value(&mut gui.selected_http_method, HttpMethod::PUT, "PUT");
+                    ui.selectable_value(&mut gui.selected_http_method, request::HttpMethod::GET, "GET");
+                    ui.selectable_value(&mut gui.selected_http_method, request::HttpMethod::POST, "POST");
+                    ui.selectable_value(&mut gui.selected_http_method, request::HttpMethod::PUT, "PUT");
                     ui.selectable_value(
                         &mut gui.selected_http_method,
-                        HttpMethod::DELETE,
+                        request::HttpMethod::DELETE,
                         "DELETE",
                     );
-                    ui.selectable_value(&mut gui.selected_http_method, HttpMethod::PATCH, "PATCH");
+                    ui.selectable_value(&mut gui.selected_http_method, request::HttpMethod::PATCH, "PATCH");
                     ui.selectable_value(
                         &mut gui.selected_http_method,
-                        HttpMethod::OPTIONS,
+                        request::HttpMethod::OPTIONS,
                         "OPTIONS",
                     );
-                    ui.selectable_value(&mut gui.selected_http_method, HttpMethod::HEAD, "HEAD");
+                    ui.selectable_value(&mut gui.selected_http_method, request::HttpMethod::HEAD, "HEAD");
                 });
             ui.label("URL:");
             ui.add(egui::TextEdit::singleline(&mut gui.url).desired_width(400.0));
             if ui.button("Submit").clicked() {
-                let body = if gui.selected_http_method != HttpMethod::GET {
-                    Some(api::RequestBody::JSON(
+                let body = if gui.selected_http_method != request::HttpMethod::GET {
+                    Some(request::RequestBody::JSON(
                         serde_json::from_str(&gui.body_str).expect("Body is invalid json"),
                     ))
                 } else {
@@ -48,23 +48,23 @@ pub fn content_header_panel(gui: &mut Gui, ctx: &egui::Context) {
                     .collect::<Vec<(String, String)>>())
                 .to_vec();
                 match gui.selected_auth_mode {
-                    AuthMode::APIKEY => {
+                    ui::AuthMode::APIKEY => {
                         submitted_headers
                             .push((String::from(gui.api_key_name.clone()), gui.api_key.clone()));
                     }
-                    AuthMode::BEARER => {
+                    ui::AuthMode::BEARER => {
                         submitted_headers.push((
                             String::from("Authorization"),
                             format!("Bearer {}", gui.bearer_token),
                         ));
                     }
-                    AuthMode::OAUTH2 => {
+                    ui::AuthMode::OAUTH2 => {
                         submitted_headers.push((
                             String::from("Authorization"),
                             format!("Bearer {}", gui.oauth_token),
                         ));
                     }
-                    AuthMode::NONE => (),
+                    ui::AuthMode::NONE => (),
                 };
 
                 let active_tab_guard = gui.active_tab.borrow_mut();
@@ -74,7 +74,7 @@ pub fn content_header_panel(gui: &mut Gui, ctx: &egui::Context) {
                 } else {
                     Uuid::new_v4()
                 };
-                let request = HttpRequest {
+                let request = request::HttpRequest {
                     tab_id,
                     id: Uuid::new_v4(),
                     name: None,
@@ -91,19 +91,19 @@ pub fn content_header_panel(gui: &mut Gui, ctx: &egui::Context) {
         if let Ok(mut request_window_mode) = gui.request_window_mode.try_write() {
             ui.horizontal(|ui| {
                 if ui.button("Environment").clicked() {
-                    *request_window_mode = RequestWindowMode::ENVIRONMENT;
+                    *request_window_mode = ui::RequestWindowMode::ENVIRONMENT;
                 }
                 /*if ui.button("Params").clicked() {
                     *request_window_mode = RequestWindowMode::PARAMS;
                 }*/
                 if ui.button("Auth").clicked() {
-                    *request_window_mode = RequestWindowMode::AUTHORIZATION;
+                    *request_window_mode = ui::RequestWindowMode::AUTHORIZATION;
                 }
                 if ui.button("Headers").clicked() {
-                    *request_window_mode = RequestWindowMode::HEADERS;
+                    *request_window_mode = ui::RequestWindowMode::HEADERS;
                 }
                 if ui.button("Body").clicked() {
-                    *request_window_mode = RequestWindowMode::BODY;
+                    *request_window_mode = ui::RequestWindowMode::BODY;
                 }
             });
         }

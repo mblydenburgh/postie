@@ -2,7 +2,9 @@ use std::{thread, time};
 
 use api::PostieApi;
 
-use crate::{Gui, ImportMode};
+use api::domain::ui;
+
+use crate::Gui;
 
 pub fn import_modal(gui: &mut Gui, ctx: &egui::Context) {
     if let Ok(mut import_window_open) = gui.import_window_open.try_write() {
@@ -28,7 +30,7 @@ pub fn import_modal(gui: &mut Gui, ctx: &egui::Context) {
                             if let Ok(import_mode) = gui.import_mode.try_read() {
                                 let import_result_clone = gui.import_result.clone();
                                 match *import_mode {
-                                    ImportMode::COLLECTION => {
+                                    ui::ImportMode::COLLECTION => {
                                         let collections_for_worker = gui.collections.clone();
                                         _ = tokio::spawn(async move {
                                             let res =
@@ -42,7 +44,7 @@ pub fn import_modal(gui: &mut Gui, ctx: &egui::Context) {
                                             Gui::refresh_collections(collections_for_worker).await;
                                         });
                                     }
-                                    ImportMode::ENVIRONMENT => {
+                                    ui::ImportMode::ENVIRONMENT => {
                                         let environments_for_worker = gui.environments.clone();
                                         _ = tokio::spawn(async move {
                                             let res =

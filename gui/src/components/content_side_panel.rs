@@ -1,19 +1,20 @@
 use std::{cell::RefCell, rc::Rc, str::FromStr, sync::Arc};
 
-use crate::{ActiveWindow, Gui};
+use crate::Gui;
 use api::{
     domain::{
         collection::{CollectionRequest, CollectionUrl},
-        request::DBRequest,
+        request::{DBRequest, HttpMethod},
+        ui,
     },
-    HttpMethod, ResponseData,
+    ResponseData,
 };
 use egui::{ScrollArea, SidePanel};
 
 pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
     if let Ok(active_window) = gui.active_window.try_read() {
         SidePanel::left("content_panel").show(ctx, |ui| match *active_window {
-                ActiveWindow::COLLECTIONS => {
+                ui::ActiveWindow::COLLECTIONS => {
                     ScrollArea::vertical().show(ui, |ui| {
                     ui.label("Collections");
                     let collections_clone = Arc::clone(&gui.collections);
@@ -97,7 +98,7 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                     }
                     });
                 }
-                ActiveWindow::ENVIRONMENT => {
+                ui::ActiveWindow::ENVIRONMENT => {
                     ScrollArea::vertical().show(ui, |ui| {
                         ui.label("Environments");
                         let envs_clone = Arc::clone(&gui.environments);
@@ -113,7 +114,7 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                         }
                     });
                 }
-                ActiveWindow::HISTORY => {
+                ui::ActiveWindow::HISTORY => {
                     ScrollArea::vertical().show(ui, |ui| {
                         ui.label("History");
                         let history_items_clone = Arc::clone(&gui.request_history_items);

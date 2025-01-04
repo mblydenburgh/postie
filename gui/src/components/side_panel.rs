@@ -1,6 +1,7 @@
 use egui::SidePanel;
 
-use crate::{ActiveWindow, Gui};
+use api::domain::ui::ActiveWindow;
+use crate::Gui;
 
 pub fn side_panel(gui: &mut Gui, ctx: &egui::Context) {
     SidePanel::left("nav_panel").show(ctx, |ui| {

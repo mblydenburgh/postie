@@ -1,9 +1,13 @@
 use std::{thread, time};
 
-use api::{domain::collection::{Collection, CollectionFolder, CollectionItemOrFolder}, PostieApi};
+use api::{
+    domain::collection::{Collection, CollectionFolder, CollectionItemOrFolder},
+    domain::ui::NewWindowMode,
+    PostieApi,
+};
 use uuid::Uuid;
 
-use crate::{Gui, NewWindowMode};
+use crate::Gui;
 
 pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
     if let Ok(mut new_window_open) = gui.new_window_open.try_write() {
@@ -19,7 +23,7 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                                 NewWindowMode::FOLDER => {
                                     let collections = &gui.collections.try_read().unwrap().clone();
                                     let selected_collection =
-                                    &mut gui.selected_save_window_collection;
+                                        &mut gui.selected_save_window_collection;
                                     if let Some(cols) = collections {
                                         egui::ComboBox::from_label("Collection to add folder to")
                                             .selected_text(
@@ -86,7 +90,8 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                                     }
                                     NewWindowMode::FOLDER => {
                                         //call to update collection with new folder
-                                        let collection_for_worker = gui.selected_save_window_collection.clone().unwrap();
+                                        let collection_for_worker =
+                                            gui.selected_save_window_collection.clone().unwrap();
                                         let collections_for_worker = gui.collections.clone();
                                         let name_for_worker = gui.new_name.clone();
 
@@ -94,15 +99,16 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                                             // take selected collection, add new folder to the top
                                             // `item` field as with no requests
                                             let mut collection_items = collection_for_worker.item;
-                                            let new_folder = CollectionItemOrFolder::Folder(CollectionFolder{
-                                                name: name_for_worker,
-                                                item: vec![]
-                                            });
+                                            let new_folder =
+                                                CollectionItemOrFolder::Folder(CollectionFolder {
+                                                    name: name_for_worker,
+                                                    item: vec![],
+                                                });
                                             collection_items.push(new_folder);
-                                            let updated_collection: Collection = Collection{
+                                            let updated_collection: Collection = Collection {
                                                 info: collection_for_worker.info,
                                                 item: collection_items,
-                                                auth: collection_for_worker.auth
+                                                auth: collection_for_worker.auth,
                                             };
 
                                             let _ = PostieApi::save_collection(updated_collection)

@@ -3,7 +3,9 @@ use std::{ops::Deref, str::FromStr, sync::Arc};
 use egui::TopBottomPanel;
 use uuid::Uuid;
 
-use crate::{Gui, ImportMode, NewWindowMode, Tab};
+use api::domain::{tab, ui};
+
+use crate::Gui;
 
 pub fn menu_panel(gui: &mut Gui, ctx: &egui::Context) {
     TopBottomPanel::top("menu_panel").show(ctx, |ui| {
@@ -12,7 +14,7 @@ pub fn menu_panel(gui: &mut Gui, ctx: &egui::Context) {
                 ui.menu_button("New", |ui| {
                     if ui.button("Request").clicked() {
                         let mut tabs = gui.tabs.try_write().unwrap();
-                        let new_tab = Tab::default();
+                        let new_tab = tab::Tab::default();
                         tabs.insert(new_tab.id.clone(), new_tab);
                     }
                     if ui.button("Collection").clicked() {
@@ -20,7 +22,7 @@ pub fn menu_panel(gui: &mut Gui, ctx: &egui::Context) {
                             *new_model_open = true;
                         }
                         if let Ok(mut new_model_mode) = gui.new_window_mode.try_write() {
-                            *new_model_mode = NewWindowMode::COLLECTION;
+                            *new_model_mode = ui::NewWindowMode::COLLECTION;
                         }
                     };
                     if ui.button("Collection Folder").clicked() {
@@ -28,7 +30,7 @@ pub fn menu_panel(gui: &mut Gui, ctx: &egui::Context) {
                             *new_model_open = true;
                         }
                         if let Ok(mut new_model_mode) = gui.new_window_mode.try_write() {
-                            *new_model_mode = NewWindowMode::FOLDER;
+                            *new_model_mode = ui::NewWindowMode::FOLDER;
                         }
                     };
                     if ui.button("Environment").clicked() {
@@ -36,7 +38,7 @@ pub fn menu_panel(gui: &mut Gui, ctx: &egui::Context) {
                             *new_model_open = true;
                         }
                         if let Ok(mut new_model_mode) = gui.new_window_mode.try_write() {
-                            *new_model_mode = NewWindowMode::ENVIRONMENT;
+                            *new_model_mode = ui::NewWindowMode::ENVIRONMENT;
                         }
                     };
                 });
@@ -53,7 +55,7 @@ pub fn menu_panel(gui: &mut Gui, ctx: &egui::Context) {
                             *import_open = true;
                         }
                         if let Ok(mut import_mode) = gui.import_mode.try_write() {
-                            *import_mode = ImportMode::COLLECTION;
+                            *import_mode = ui::ImportMode::COLLECTION;
                         }
                     };
                     if ui.button("Environment").clicked() {
@@ -61,7 +63,7 @@ pub fn menu_panel(gui: &mut Gui, ctx: &egui::Context) {
                             *import_open = true;
                         }
                         if let Ok(mut import_mode) = gui.import_mode.try_write() {
-                            *import_mode = ImportMode::ENVIRONMENT;
+                            *import_mode = ui::ImportMode::ENVIRONMENT;
                         }
                     };
                 });
