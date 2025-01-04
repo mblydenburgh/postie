@@ -1,16 +1,15 @@
 pub mod components;
 
-use anyhow;
 use api::{
     domain::{
         collection::Collection,
         environment::{EnvironmentFile, EnvironmentValue},
-        request::DBRequest,
+        request::{DBRequest, HttpRequest, OAuth2Request, OAuthRequestBody, PostieRequest},
         request_item::RequestHistoryItem,
-        response::DBResponse,
+        response::{DBResponse, Response, ResponseData},
         tab::Tab,
     },
-    PostieApi, ResponseData,
+    PostieApi,
 };
 use components::{
     content_header_panel::content_header_panel, content_panel::content_panel,
@@ -18,7 +17,6 @@ use components::{
     new_modal::new_modal, save_window::save_window, side_panel::side_panel,
 };
 use eframe::{egui, App, NativeOptions};
-use serde::{Deserialize, Serialize};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -28,51 +26,12 @@ use std::{
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize)]
-pub enum ActiveWindow {
-    COLLECTIONS,
-    ENVIRONMENT,
-    HISTORY,
-}
-#[derive(Serialize, Deserialize)]
-pub enum ImportMode {
-    COLLECTION,
-    ENVIRONMENT,
-}
-#[derive(Serialize, Deserialize)]
-pub enum NewWindowMode {
-    COLLECTION,
-    ENVIRONMENT,
-    FOLDER,
-}
-#[derive(Serialize, Deserialize)]
-pub enum RequestWindowMode {
-    AUTHORIZATION,
-    PARAMS,
-    HEADERS,
-    BODY,
-    ENVIRONMENT,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum AuthMode {
-    APIKEY,
-    BEARER,
-    OAUTH2,
-    NONE,
-}
-impl std::fmt::Display for AuthMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
 /* Holds all ui state, I found that keeping each property separate makes updating easier as you
  * dont need to worry about passing around a single reference to all parts of the ui that are
  * accessing it at once. Up for thoughts on how to make this a little cleaner though.
 */
 pub struct Gui {
-    pub response: Arc<RwLock<Option<api::ResponseData>>>,
+    pub response: Arc<RwLock<Option<ResponseData>>>,
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
     pub environments: Arc<RwLock<Option<Vec<api::domain::environment::EnvironmentFile>>>>,
     pub collections: Arc<RwLock<Option<Vec<api::domain::collection::Collection>>>>,
@@ -83,29 +42,29 @@ pub struct Gui {
     pub selected_history_item: Rc<RefCell<Option<api::domain::request_item::RequestHistoryItem>>>,
     pub selected_environment: Rc<RefCell<api::domain::environment::EnvironmentFile>>,
     pub selected_collection: Rc<RefCell<Option<api::domain::collection::Collection>>>,
-    pub selected_http_method: api::HttpMethod,
-    pub selected_auth_mode: AuthMode,
+    pub selected_http_method: api::domain::request::HttpMethod,
+    pub selected_auth_mode: api::domain::ui::AuthMode,
     pub selected_save_window_collection: Option<api::domain::collection::Collection>,
     pub selected_save_window_folder: Option<String>,
     pub api_key: String,
     pub api_key_name: String,
     pub bearer_token: String,
     pub oauth_response: Arc<RwLock<Option<ResponseData>>>,
-    pub oauth_config: api::OAuth2Request,
+    pub oauth_config: OAuth2Request,
     pub oauth_token: String,
     pub selected_request: Rc<RefCell<Option<api::domain::collection::CollectionRequest>>>,
     pub env_vars: Rc<RefCell<Vec<EnvironmentValue>>>,
-    pub active_window: RwLock<ActiveWindow>,
-    pub request_window_mode: RwLock<RequestWindowMode>,
+    pub active_window: RwLock<api::domain::ui::ActiveWindow>,
+    pub request_window_mode: RwLock<api::domain::ui::RequestWindowMode>,
     pub url: String,
     pub body_str: String,
     pub res_status: Arc<RwLock<String>>,
     pub import_window_open: RwLock<bool>,
     pub new_window_open: RwLock<bool>,
-    pub new_window_mode: RwLock<NewWindowMode>,
+    pub new_window_mode: RwLock<api::domain::ui::NewWindowMode>,
     pub new_name: String,
     pub save_window_open: RwLock<bool>,
-    pub import_mode: RwLock<ImportMode>,
+    pub import_mode: RwLock<api::domain::ui::ImportMode>,
     pub import_file_path: String,
     pub import_result: Arc<Mutex<Option<String>>>,
     pub sender: tokio::sync::mpsc::Sender<Option<ResponseData>>,
@@ -141,8 +100,8 @@ impl Default for Gui {
             })),
             selected_collection: Rc::new(RefCell::new(None)),
             selected_history_item: Rc::new(RefCell::new(None)),
-            selected_http_method: api::HttpMethod::GET,
-            selected_auth_mode: AuthMode::NONE,
+            selected_http_method: api::domain::request::HttpMethod::GET,
+            selected_auth_mode: api::domain::ui::AuthMode::NONE,
             selected_save_window_collection: None,
             selected_save_window_folder: None,
             selected_request: Rc::new(RefCell::new(None)),
@@ -150,12 +109,12 @@ impl Default for Gui {
             api_key: "".into(),
             oauth_response: Arc::new(RwLock::new(None)),
             oauth_token: "".into(),
-            oauth_config: api::OAuth2Request {
+            oauth_config: OAuth2Request {
                 access_token_url: "".into(),
                 refresh_url: "".into(),
                 client_id: "".into(),
                 client_secret: "".into(),
-                request: api::OAuthRequestBody {
+                request: OAuthRequestBody {
                     grant_type: "client_credentials".into(),
                     scope: "".into(),
                     audience: "".into(),
@@ -164,18 +123,18 @@ impl Default for Gui {
             bearer_token: String::from(""),
             saved_requests: Arc::new(RwLock::new(None)),
             saved_responses: Arc::new(RwLock::new(None)),
-            active_window: RwLock::new(ActiveWindow::COLLECTIONS),
-            request_window_mode: RwLock::new(RequestWindowMode::BODY),
+            active_window: RwLock::new(api::domain::ui::ActiveWindow::COLLECTIONS),
+            request_window_mode: RwLock::new(api::domain::ui::RequestWindowMode::BODY),
             url: "".into(),
             body_str: "".into(),
             res_status: Arc::new(RwLock::new("".into())),
             import_window_open: RwLock::new(false),
             new_window_open: RwLock::new(false),
-            new_window_mode: RwLock::new(NewWindowMode::COLLECTION),
+            new_window_mode: RwLock::new(api::domain::ui::NewWindowMode::COLLECTION),
             save_window_open: RwLock::new(false),
             new_name: "".into(),
             import_file_path: "".into(),
-            import_mode: RwLock::new(ImportMode::COLLECTION),
+            import_mode: RwLock::new(api::domain::ui::ImportMode::COLLECTION),
             import_result: Arc::new(Mutex::new(None)),
             sender,
             receiver,
@@ -215,8 +174,23 @@ impl Gui {
             .into_iter()
             .map(|r| (r.id.clone(), r))
             .collect();
-        let tabs_by_id: HashMap<String, Tab> =
-            saved_tabs.into_iter().map(|r| (r.id.clone(), r)).collect();
+        let tabs_by_id: HashMap<String, Tab> = if !saved_tabs.is_empty() {
+            saved_tabs.into_iter().map(|r| (r.id.clone(), r)).collect()
+        } else {
+            let default_tab = Tab {
+                id: Uuid::new_v4().to_string(),
+                method: api::domain::request::HttpMethod::GET,
+                url: "".into(),
+                req_body: "".into(),
+                req_headers: api::domain::request::RequestHeaders(vec![]),
+                res_status: None,
+                res_body: "".into(),
+                res_headers: api::domain::request::RequestHeaders(vec![]),
+            };
+            let mut default_tab_map: HashMap<String, Tab> = HashMap::new();
+            default_tab_map.insert(Uuid::new_v4().to_string(), default_tab);
+            default_tab_map
+        };
         let mut default = Gui::default();
         default.environments = Arc::new(RwLock::from(Some(envs)));
         default.collections = Arc::new(RwLock::from(Some(collections)));
@@ -224,9 +198,18 @@ impl Gui {
         default.saved_requests = Arc::new(RwLock::from(Some(requests_by_id)));
         default.saved_responses = Arc::new(RwLock::from(Some(responses_by_id)));
         default.tabs = Arc::new(RwLock::new(tabs_by_id.clone()));
-        default.active_tab = Arc::new(RwLock::new(Some(
-            tabs_by_id.values().next().unwrap().clone(),
-        )));
+        let default_active_tab = tabs_by_id.values().next().unwrap().clone();
+        default.active_tab = Arc::new(RwLock::new(Some(default_active_tab.clone())));
+        default.url = default_active_tab.url.clone();
+        default.body_str = default_active_tab.req_body.clone();
+        default.selected_http_method = default_active_tab.method.clone();
+        default.res_status = Arc::new(RwLock::new(
+            default_active_tab.res_status.clone().unwrap_or("".into()),
+        ));
+        let response_data = ResponseData::JSON(
+            serde_json::from_str(&default_active_tab.res_body).unwrap_or(serde_json::Value::Null),
+        );
+        default.response = Arc::new(RwLock::new(Some(response_data)));
         default
     }
     async fn refresh_request_data(
@@ -252,16 +235,16 @@ impl Gui {
         let mut saved_requests_write_guard = requests.try_write().unwrap();
         let mut saved_responses_write_guard = responses.try_write().unwrap();
         let mut tabs_write_guard = tabs.try_write().unwrap();
-        *request_history_item_write_guard = Some(request_history_items).into();
+        *request_history_item_write_guard = Some(request_history_items);
         *saved_requests_write_guard = Some(requests_by_id);
-        *saved_responses_write_guard = Some(responses_by_id).into();
+        *saved_responses_write_guard = Some(responses_by_id);
         let tabs_by_id = saved_tabs.into_iter().map(|r| (r.id.clone(), r)).collect();
         *tabs_write_guard = tabs_by_id;
     }
     async fn refresh_collections(old_collections: Arc<RwLock<Option<Vec<Collection>>>>) {
         let collections = PostieApi::load_collections().await.unwrap();
         let mut collection_write_guard = old_collections.try_write().unwrap();
-        *collection_write_guard = Some(collections).into();
+        *collection_write_guard = Some(collections);
     }
     async fn refresh_environments(old_environments: Arc<RwLock<Option<Vec<EnvironmentFile>>>>) {
         let envs = PostieApi::load_environments()
@@ -277,14 +260,14 @@ impl Gui {
                 }]),
             }]);
         let mut environment_write_guard = old_environments.try_write().unwrap();
-        *environment_write_guard = Some(envs).into();
+        *environment_write_guard = Some(envs);
     }
-    async fn submit(input: api::HttpRequest) -> anyhow::Result<api::Response> {
-        PostieApi::make_request(api::PostieRequest::HTTP(input)).await
+    async fn submit(input: HttpRequest) -> anyhow::Result<Response> {
+        PostieApi::make_request(PostieRequest::HTTP(input)).await
     }
     // egui needs to run on the main thread so all async requests need to be run on a worker
     // thread.
-    fn spawn_submit(&mut self, input: api::HttpRequest) -> anyhow::Result<()> {
+    fn spawn_submit(&mut self, input: HttpRequest) -> anyhow::Result<()> {
         // TODO figure out how to impl Send for Gui so it can be passed to another thread.
         // currently getting an error. Workaround is to just clone the PostieApi
         let response_for_worker = self.response.clone();
@@ -346,8 +329,8 @@ impl Gui {
             .await;
         });
     }
-    async fn oauth_token_request(input: api::OAuth2Request) -> anyhow::Result<api::ResponseData> {
-        let res = PostieApi::make_request(api::PostieRequest::OAUTH(input))
+    async fn oauth_token_request(input: OAuth2Request) -> anyhow::Result<ResponseData> {
+        let res = PostieApi::make_request(PostieRequest::OAUTH(input))
             .await
             .ok()
             .unwrap();
@@ -356,7 +339,7 @@ impl Gui {
     }
     fn spawn_ouath_request(
         sender: &mut tokio::sync::mpsc::Sender<Option<ResponseData>>,
-        input: api::OAuth2Request,
+        input: OAuth2Request,
     ) -> anyhow::Result<()> {
         let sender_for_worker = sender.clone();
         tokio::spawn(async move {

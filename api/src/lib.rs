@@ -1,120 +1,28 @@
 pub mod db;
 pub mod domain;
+pub mod utilities;
 
 use chrono::prelude::*;
 use db::repository;
 use domain::environment::EnvironmentFile;
-use domain::request::{RequestHeader, RequestHeaders};
+use domain::request::RequestHeaders;
 use domain::{
     collection::{
         Collection, CollectionItem, CollectionItemOrFolder, CollectionRequest,
         CollectionRequestHeader, CollectionUrl,
     },
+    request::{HttpRequest, PostieRequest, RequestBody},
+    response::{Response, ResponseData},
     tab::Tab,
 };
 use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
     Method,
 };
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use std::{borrow::Borrow, fs, str::FromStr};
+use std::{borrow::Borrow, fs};
 use uuid::Uuid;
 
 use crate::domain::{request::DBRequest, request_item::RequestHistoryItem, response::DBResponse};
-
-#[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
-pub enum HttpMethod {
-    GET,
-    POST,
-    PUT,
-    PATCH,
-    DELETE,
-    OPTIONS,
-    HEAD,
-}
-impl std::fmt::Display for HttpMethod {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-#[derive(Debug)]
-pub struct HttpMethodParseError;
-impl FromStr for HttpMethod {
-    type Err = HttpMethodParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "GET" => Ok(HttpMethod::GET),
-            "POST" => Ok(HttpMethod::POST),
-            "PUT" => Ok(HttpMethod::PUT),
-            "PATCH" => Ok(HttpMethod::PATCH),
-            "DELETE" => Ok(HttpMethod::DELETE),
-            "OPTIONS" => Ok(HttpMethod::OPTIONS),
-            "HEAD" => Ok(HttpMethod::HEAD),
-            _ => Err(HttpMethodParseError),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum PostieRequest {
-    HTTP(HttpRequest),
-    OAUTH(OAuth2Request),
-}
-
-#[derive(Debug, Clone)]
-pub struct HttpRequest {
-    pub tab_id: Uuid,
-    pub id: Uuid,
-    pub name: Option<String>,
-    pub method: HttpMethod,
-    pub url: String,
-    pub headers: Option<Vec<(String, String)>>,
-    pub body: Option<RequestBody>,
-    pub environment: EnvironmentFile,
-}
-
-#[derive(Clone, Debug)]
-pub enum RequestBody {
-    JSON(serde_json::Value),
-    FORM(String),
-}
-
-#[derive(Debug)]
-pub struct OAuth2Request {
-    pub access_token_url: String,
-    pub refresh_url: String,
-    pub client_id: String,
-    pub client_secret: String,
-    pub request: OAuthRequestBody,
-}
-
-#[derive(Debug, Serialize)]
-pub struct OAuthRequestBody {
-    pub grant_type: String,
-    pub scope: String,
-    pub audience: String,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-pub struct OAuthResponse {
-    pub access_token: String,
-    pub expires_in: i32,
-    pub token_type: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct Response {
-    pub status: String,
-    pub data: ResponseData,
-}
-
-#[derive(Clone, Debug)]
-pub enum ResponseData {
-    JSON(serde_json::Value),
-    TEXT(String),
-}
 
 pub struct PostieApi {
     pub client: reqwest::Client,
@@ -134,11 +42,11 @@ impl PostieApi {
     }
     pub fn parse_collection(collection_json: &str) -> Collection {
         println!("Parsing collection from json");
-        serde_json::from_str(&collection_json).expect("Failed to parse collection")
+        serde_json::from_str(collection_json).expect("Failed to parse collection")
     }
     pub fn parse_environment(environment_json: &str) -> EnvironmentFile {
         println!("Parsing environment from json");
-        serde_json::from_str(&environment_json).expect("Failed to parse environment")
+        serde_json::from_str(environment_json).expect("Failed to parse environment")
     }
     pub fn read_file(path: &str) -> anyhow::Result<String> {
         println!("Reading file: {}", path);
@@ -304,20 +212,12 @@ impl PostieApi {
             // request and save http request
             PostieRequest::HTTP(input) => {
                 println!("Submitting http request: {:?}", input);
-                let method = match input.method {
-                    HttpMethod::GET => Method::GET,
-                    HttpMethod::POST => Method::POST,
-                    HttpMethod::PUT => Method::PUT,
-                    HttpMethod::PATCH => Method::PATCH,
-                    HttpMethod::DELETE => Method::DELETE,
-                    HttpMethod::HEAD => Method::HEAD,
-                    HttpMethod::OPTIONS => Method::OPTIONS,
-                };
+                let method = reqwest::Method::from(input.method.clone());
 
                 let mut headers = HeaderMap::new();
                 if let Some(h) = input.headers.clone() {
                     for (key, value) in h {
-                        let header_name = HeaderName::from_bytes(&key.as_bytes()).unwrap();
+                        let header_name = HeaderName::from_bytes(key.as_bytes()).unwrap();
                         let header_value = HeaderValue::from_str(&value).unwrap();
                         headers.insert(header_name, header_value);
                     }
@@ -340,23 +240,9 @@ impl PostieApi {
                 let res = req.send().await?;
                 let response_time = sent_at.elapsed().as_millis();
                 let res_headers = res.headers().clone();
-                let res_status = res.status().clone();
-                let res_type = &res_headers.get("content-type").unwrap().to_str().unwrap();
+                let res_status = res.status();
+                let res_type = res_headers.get("content-type").unwrap().to_str().unwrap();
                 let res_text = res.text().await?;
-                if !res_type.starts_with("application/json")
-                    && !res_type.starts_with("text/plain")
-                    && !res_type.starts_with("text/html")
-                {
-                    // I couldn't figure out how to safely throw an error so I'm just returning this for now
-                    println!(
-                        "expected application/json text/html, or text/plain, got {}",
-                        res_type
-                    );
-                    return Ok(Response {
-                        data: ResponseData::JSON(json!({"err": "unsupported response type!"})),
-                        status: res_status.to_string(),
-                    });
-                }
 
                 let request_headers = input
                     .headers
@@ -382,13 +268,13 @@ impl PostieApi {
                     url: input.url.clone(),
                     headers: request_headers,
                 };
-                let _ = db.save_request_history(&db_request).await?;
+                db.save_request_history(&db_request).await?;
                 let response_headers: Vec<domain::response::ResponseHeader> = res_headers
                     .borrow()
                     .into_iter()
                     .map(|(key, value)| domain::response::ResponseHeader {
-                        key: String::from(HeaderName::as_str(&key)),
-                        value: String::from(HeaderValue::to_str(&value).unwrap()),
+                        key: String::from(HeaderName::as_str(key)),
+                        value: String::from(HeaderValue::to_str(value).unwrap()),
                     })
                     .collect();
                 let db_response = DBResponse {
@@ -398,19 +284,15 @@ impl PostieApi {
                     headers: response_headers,
                     body: Some(res_text.clone()),
                 };
-                let _ = db.save_response(&db_response).await?;
-                let _ = db
-                    .save_request_response_item(&db_request, &db_response, &now, &response_time)
+                db.save_response(&db_response).await?;
+                db.save_request_response_item(&db_request, &db_response, &now, &response_time)
                     .await?;
-                let response_data = if res_type.starts_with("application/json") {
-                    let res_json = serde_json::from_str(&res_text)?;
-                    ResponseData::JSON(res_json)
-                } else {
-                    ResponseData::TEXT(res_text)
-                };
-                let res_body = match &response_data {
+                let response = utilities::response::build_response(res_type, res_status, res_text)?;
+                let res_body = match &response.data {
                     ResponseData::JSON(j) => j.to_string(),
                     ResponseData::TEXT(t) => t.to_string(),
+                    ResponseData::XML(x) => x.to_string(),
+                    ResponseData::UNKNOWN(t) => t.to_string(),
                 };
                 let updated_tab = Tab {
                     id: input.tab_id.to_string(),
@@ -422,11 +304,8 @@ impl PostieApi {
                     res_body,
                     res_headers: RequestHeaders(vec![]),
                 };
-                let _ = db.save_tab(&updated_tab).await?;
-                Ok(Response {
-                    data: response_data,
-                    status: res_status.to_string(),
-                })
+                db.save_tab(&updated_tab).await?;
+                Ok(response)
             }
             // if making an oauth token request, dont save to db
             PostieRequest::OAUTH(input) => {

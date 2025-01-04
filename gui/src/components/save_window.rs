@@ -1,8 +1,12 @@
 use std::str::FromStr;
 
 use api::{
-    domain::{collection::CollectionItemOrFolder, environment::EnvironmentFile},
-    HttpRequest, PostieApi, RequestBody,
+    domain::{
+        collection::CollectionItemOrFolder,
+        environment::EnvironmentFile,
+        request::{HttpRequest, RequestBody},
+    },
+    PostieApi,
 };
 use uuid::Uuid;
 
@@ -12,7 +16,7 @@ pub fn save_window(gui: &mut Gui, ctx: &egui::Context) {
     if let Ok(mut save_window_open) = gui.save_window_open.try_write() {
         if *save_window_open {
             egui::Window::new("Save request")
-                .open(&mut *save_window_open)
+                .open(&mut save_window_open)
                 .show(ctx, |ui| {
                     let collections = &gui.collections.try_read().unwrap().clone();
 

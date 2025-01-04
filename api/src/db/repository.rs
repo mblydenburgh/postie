@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use anyhow::Error;
 use chrono::{DateTime, Utc};
 use serde_json::from_str;
 use sqlx::{sqlite::SqliteRow, Connection, Row, SqliteConnection};
@@ -8,8 +7,8 @@ use uuid::Uuid;
 
 use crate::domain::{
     collection::{Collection, CollectionAuth, CollectionInfo, CollectionItemOrFolder},
-    environment::{EnvironmentFile, EnvironmentValue},
-    request::{self, DBRequest, RequestHeader, RequestHeaders},
+    environment::EnvironmentFile,
+    request::{self, DBRequest, HttpMethod, RequestHeader, RequestHeaders},
     request_item::RequestHistoryItem,
     response::{DBResponse, ResponseHeader},
     tab::Tab,
@@ -386,11 +385,11 @@ impl PostieDb {
                     url,
                     req_body: req_body.unwrap_or_default(),
                     method: match method.as_str() {
-                        "GET" => crate::HttpMethod::GET,
-                        "POST" => crate::HttpMethod::POST,
-                        "PUT" => crate::HttpMethod::PUT,
-                        "DELETE" => crate::HttpMethod::DELETE,
-                        _ => crate::HttpMethod::GET,
+                        "GET" => HttpMethod::GET,
+                        "POST" => HttpMethod::POST,
+                        "PUT" => HttpMethod::PUT,
+                        "DELETE" => HttpMethod::DELETE,
+                        _ => HttpMethod::GET,
                     },
                     res_status,
                     req_headers: headers,
