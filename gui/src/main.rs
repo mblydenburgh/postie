@@ -215,8 +215,23 @@ impl Gui {
             .into_iter()
             .map(|r| (r.id.clone(), r))
             .collect();
-        let tabs_by_id: HashMap<String, Tab> =
-            saved_tabs.into_iter().map(|r| (r.id.clone(), r)).collect();
+        let tabs_by_id: HashMap<String, Tab> = if saved_tabs.len() > 0 {
+            saved_tabs.into_iter().map(|r| (r.id.clone(), r)).collect()
+        } else {
+            let default_tab = Tab {
+                id: Uuid::new_v4().to_string(),
+                method: api::HttpMethod::GET,
+                url: "".into(),
+                req_body: "".into(),
+                req_headers: api::domain::request::RequestHeaders(vec![]),
+                res_status: None,
+                res_body: "".into(),
+                res_headers: api::domain::request::RequestHeaders(vec![]),
+            };
+            let mut default_tab_map: HashMap<String, Tab> = HashMap::new();
+            default_tab_map.insert(Uuid::new_v4().to_string(), default_tab );
+            default_tab_map
+        };
         let mut default = Gui::default();
         default.environments = Arc::new(RwLock::from(Some(envs)));
         default.collections = Arc::new(RwLock::from(Some(collections)));

@@ -1,4 +1,4 @@
-use std::cell::RefMut;
+use std::{cell::RefMut, fmt::Pointer};
 
 use api::{domain::environment::EnvironmentValue, ResponseData};
 use egui::{CentralPanel, ComboBox, ScrollArea, TextEdit, TextStyle, TopBottomPanel};
@@ -45,6 +45,16 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                                             ui.label(text);
                                         });
                                     }
+                                    ResponseData::XML(x) => {
+                                        ScrollArea::vertical().show(ui, |ui| {
+                                            ui.label(x);
+                                        });
+                                    },
+                                    ResponseData::UNKNOWN(text) => {
+                                        ScrollArea::vertical().show(ui, |ui| {
+                                            ui.label(text);
+                                        });
+                                    },
                                 };
                             });
                         }
@@ -188,7 +198,7 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                                                         ui.label(data.access_token.clone());
                                                         gui.oauth_token = data.access_token.clone();
                                                     }
-                                                    ResponseData::TEXT(_t) => todo!(),
+                                                    _ => todo!(),
                                                 }
                                             }
                                         }

@@ -4,7 +4,7 @@ pub mod domain;
 use chrono::prelude::*;
 use db::repository;
 use domain::environment::EnvironmentFile;
-use domain::request::{RequestHeader, RequestHeaders};
+use domain::request::RequestHeaders;
 use domain::{
     collection::{
         Collection, CollectionItem, CollectionItemOrFolder, CollectionRequest,
@@ -114,6 +114,8 @@ pub struct Response {
 pub enum ResponseData {
     JSON(serde_json::Value),
     TEXT(String),
+    XML(String),
+    UNKNOWN(String)
 }
 
 pub struct PostieApi {
@@ -341,19 +343,21 @@ impl PostieApi {
                 let response_time = sent_at.elapsed().as_millis();
                 let res_headers = res.headers().clone();
                 let res_status = res.status().clone();
-                let res_type = &res_headers.get("content-type").unwrap().to_str().unwrap();
+                let res_type = res_headers.get("content-type").unwrap().to_str().unwrap();
                 let res_text = res.text().await?;
                 if !res_type.starts_with("application/json")
                     && !res_type.starts_with("text/plain")
                     && !res_type.starts_with("text/html")
+                    && !res_type.starts_with("application/xml")
+                    && !res_type.starts_with("text/xml")
                 {
                     // I couldn't figure out how to safely throw an error so I'm just returning this for now
                     println!(
-                        "expected application/json text/html, or text/plain, got {}",
+                        "expected application/json, application/xml, text/xml, text/html, or text/plain, got {}",
                         res_type
                     );
                     return Ok(Response {
-                        data: ResponseData::JSON(json!({"err": "unsupported response type!"})),
+                        data: ResponseData::JSON(json!({"err": println!("unsupported response type {}!", res_type)})),
                         status: res_status.to_string(),
                     });
                 }
@@ -402,15 +406,36 @@ impl PostieApi {
                 let _ = db
                     .save_request_response_item(&db_request, &db_response, &now, &response_time)
                     .await?;
-                let response_data = if res_type.starts_with("application/json") {
-                    let res_json = serde_json::from_str(&res_text)?;
-                    ResponseData::JSON(res_json)
-                } else {
-                    ResponseData::TEXT(res_text)
+                let res_data = match res_type {
+                    "application/json" => {
+                        let res_json = serde_json::from_str(&res_text)?;
+                        ResponseData::JSON(res_json)
+                    },
+                    "application/xml" => {
+                        // TODO - validate xml, currently trying to use serder_xml_rs::from_str()
+                        // fails
+                        ResponseData::XML(res_text)
+                    },
+                    "text/plain" => {
+                        ResponseData::TEXT(res_text)
+                    },
+                    "text/html" => {
+                        ResponseData::TEXT(res_text)
+                    },
+                    "text/xml" => {
+                        // TODO - validate xml, currently trying to use serder_xml_rs::from_str()
+                        // fails
+                        ResponseData::XML(res_text)
+                    },
+                    _ => {
+                        ResponseData::UNKNOWN("".into())
+                    }
                 };
-                let res_body = match &response_data {
+                let res_body = match &res_data {
                     ResponseData::JSON(j) => j.to_string(),
                     ResponseData::TEXT(t) => t.to_string(),
+                    ResponseData::XML(x) => x.to_string(),
+                    ResponseData::UNKNOWN(t) => t.to_string()
                 };
                 let updated_tab = Tab {
                     id: input.tab_id.to_string(),
@@ -424,7 +449,7 @@ impl PostieApi {
                 };
                 let _ = db.save_tab(&updated_tab).await?;
                 Ok(Response {
-                    data: response_data,
+                    data: res_data,
                     status: res_status.to_string(),
                 })
             }
