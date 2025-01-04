@@ -18,8 +18,10 @@ in your currently used .app.
   - POST and PUT requests only support application/json body
 - Response Types:
   - application/json
+  - application/xml (rendered as plain text)
   - text/html
   - text/plain
+  - text/xml (rendered as plain text)
 - Authentication types:
   - Bearer Token
   - OAuth 2.0
@@ -42,7 +44,8 @@ in your currently used .app.
 - Deletion of imported collections and environments
 - Deletion of collection folders
 - File upload request bodies
-- Other Response Types not listed above (xml coming next!)
+- Other Response Types not listed above
+- Render XML responses in an interactive way similar to json
 - Pre-request scripts (in rust or js)
 - Cloud hosting of sqlite tables (very future if at all)
 
