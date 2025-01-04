@@ -78,9 +78,7 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                                         };
                                         let envs_for_worker = gui.environments.clone();
                                         let _ = tokio::spawn(async move {
-                                            PostieApi::save_environment(blank_env)
-                                                .await
-                                                .unwrap();
+                                            PostieApi::save_environment(blank_env).await.unwrap();
                                         });
                                         _ = tokio::spawn(async move {
                                             let sleep = time::Duration::from_millis(50);

@@ -18,3 +18,24 @@ pub struct ResponseHeader {
     pub key: String,
     pub value: String,
 }
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct OAuthResponse {
+    pub access_token: String,
+    pub expires_in: i32,
+    pub token_type: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct Response {
+    pub status: String,
+    pub data: ResponseData,
+}
+
+#[derive(Clone, Debug)]
+pub enum ResponseData {
+    JSON(serde_json::Value),
+    TEXT(String),
+    XML(String),
+    UNKNOWN(String),
+}

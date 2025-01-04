@@ -1,6 +1,11 @@
 use std::cell::RefMut;
 
-use api::{domain::environment::EnvironmentValue, domain::request,domain::ui, ResponseData};
+use api::{
+    domain::environment::EnvironmentValue,
+    domain::request,
+    domain::response::{OAuthResponse, ResponseData},
+    domain::ui,
+};
 use egui::{CentralPanel, ComboBox, ScrollArea, TextEdit, TextStyle, TopBottomPanel};
 use egui_extras::{Column, TableBuilder};
 use egui_json_tree::JsonTree;
@@ -190,7 +195,7 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
                                                 match r {
                                                     ResponseData::JSON(j) => {
                                                         let data = serde_json::from_value::<
-                                                            api::OAuthResponse,
+                                                            OAuthResponse,
                                                         >(
                                                             j
                                                         )

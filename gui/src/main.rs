@@ -4,12 +4,12 @@ use api::{
     domain::{
         collection::Collection,
         environment::{EnvironmentFile, EnvironmentValue},
-        request::{DBRequest, HttpRequest, PostieRequest, OAuth2Request, OAuthRequestBody},
+        request::{DBRequest, HttpRequest, OAuth2Request, OAuthRequestBody, PostieRequest},
         request_item::RequestHistoryItem,
-        response::DBResponse,
+        response::{DBResponse, Response, ResponseData},
         tab::Tab,
     },
-    PostieApi, ResponseData,
+    PostieApi,
 };
 use components::{
     content_header_panel::content_header_panel, content_panel::content_panel,
@@ -26,13 +26,12 @@ use std::{
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-
 /* Holds all ui state, I found that keeping each property separate makes updating easier as you
  * dont need to worry about passing around a single reference to all parts of the ui that are
  * accessing it at once. Up for thoughts on how to make this a little cleaner though.
 */
 pub struct Gui {
-    pub response: Arc<RwLock<Option<api::ResponseData>>>,
+    pub response: Arc<RwLock<Option<ResponseData>>>,
     pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
     pub environments: Arc<RwLock<Option<Vec<api::domain::environment::EnvironmentFile>>>>,
     pub collections: Arc<RwLock<Option<Vec<api::domain::collection::Collection>>>>,
@@ -199,9 +198,18 @@ impl Gui {
         default.saved_requests = Arc::new(RwLock::from(Some(requests_by_id)));
         default.saved_responses = Arc::new(RwLock::from(Some(responses_by_id)));
         default.tabs = Arc::new(RwLock::new(tabs_by_id.clone()));
-        default.active_tab = Arc::new(RwLock::new(Some(
-            tabs_by_id.values().next().unwrap().clone(),
-        )));
+        let default_active_tab = tabs_by_id.values().next().unwrap().clone();
+        default.active_tab = Arc::new(RwLock::new(Some(default_active_tab.clone())));
+        default.url = default_active_tab.url.clone();
+        default.body_str = default_active_tab.req_body.clone();
+        default.selected_http_method = default_active_tab.method.clone();
+        default.res_status = Arc::new(RwLock::new(
+            default_active_tab.res_status.clone().unwrap_or("".into()),
+        ));
+        let response_data = ResponseData::JSON(
+            serde_json::from_str(&default_active_tab.res_body).unwrap_or(serde_json::Value::Null),
+        );
+        default.response = Arc::new(RwLock::new(Some(response_data)));
         default
     }
     async fn refresh_request_data(
@@ -254,7 +262,7 @@ impl Gui {
         let mut environment_write_guard = old_environments.try_write().unwrap();
         *environment_write_guard = Some(envs);
     }
-    async fn submit(input: HttpRequest) -> anyhow::Result<api::Response> {
+    async fn submit(input: HttpRequest) -> anyhow::Result<Response> {
         PostieApi::make_request(PostieRequest::HTTP(input)).await
     }
     // egui needs to run on the main thread so all async requests need to be run on a worker
@@ -321,7 +329,7 @@ impl Gui {
             .await;
         });
     }
-    async fn oauth_token_request(input: OAuth2Request) -> anyhow::Result<api::ResponseData> {
+    async fn oauth_token_request(input: OAuth2Request) -> anyhow::Result<ResponseData> {
         let res = PostieApi::make_request(PostieRequest::OAUTH(input))
             .await
             .ok()

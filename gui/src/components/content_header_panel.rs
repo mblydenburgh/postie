@@ -12,21 +12,41 @@ pub fn content_header_panel(gui: &mut Gui, ctx: &egui::Context) {
             ComboBox::from_label("")
                 .selected_text(format!("{:?}", gui.selected_http_method))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut gui.selected_http_method, request::HttpMethod::GET, "GET");
-                    ui.selectable_value(&mut gui.selected_http_method, request::HttpMethod::POST, "POST");
-                    ui.selectable_value(&mut gui.selected_http_method, request::HttpMethod::PUT, "PUT");
+                    ui.selectable_value(
+                        &mut gui.selected_http_method,
+                        request::HttpMethod::GET,
+                        "GET",
+                    );
+                    ui.selectable_value(
+                        &mut gui.selected_http_method,
+                        request::HttpMethod::POST,
+                        "POST",
+                    );
+                    ui.selectable_value(
+                        &mut gui.selected_http_method,
+                        request::HttpMethod::PUT,
+                        "PUT",
+                    );
                     ui.selectable_value(
                         &mut gui.selected_http_method,
                         request::HttpMethod::DELETE,
                         "DELETE",
                     );
-                    ui.selectable_value(&mut gui.selected_http_method, request::HttpMethod::PATCH, "PATCH");
+                    ui.selectable_value(
+                        &mut gui.selected_http_method,
+                        request::HttpMethod::PATCH,
+                        "PATCH",
+                    );
                     ui.selectable_value(
                         &mut gui.selected_http_method,
                         request::HttpMethod::OPTIONS,
                         "OPTIONS",
                     );
-                    ui.selectable_value(&mut gui.selected_http_method, request::HttpMethod::HEAD, "HEAD");
+                    ui.selectable_value(
+                        &mut gui.selected_http_method,
+                        request::HttpMethod::HEAD,
+                        "HEAD",
+                    );
                 });
             ui.label("URL:");
             ui.add(egui::TextEdit::singleline(&mut gui.url).desired_width(400.0));
@@ -49,8 +69,7 @@ pub fn content_header_panel(gui: &mut Gui, ctx: &egui::Context) {
                 .to_vec();
                 match gui.selected_auth_mode {
                     ui::AuthMode::APIKEY => {
-                        submitted_headers
-                            .push((gui.api_key_name.clone(), gui.api_key.clone()));
+                        submitted_headers.push((gui.api_key_name.clone(), gui.api_key.clone()));
                     }
                     ui::AuthMode::BEARER => {
                         submitted_headers.push((

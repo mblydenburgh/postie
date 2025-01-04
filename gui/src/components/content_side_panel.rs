@@ -1,13 +1,11 @@
 use std::{cell::RefCell, rc::Rc, str::FromStr, sync::Arc};
 
 use crate::Gui;
-use api::{
-    domain::{
-        collection::{CollectionRequest, CollectionUrl},
-        request::{DBRequest, HttpMethod},
-        ui,
-    },
-    ResponseData,
+use api::domain::{
+    collection::{CollectionRequest, CollectionUrl},
+    request::{DBRequest, HttpMethod},
+    response::ResponseData,
+    ui,
 };
 use egui::{ScrollArea, SidePanel};
 

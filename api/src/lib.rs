@@ -12,39 +12,17 @@ use domain::{
         CollectionRequestHeader, CollectionUrl,
     },
     request::{HttpRequest, PostieRequest, RequestBody},
+    response::{Response, ResponseData},
     tab::Tab,
 };
 use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
     Method,
 };
-use serde::Deserialize;
-use serde_json::json;
 use std::{borrow::Borrow, fs};
 use uuid::Uuid;
 
 use crate::domain::{request::DBRequest, request_item::RequestHistoryItem, response::DBResponse};
-
-#[derive(Clone, Debug, Deserialize)]
-pub struct OAuthResponse {
-    pub access_token: String,
-    pub expires_in: i32,
-    pub token_type: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct Response {
-    pub status: String,
-    pub data: ResponseData,
-}
-
-#[derive(Clone, Debug)]
-pub enum ResponseData {
-    JSON(serde_json::Value),
-    TEXT(String),
-    XML(String),
-    UNKNOWN(String),
-}
 
 pub struct PostieApi {
     pub client: reqwest::Client,
@@ -265,24 +243,6 @@ impl PostieApi {
                 let res_status = res.status();
                 let res_type = res_headers.get("content-type").unwrap().to_str().unwrap();
                 let res_text = res.text().await?;
-                if !res_type.starts_with("application/json")
-                    && !res_type.starts_with("text/plain")
-                    && !res_type.starts_with("text/html")
-                    && !res_type.starts_with("application/xml")
-                    && !res_type.starts_with("text/xml")
-                {
-                    // I couldn't figure out how to safely throw an error so I'm just returning this for now
-                    println!(
-                        "expected application/json, application/xml, text/xml, text/html, or text/plain, got {}",
-                        res_type
-                    );
-                    return Ok(Response {
-                        data: ResponseData::JSON(
-                            json!({"err": println!("unsupported response type {}!", res_type)}),
-                        ),
-                        status: res_status.to_string(),
-                    });
-                }
 
                 let request_headers = input
                     .headers
@@ -325,29 +285,10 @@ impl PostieApi {
                     body: Some(res_text.clone()),
                 };
                 db.save_response(&db_response).await?;
-                db
-                    .save_request_response_item(&db_request, &db_response, &now, &response_time)
+                db.save_request_response_item(&db_request, &db_response, &now, &response_time)
                     .await?;
-                let res_data = match res_type {
-                    "application/json" => {
-                        let res_json = serde_json::from_str(&res_text)?;
-                        ResponseData::JSON(res_json)
-                    }
-                    "application/xml" => {
-                        // TODO - validate xml, currently trying to use serder_xml_rs::from_str()
-                        // fails
-                        ResponseData::XML(res_text)
-                    }
-                    "text/plain" => ResponseData::TEXT(res_text),
-                    "text/html" => ResponseData::TEXT(res_text),
-                    "text/xml" => {
-                        // TODO - validate xml, currently trying to use serder_xml_rs::from_str()
-                        // fails
-                        ResponseData::XML(res_text)
-                    }
-                    _ => ResponseData::UNKNOWN("".into()),
-                };
-                let res_body = match &res_data {
+                let response = utilities::response::build_response(res_type, res_status, res_text)?;
+                let res_body = match &response.data {
                     ResponseData::JSON(j) => j.to_string(),
                     ResponseData::TEXT(t) => t.to_string(),
                     ResponseData::XML(x) => x.to_string(),
@@ -364,10 +305,7 @@ impl PostieApi {
                     res_headers: RequestHeaders(vec![]),
                 };
                 db.save_tab(&updated_tab).await?;
-                Ok(Response {
-                    data: res_data,
-                    status: res_status.to_string(),
-                })
+                Ok(response)
             }
             // if making an oauth token request, dont save to db
             PostieRequest::OAUTH(input) => {
