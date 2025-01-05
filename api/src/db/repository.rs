@@ -410,4 +410,12 @@ impl PostieDb {
             .await?;
         Ok(())
     }
+
+    pub async fn delete_collection(&mut self, collection_id: String) -> anyhow::Result<()> {
+        let id = collection_id.to_string();
+        sqlx::query!("DELETE FROM collections WHERE id = $1", id)
+            .execute(&mut self.connection)
+            .await?;
+        Ok(())
+    }
 }

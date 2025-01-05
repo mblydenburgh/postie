@@ -193,6 +193,11 @@ impl PostieApi {
         let responses = api.db.get_all_responses().await.unwrap();
         Ok(responses)
     }
+    pub async fn delete_collection(id: String) -> anyhow::Result<()> {
+        let mut api = PostieApi::new().await;
+        let response = api.db.delete_collection(id).await;
+        response
+    }
     pub fn substitute_variables_in_url(environment: &EnvironmentFile, raw_url: String) -> String {
         println!("substituting env vars");
         if let Some(values) = environment.clone().values {
