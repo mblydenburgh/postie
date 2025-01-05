@@ -63,7 +63,15 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                                             api::domain::collection::CollectionItemOrFolder::Folder(folder) => {
                                                 ui.horizontal(|ui| {
                                                     if ui.button("X").clicked() {
-                                                    }
+                                    let clicked_col_id = c.clone().info.id;
+                                    let clicked_folder_name = folder.name.clone();
+                                    // call to delete collection by id, refresh collections for ui
+                                        let refresh_clone = collections_clone.clone();
+                                        tokio::spawn(async move {
+                                            let _ = PostieApi::delete_collection_folder(clicked_col_id, clicked_folder_name).await;
+                                            Gui::refresh_collections(refresh_clone).await;
+                                        });
+                                                    };
                                                     if ui.collapsing(folder.name, |ui| {
                                                         for folder_item in folder.item {
                                                             match folder_item {
