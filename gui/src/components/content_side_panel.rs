@@ -24,6 +24,7 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                         for c in cols {
                             let c_clone = c.clone();
                             ui.horizontal(|ui| {
+                                //delete button for top level collection
                                 if ui.button("X").clicked() {
                                     let clicked_id = c_clone.info.id;
                                     // call to delete collection by id, refresh collections for ui
@@ -63,27 +64,30 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                                             api::domain::collection::CollectionItemOrFolder::Folder(folder) => {
                                                 ui.horizontal(|ui| {
                                                     if ui.button("X").clicked() {
-                                    let clicked_col_id = c.clone().info.id;
-                                    let clicked_folder_name = folder.name.clone();
-                                    // call to delete collection by id, refresh collections for ui
-                                        let refresh_clone = collections_clone.clone();
-                                        tokio::spawn(async move {
-                                            let _ = PostieApi::delete_collection_folder(clicked_col_id, clicked_folder_name).await;
-                                            Gui::refresh_collections(refresh_clone).await;
-                                        });
+                                                        let clicked_col_id = c.clone().info.id;
+                                                        let clicked_folder_name = folder.name.clone();
+                                                        // call to delete collection by id, refresh collections for ui
+                                                        let refresh_clone = collections_clone.clone();
+                                                        tokio::spawn(async move {
+                                                            let _ = PostieApi::delete_collection_folder(clicked_col_id, clicked_folder_name).await;
+                                                            Gui::refresh_collections(refresh_clone).await;
+                                                        });
                                                     };
-                                                    if ui.collapsing(folder.name, |ui| {
-                                                        for folder_item in folder.item {
+                                                    if ui.collapsing(folder.clone().name, |ui| {
+                                                        for folder_item in folder.clone().item {
                                                             match folder_item {
                                                                 api::domain::collection::CollectionItemOrFolder::Item(i) => {
                                                                     ui.horizontal(|ui| {
                                                                         if ui.button("X").clicked() {
-                                                                            // get collection, find clicked
-                                                                            // item and remove it from
-                                                                            // list. then re-update
-                                                                            // collections to refresh ui
-                                                                            // PostieApi::remove_collection_item()
-
+                                                                            let clicked_col_id = c.clone().info.id;
+                                                                            let clicked_req_name = i.name.clone();
+                                                                            //let clicked_folder_name = 
+                                                                            let refresh_clone = collections_clone.clone();
+                                                                            let folder_for_worker = folder.clone();
+                                                                            tokio::spawn(async move {
+                                                                                let _ = PostieApi::delete_collection_request(clicked_col_id, folder_for_worker.name, clicked_req_name).await;
+                                                                                Gui::refresh_collections(refresh_clone).await;
+                                                                            });
                                                                         }
                                                                         if ui.selectable_value(&mut gui.selected_request, Rc::new(RefCell::from(Some(i.clone().request))), i.name.to_string())
                                                                             .clicked() {
