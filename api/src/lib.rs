@@ -234,17 +234,12 @@ impl PostieApi {
                     match item.clone() {
                         CollectionItemOrFolder::Folder(ref mut f) => {
                             collection_items.push(CollectionItemOrFolder::Folder(f.clone()));
-                            for f_item in &mut f.item {
+                            for (f_index, f_item) in &mut f.item.iter().enumerate() {
                                 if let CollectionItemOrFolder::Item(i) = f_item {
-                                    if i.name != request_name && f.name.clone() != folder_name.clone() {
-                                        // this collection item doesnt match the one to delete, add
-                                        // it fo collection_items
-                                        let mut folder_items = collection_items[index].clone();
-                                        if let CollectionItemOrFolder::Folder(ref mut cf) = folder_items {
-                                            cf.item.push(CollectionItemOrFolder::Item(i.clone()));
+                                    if i.name == request_name && f.name.clone() == folder_name.clone() {
+                                        if let CollectionItemOrFolder::Folder(ref mut cf) = collection_items[index] {
+                                           cf.item.remove(f_index);
                                         }
-                                    } else {
-                                        println!("matching request found, removing");
                                     }
                                 }
                             }
