@@ -19,6 +19,8 @@ use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
     Method,
 };
+use serde_json::Map;
+use std::fmt::write;
 use std::{borrow::Borrow, fs};
 use uuid::Uuid;
 
@@ -192,6 +194,67 @@ impl PostieApi {
         let mut api = PostieApi::new().await;
         let responses = api.db.get_all_responses().await.unwrap();
         Ok(responses)
+    }
+    pub async fn delete_collection(id: String) -> anyhow::Result<()> {
+        let mut api = PostieApi::new().await;
+        api.db.delete_collection(id).await
+    }
+    pub async fn delete_collection_folder(id: String, folder_name: String) -> anyhow::Result<()> {
+        let mut api = PostieApi::new().await;
+        let collections = api.db.get_all_collections().await?;
+        for mut col in collections {
+            if col.info.id == id {
+                println!("matching collection found, looking for folder to remove");
+                let mut collection_items: Vec<CollectionItemOrFolder> = vec![];
+                for item in &mut col.item {
+                    if let CollectionItemOrFolder::Folder(ref mut f) = item {
+                        if f.name != folder_name {
+                            collection_items.push(CollectionItemOrFolder::Folder(f.clone()));
+                        }
+                    }
+                }
+                col.item = collection_items;
+                let _ = api.db.save_collection(col).await;
+            }
+        }
+        Ok(())
+    }
+    pub async fn delete_collection_request(
+        id: String,
+        folder_name: String,
+        request_name: String,
+    ) -> anyhow::Result<()> {
+        let mut api = PostieApi::new().await;
+        let collections = api.db.get_all_collections().await?;
+        for mut col in collections {
+            if col.info.id == id {
+                println!("matching collection found, looking for request to remove");
+                let mut collection_items: Vec<CollectionItemOrFolder> = vec![];
+                for (index, item) in &mut col.item.iter().enumerate() {
+                    match item.clone() {
+                        CollectionItemOrFolder::Folder(ref mut f) => {
+                            collection_items.push(CollectionItemOrFolder::Folder(f.clone()));
+                            for (f_index, f_item) in &mut f.item.iter().enumerate() {
+                                if let CollectionItemOrFolder::Item(i) = f_item {
+                                    if i.name == request_name && f.name.clone() == folder_name.clone() {
+                                        if let CollectionItemOrFolder::Folder(ref mut cf) = collection_items[index] {
+                                           cf.item.remove(f_index);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        CollectionItemOrFolder::Item(i) => {
+                            if i.name == request_name {
+                            }
+                        }
+                    }
+                }
+                col.item = collection_items;
+                let _ = api.db.save_collection(col).await;
+            }
+        }
+        Ok(())
     }
     pub fn substitute_variables_in_url(environment: &EnvironmentFile, raw_url: String) -> String {
         println!("substituting env vars");

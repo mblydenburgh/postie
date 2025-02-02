@@ -1,11 +1,14 @@
 use std::{cell::RefCell, rc::Rc, str::FromStr, sync::Arc};
 
 use crate::Gui;
-use api::domain::{
-    collection::{CollectionRequest, CollectionUrl},
-    request::{DBRequest, HttpMethod},
-    response::ResponseData,
-    ui,
+use api::{
+    domain::{
+        collection::{CollectionRequest, CollectionUrl},
+        request::{DBRequest, HttpMethod},
+        response::ResponseData,
+        ui,
+    },
+    PostieApi,
 };
 use egui::{ScrollArea, SidePanel};
 
@@ -20,77 +23,114 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                     if let Some(cols) = &*collections {
                         for c in cols {
                             let c_clone = c.clone();
-                            ui.collapsing(c_clone.info.name, |ui| {
-                                for i in c_clone.item {
-                                    match i {
-                                        api::domain::collection::CollectionItemOrFolder::Item(item) => {
-                                            if ui.selectable_value(&mut gui.selected_request, Rc::new(RefCell::from(Some(item.clone().request))), item.name.to_string()).clicked() {
-                                                                    gui.url = item.request.url.raw.clone();
-                                                                    gui.selected_http_method = HttpMethod::from_str(&item.request.method.clone()).unwrap();
-                                                                    if let Some(body) = item.request.body {
-                                                                        if let Some(body_str) = body.raw {
-                                                                            gui.body_str = body_str;
-                                                                        }
-                                                                    }
-                                                                    if let Some(headers) = item.request.header {
-                                                                        let constructed_headers: Vec<(bool, String, String)> = headers.into_iter().map(|h| {
-                                                                            (true, h.key, h.value)
-                                                                        }).collect();
-                                                                        gui.headers = Rc::new(RefCell::from(constructed_headers));
-                                                                    }
-                                            }
-                                        },
-                                        // TODO - figure out how to correctly pass around Gui and
-                                        // Ui to be able to call the recursive function. Also
-                                        // figure out a way to make the recursive render function
-                                        // not return () and always return a Ui::Response. For now,
-                                        // handle rendering one level deep of folders. If a folder
-                                        // within a folder is found then a dummy request it
-                                        // substituted.
-                                        api::domain::collection::CollectionItemOrFolder::Folder(folder) => {
-                                            if ui.collapsing(folder.name, |ui| {
-                                                for folder_item in folder.item {
-                                                    match folder_item {
-                                                        api::domain::collection::CollectionItemOrFolder::Item(i) => {
-                                                            if ui.selectable_value(&mut gui.selected_request, Rc::new(RefCell::from(Some(i.clone().request))), i.name.to_string())
-                                                                .clicked() {
-                                                                    gui.url = i.request.url.raw.clone();
-                                                                    gui.selected_http_method = HttpMethod::from_str(&i.request.method.clone()).unwrap();
-                                                                    if let Some(body) = i.request.body {
-                                                                        if let Some(body_str) = body.raw {
-                                                                            gui.body_str = body_str;
-                                                                        }
-                                                                    }
-                                                                    if let Some(headers) = i.request.header {
-                                                                        let constructed_headers: Vec<(bool, String, String)> = headers.into_iter().map(|h| {
-                                                                            (true, h.key, h.value)
-                                                                        }).collect();
-                                                                        gui.headers = Rc::new(RefCell::from(constructed_headers));
-                                                                    }
-                                                                }
-                                                        },
-                                                        api::domain::collection::CollectionItemOrFolder::Folder(f) => {
-                                                            let fallback_request = CollectionRequest {
-                                                                method: String::from("GET"),
-                                                                url: CollectionUrl {
-                                                                    raw: String::from("default"),
-                                                                    host: None,
-                                                                    path: None,
-                                                                },
-                                                                auth: None,
-                                                                header: None,
-                                                                body: None,
-                                                            };
-                                                            if ui.selectable_value(&mut gui.selected_request, Rc::new(RefCell::from(Some(fallback_request))), f.name.to_string()).clicked() {
-                                                            }
-                                                        },
+                            ui.horizontal(|ui| {
+                                //delete button for top level collection
+                                if ui.button("X").clicked() {
+                                    let clicked_id = c_clone.info.id;
+                                    // call to delete collection by id, refresh collections for ui
+                                        let refresh_clone = collections_clone.clone();
+                                        tokio::spawn(async move {
+                                            let _ = PostieApi::delete_collection(clicked_id).await;
+                                            Gui::refresh_collections(refresh_clone).await;
+                                        });
+                                }
+                                ui.collapsing(c_clone.info.name, |ui| {
+                                    for i in c_clone.item {
+                                        match i {
+                                            api::domain::collection::CollectionItemOrFolder::Item(item) => {
+                                                if ui.selectable_value(&mut gui.selected_request, Rc::new(RefCell::from(Some(item.clone().request))), item.name.to_string()).clicked() {
+                                                    gui.url = item.request.url.raw.clone();
+                                                    gui.selected_http_method = HttpMethod::from_str(&item.request.method.clone()).unwrap();
+                                                    if let Some(body) = item.request.body {
+                                                        if let Some(body_str) = body.raw {
+                                                            gui.body_str = body_str;
+                                                        }
+                                                    }
+                                                    if let Some(headers) = item.request.header {
+                                                        let constructed_headers: Vec<(bool, String, String)> = headers.into_iter().map(|h| {
+                                                            (true, h.key, h.value)
+                                                        }).collect();
+                                                        gui.headers = Rc::new(RefCell::from(constructed_headers));
                                                     }
                                                 }
-                                            }).header_response.clicked() {
-                                            }
-                                        },
-                                    };
-                                }
+                                            },
+                                            // TODO - figure out how to correctly pass around Gui and
+                                            // Ui to be able to call the recursive function. Also
+                                            // figure out a way to make the recursive render function
+                                            // not return () and always return a Ui::Response. For now,
+                                            // handle rendering one level deep of folders. If a folder
+                                            // within a folder is found then a dummy request it
+                                            // substituted.
+                                            api::domain::collection::CollectionItemOrFolder::Folder(folder) => {
+                                                ui.horizontal(|ui| {
+                                                    if ui.button("X").clicked() {
+                                                        let clicked_col_id = c.clone().info.id;
+                                                        let clicked_folder_name = folder.name.clone();
+                                                        // call to delete collection by id, refresh collections for ui
+                                                        let refresh_clone = collections_clone.clone();
+                                                        tokio::spawn(async move {
+                                                            let _ = PostieApi::delete_collection_folder(clicked_col_id, clicked_folder_name).await;
+                                                            Gui::refresh_collections(refresh_clone).await;
+                                                        });
+                                                    };
+                                                    if ui.collapsing(folder.clone().name, |ui| {
+                                                        for folder_item in folder.clone().item {
+                                                            match folder_item {
+                                                                api::domain::collection::CollectionItemOrFolder::Item(i) => {
+                                                                    ui.horizontal(|ui| {
+                                                                        if ui.button("X").clicked() {
+                                                                            let clicked_col_id = c.clone().info.id;
+                                                                            let clicked_req_name = i.name.clone();
+                                                                            //let clicked_folder_name = 
+                                                                            let refresh_clone = collections_clone.clone();
+                                                                            let folder_for_worker = folder.clone();
+                                                                            tokio::spawn(async move {
+                                                                                let _ = PostieApi::delete_collection_request(clicked_col_id, folder_for_worker.name, clicked_req_name).await;
+                                                                                Gui::refresh_collections(refresh_clone).await;
+                                                                            });
+                                                                        }
+                                                                        if ui.selectable_value(&mut gui.selected_request, Rc::new(RefCell::from(Some(i.clone().request))), i.name.to_string())
+                                                                            .clicked() {
+                                                                                gui.url = i.request.url.raw.clone();
+                                                                                gui.selected_http_method = HttpMethod::from_str(&i.request.method.clone()).unwrap();
+                                                                                if let Some(body) = i.request.body {
+                                                                                    if let Some(body_str) = body.raw {
+                                                                                        gui.body_str = body_str;
+                                                                                    }
+                                                                                }
+                                                                                if let Some(headers) = i.request.header {
+                                                                                    let constructed_headers: Vec<(bool, String, String)> = headers.into_iter().map(|h| {
+                                                                                        (true, h.key, h.value)
+                                                                                    }).collect();
+                                                                                    gui.headers = Rc::new(RefCell::from(constructed_headers));
+                                                                                }
+                                                                            }
+                                                                    });
+                                                                },
+                                                                api::domain::collection::CollectionItemOrFolder::Folder(f) => {
+                                                                    let fallback_request = CollectionRequest {
+                                                                        method: String::from("GET"),
+                                                                        url: CollectionUrl {
+                                                                            raw: String::from("default"),
+                                                                            host: None,
+                                                                            path: None,
+                                                                        },
+                                                                        auth: None,
+                                                                        header: None,
+                                                                        body: None,
+                                                                    };
+                                                                    if ui.selectable_value(&mut gui.selected_request, Rc::new(RefCell::from(Some(fallback_request.clone()))), f.name.to_string()).clicked() {
+                                                                    }
+                                                                },
+                                                            }
+                                                        }
+                                                    }).header_response.clicked() {
+                                                    }
+                                                });
+                                            },
+                                        };
+                                    }
+                                });
                             });
                         }
                     }
