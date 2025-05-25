@@ -1,6 +1,6 @@
 use api::{
-    domain::environment::{EnvironmentFile, EnvironmentValue},
-    PostieApi,
+  domain::environment::{EnvironmentFile, EnvironmentValue},
+  PostieApi,
 };
 use reqwest::Url;
 use wiremock::Match;
@@ -10,42 +10,42 @@ use wiremock::Match;
 // matches a specified assertion url.
 pub struct MockUrlMatcher(String);
 impl Match for MockUrlMatcher {
-    fn matches(&self, request: &wiremock::Request) -> bool {
-        if request.url == Url::parse(&self.0).unwrap() {
-            true
-        } else {
-            false
-        }
+  fn matches(&self, request: &wiremock::Request) -> bool {
+    if request.url == Url::parse(&self.0).unwrap() {
+      true
+    } else {
+      false
     }
+  }
 }
 
 #[test]
 fn env_var_substitution_applies_correctly_in_urls() {
-    let environment = EnvironmentFile {
-        id: String::from("id"),
-        name: String::from("some environment"),
-        values: Some(vec![EnvironmentValue {
-            key: String::from("HOST_URL"),
-            value: String::from("https://httpbin.org"),
-            r#type: String::from("default"),
-            enabled: true,
-        }]),
-    };
-    let raw_url = String::from("{{HOST_URL}}/json");
-    let converted_url = PostieApi::substitute_variables_in_url(&environment, raw_url);
-    assert_eq!(converted_url, "https://httpbin.org/json");
+  let environment = EnvironmentFile {
+    id: String::from("id"),
+    name: String::from("some environment"),
+    values: Some(vec![EnvironmentValue {
+      key: String::from("HOST_URL"),
+      value: String::from("https://httpbin.org"),
+      r#type: String::from("default"),
+      enabled: true,
+    }]),
+  };
+  let raw_url = String::from("{{HOST_URL}}/json");
+  let converted_url = PostieApi::substitute_variables_in_url(&environment, raw_url);
+  assert_eq!(converted_url, "https://httpbin.org/json");
 }
 
 #[test]
 fn returns_base_url_if_env_vars_dont_exist() {
-    let environment = EnvironmentFile {
-        id: String::from("id"),
-        name: String::from("some environment"),
-        values: None,
-    };
-    let raw_url = String::from("{{BOGUS}}/json");
-    let converted_url = PostieApi::substitute_variables_in_url(&environment, raw_url);
-    assert_eq!(converted_url, "{{BOGUS}}/json");
+  let environment = EnvironmentFile {
+    id: String::from("id"),
+    name: String::from("some environment"),
+    values: None,
+  };
+  let raw_url = String::from("{{BOGUS}}/json");
+  let converted_url = PostieApi::substitute_variables_in_url(&environment, raw_url);
+  assert_eq!(converted_url, "{{BOGUS}}/json");
 }
 
 // TODO - figure out how to make this test work to validate the substitution when it is a private

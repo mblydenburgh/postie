@@ -70,6 +70,7 @@ This project uses the rust `sqlx` and `sqlx-cli` packages to manage a SQLite dat
 
 To generate a new database file, run the following commands:
 
+* Create a .env file and copy the contents of .env-example into it
 * `sqlx db create` - creates the database file, located at `postie.sqlite`
 * `sqlx migrate run` - runs all pending migrations
 
