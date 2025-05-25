@@ -10,67 +10,35 @@ use api::{
   },
   PostieApi,
 };
-use egui::{InnerResponse, ScrollArea, SidePanel};
+use egui::{CollapsingResponse, InnerResponse, ScrollArea, SidePanel};
 use tokio::sync::RwLock;
 
 pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
   if let Ok(active_window) = gui.active_window.try_read() {
+    let collections_clone = Arc::clone(&gui.collections);
+    let selected_req_clone = Rc::clone(&gui.selected_request);
+    let mut url_clone = gui.url.clone();
+    let mut selected_method_clone = gui.selected_http_method.clone();
+    let mut req_headers_clone = Rc::clone(&gui.headers);
+    let mut req_body_clone = gui.body_str.clone();
     SidePanel::left("content_panel").show(ctx, |ui| match *active_window {
       ui::ActiveWindow::COLLECTIONS => {
         ScrollArea::vertical().show(ui, |ui| {
           ui.label("Collections");
-          let collections_clone = Arc::clone(&gui.collections);
           let collections = collections_clone.try_write().unwrap();
           if let Some(cols) = &*collections {
             for c in cols {
               let c_clone = c.clone();
-              ui.horizontal(|ui| {
-                //delete button for top level collection
-                if ui.button("X").clicked() {
-                  let clicked_id = c_clone.info.id;
-                  // call to delete collection by id, refresh collections for ui
-                  let refresh_clone = collections_clone.clone();
-                  tokio::spawn(async move {
-                    let _ = PostieApi::delete_collection(clicked_id).await;
-                    Gui::refresh_collections(refresh_clone).await;
-                  });
-                }
-                ui.collapsing(c_clone.info.name, |ui| {
-                  for i in c_clone.item {
-                    match i {
-                      CollectionItemOrFolder::Item(item) => {
-                        if ui
-                          .selectable_value(
-                            &mut gui.selected_request,
-                            Rc::new(RefCell::from(Some(item.clone().request))),
-                            item.name.to_string(),
-                          )
-                          .clicked()
-                        {
-                          gui.url = item.request.url.raw.clone();
-                          gui.selected_http_method =
-                            HttpMethod::from_str(&item.request.method.clone()).unwrap();
-                          if let Some(body) = item.request.body {
-                            if let Some(body_str) = body.raw {
-                              gui.body_str = body_str;
-                            }
-                          }
-                          if let Some(headers) = item.request.header {
-                            let constructed_headers: Vec<(bool, String, String)> = headers
-                              .into_iter()
-                              .map(|h| (true, h.key, h.value))
-                              .collect();
-                            gui.headers = Rc::new(RefCell::from(constructed_headers));
-                          }
-                        }
-                      }
-                      CollectionItemOrFolder::Folder(folder) => {
-                        render_folder(ui, c, folder, &Arc::clone(&gui.collections));
-                      }
-                    };
-                  }
-                });
-              });
+              render_collection(
+                ui,
+                &selected_req_clone,
+                &mut url_clone,
+                &mut selected_method_clone,
+                &mut req_headers_clone,
+                &mut req_body_clone,
+                &c_clone,
+                &collections_clone,
+              );
             }
           }
         });
@@ -163,8 +131,88 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
   }
 }
 
+fn render_collection(
+  ui: &mut egui::Ui,
+  selected_req: &Rc<RefCell<Option<api::domain::collection::CollectionRequest>>>,
+  url: &mut String,
+  selected_method: &mut HttpMethod,
+  req_headers: &mut Rc<RefCell<Vec<(bool, String, String)>>>,
+  req_body: &mut String,
+  c: &Collection,
+  cols: &Arc<RwLock<Option<Vec<api::domain::collection::Collection>>>>,
+) -> InnerResponse<CollapsingResponse<()>> {
+  ui.horizontal(|ui| {
+    if ui.button("X").clicked() {
+      let clicked_id = c.info.id.clone();
+      // call to delete collection by id, refresh collections for ui
+      let refresh_clone = cols.clone();
+      tokio::spawn(async move {
+        let _ = PostieApi::delete_collection(clicked_id).await;
+        Gui::refresh_collections(refresh_clone).await;
+      });
+    }
+    ui.collapsing(c.info.name.clone(), |ui| {
+      for i in c.item.clone() {
+        match i {
+          CollectionItemOrFolder::Item(item) => {
+            if ui
+              .selectable_value(
+                &mut selected_req.clone(),
+                Rc::new(RefCell::from(Some(item.clone().request))),
+                item.name.to_string(),
+              )
+              .clicked()
+            {
+              // TODO - emit channel event to update gui fields
+              *url = item.request.url.raw.clone();
+              *selected_method = HttpMethod::from_str(&item.request.method.clone()).unwrap();
+              if let Some(body) = item.request.body {
+                if let Some(body_str) = body.raw {
+                  // TODO - emit event
+                  *req_body = body_str;
+                }
+              }
+              if let Some(headers) = item.request.header {
+                let constructed_headers: Vec<(bool, String, String)> = headers
+                  .into_iter()
+                  .map(|h| (true, h.key, h.value))
+                  .collect();
+                // TODO - emit event
+                *req_headers = Rc::new(RefCell::from(constructed_headers));
+              }
+            }
+          }
+          CollectionItemOrFolder::Folder(folder) => {
+            let selected_req_clone = Rc::clone(&selected_req);
+            let mut url_clone = url.clone();
+            let mut selected_method_clone = selected_method.clone();
+            let mut req_headers_clone = Rc::clone(&req_headers);
+            let mut req_body_clone = req_body.clone();
+            render_folder(
+              ui,
+              &selected_req_clone,
+              &mut url_clone,
+              &mut selected_method_clone,
+              &mut req_headers_clone,
+              &mut req_body_clone,
+              c,
+              folder,
+              &Arc::clone(&cols),
+            );
+          }
+        };
+      }
+    })
+  })
+}
+
 fn render_folder(
   ui: &mut egui::Ui,
+  selected_req: &Rc<RefCell<Option<api::domain::collection::CollectionRequest>>>,
+  url: &mut String,
+  selected_method: &mut HttpMethod,
+  req_headers: &mut Rc<RefCell<Vec<(bool, String, String)>>>,
+  req_body: &mut String,
   c: &Collection,
   f: CollectionFolder,
   cols: &Arc<RwLock<Option<Vec<api::domain::collection::Collection>>>>,
@@ -199,8 +247,52 @@ fn render_folder(
                   Gui::refresh_collections(refresh_clone).await;
                 });
               }
+              if ui
+                .selectable_value(
+                  &mut selected_req.clone(),
+                  Rc::new(RefCell::from(Some(i.clone().request))),
+                  i.name.to_string(),
+                )
+                .clicked()
+              {
+                println!("clicked");
+                // TODO - emit channel event to update gui fields
+                *url = i.request.url.raw.clone();
+                *selected_method = HttpMethod::from_str(&i.request.method.clone()).unwrap();
+                if let Some(body) = i.request.body {
+                  if let Some(body_str) = body.raw {
+                    // TODO - emit event
+                    *req_body = body_str;
+                  }
+                }
+                if let Some(headers) = i.request.header {
+                  let constructed_headers: Vec<(bool, String, String)> = headers
+                    .into_iter()
+                    .map(|h| (true, h.key, h.value))
+                    .collect();
+                  // TODO - emit event
+                  *req_headers = Rc::new(RefCell::from(constructed_headers));
+                }
+              }
             }),
-            CollectionItemOrFolder::Folder(f) => render_folder(ui, c, f, cols),
+            CollectionItemOrFolder::Folder(f) => {
+              let selected_req_clone = Rc::clone(&selected_req);
+              let mut url_clone = url.clone();
+              let mut selected_method_clone = selected_method.clone();
+              let mut req_headers_clone = Rc::clone(&req_headers);
+              let mut req_body_clone = req_body.clone();
+              render_folder(
+                ui,
+                &selected_req_clone,
+                &mut url_clone,
+                &mut selected_method_clone,
+                &mut req_headers_clone,
+                &mut req_body_clone,
+                c,
+                f,
+                cols,
+              )
+            }
           };
         }
       })
