@@ -64,13 +64,6 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
                           }
                         }
                       }
-                      // TODO - figure out how to correctly pass around Gui and
-                      // Ui to be able to call the recursive function. Also
-                      // figure out a way to make the recursive render function
-                      // not return () and always return a Ui::Response. For now,
-                      // handle rendering one level deep of folders. If a folder
-                      // within a folder is found then a dummy request it
-                      // substituted.
                       CollectionItemOrFolder::Folder(folder) => {
                         render_folder(ui, c, folder, &Arc::clone(&gui.collections));
                       }
