@@ -56,9 +56,11 @@ cargo run DATABASE_URL=postie.sqlite
 ```
 
 To build and bundle the application from source, run the following commands:
+
+#### MacOS
 ```shell
 cargo build --release
-./scripts/bundle.sh
+./scripts/bundle_darwin.sh
 ```
 This will create a .dmg file in the `target/release` directory that can be run on a mac using the version specified in the bundle script.
 Note: a fresh database is bundled with each new app so all data will be lost when updating. For now you can restore request history by
