@@ -11,13 +11,12 @@ use api::{
   PostieApi,
 };
 use egui::{CollapsingResponse, InnerResponse, ScrollArea, SidePanel};
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc, RwLock};
 
 pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
   if let Ok(active_window) = gui.active_window.try_read() {
     let collections_clone = Arc::clone(&gui.collections);
     let selected_req_clone = Rc::clone(&gui.selected_request);
-    let mut url_clone = gui.url.clone();
     let mut selected_method_clone = gui.selected_http_method.clone();
     let mut req_headers_clone = Rc::clone(&gui.headers);
     let mut req_body_clone = gui.body_str.clone();
@@ -32,7 +31,7 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
               render_collection(
                 ui,
                 &selected_req_clone,
-                &mut url_clone,
+                &mut gui.url,
                 &mut selected_method_clone,
                 &mut req_headers_clone,
                 &mut req_body_clone,
@@ -184,14 +183,13 @@ fn render_collection(
           }
           CollectionItemOrFolder::Folder(folder) => {
             let selected_req_clone = Rc::clone(&selected_req);
-            let mut url_clone = url.clone();
             let mut selected_method_clone = selected_method.clone();
             let mut req_headers_clone = Rc::clone(&req_headers);
             let mut req_body_clone = req_body.clone();
             render_folder(
               ui,
               &selected_req_clone,
-              &mut url_clone,
+              url,
               &mut selected_method_clone,
               &mut req_headers_clone,
               &mut req_body_clone,
@@ -255,9 +253,7 @@ fn render_folder(
                 )
                 .clicked()
               {
-                println!("clicked");
-                // TODO - emit channel event to update gui fields
-                *url = i.request.url.raw.clone();
+                *url = i.request.url.raw;
                 *selected_method = HttpMethod::from_str(&i.request.method.clone()).unwrap();
                 if let Some(body) = i.request.body {
                   if let Some(body_str) = body.raw {
@@ -277,14 +273,13 @@ fn render_folder(
             }),
             CollectionItemOrFolder::Folder(f) => {
               let selected_req_clone = Rc::clone(&selected_req);
-              let mut url_clone = url.clone();
               let mut selected_method_clone = selected_method.clone();
               let mut req_headers_clone = Rc::clone(&req_headers);
               let mut req_body_clone = req_body.clone();
               render_folder(
                 ui,
                 &selected_req_clone,
-                &mut url_clone,
+                url,
                 &mut selected_method_clone,
                 &mut req_headers_clone,
                 &mut req_body_clone,
