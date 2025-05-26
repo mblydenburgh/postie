@@ -160,7 +160,6 @@ fn render_collection(
                   .into_iter()
                   .map(|h| (true, h.key, h.value))
                   .collect();
-                // TODO - emit event
                 app.headers = Rc::new(RefCell::from(constructed_headers));
               }
             }
@@ -221,14 +220,17 @@ fn render_folder(
                 app.url = i.request.url.raw;
                 app.selected_http_method = HttpMethod::from_str(&i.request.method.clone()).unwrap();
                 app.body_str = i.request.body.and_then(|b| b.raw).unwrap_or_default();
-                if let Some(headers) = i.request.header {
-                  let constructed_headers: Vec<(bool, String, String)> = headers
-                    .into_iter()
-                    .map(|h| (true, h.key, h.value))
-                    .collect();
-                  // TODO - emit event
-                  app.headers = Rc::new(RefCell::from(constructed_headers));
-                }
+                let constructed_headers: Vec<(bool, String, String)> = i
+                  .request
+                  .header
+                  .map(|headers| {
+                    headers
+                      .into_iter()
+                      .map(|h| (true, h.key, h.value))
+                      .collect()
+                  })
+                  .unwrap_or_default(); // default empty vec if none
+                app.headers = Rc::new(RefCell::from(constructed_headers));
               }
             }),
             CollectionItemOrFolder::Folder(f) => render_folder(ui, app, c, f),
