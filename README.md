@@ -32,11 +32,11 @@ in your currently used .app.
 - Importing postman environments
 - Creating new collections from scratch
 - Saving requests to existing collections
+- Infinite levels of collection nesting now supported
 - Request history is persisted and previous request/responses can be viewed again
 - Manage multiple requests at once with tabs
 
 ### Not yet supported
-- Infinite levels of collection nesting, currently only support one level of folder nesting
 - Tab data persists before hitting submit button on an unsent request
   - currently in order for a tab to persist, the request needs to be submitted or else the tab will be lost
 - Exporting saved colellections
@@ -50,7 +50,7 @@ in your currently used .app.
 - Cloud hosting of sqlite tables (very future if at all)
 
 ## Building and running
-If you wish to run the application source locallyh, ensure that have a sqlite database set up (see Database Utils) and run the following command:
+If you wish to run the application source locally, ensure that have a sqlite database set up (see Database Utils) and run the following command:
 ```shell
 cargo run DATABASE_URL=postie.sqlite
 ```
@@ -70,8 +70,8 @@ This project uses the rust `sqlx` and `sqlx-cli` packages to manage a SQLite dat
 
 To generate a new database file, run the following commands:
 
-* `sqlx db create` - creates the database file, located at `postie.sqlite`
+* Create a .env file and copy the contents of .env-example into it
+* `sqlx db create` - creates the database file, located at the project root
 * `sqlx migrate run` - runs all pending migrations
 
 You can then use any SQLite editor to open the `postie.sqlite` file to run queries.
-
