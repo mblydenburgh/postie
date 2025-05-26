@@ -19,8 +19,6 @@ use reqwest::{
   header::{self, HeaderMap, HeaderName, HeaderValue},
   Method,
 };
-use serde_json::Map;
-use std::fmt::write;
 use std::{borrow::Borrow, fs};
 use uuid::Uuid;
 

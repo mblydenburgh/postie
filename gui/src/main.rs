@@ -212,9 +212,6 @@ impl Gui {
     default.response = Arc::new(RwLock::new(Some(response_data)));
     default
   }
-  fn set_selected_request(&mut self) {
-    self.url = String::from("");
-  }
   async fn refresh_request_data(
     request_history: Arc<RwLock<Option<Vec<RequestHistoryItem>>>>,
     responses: Arc<RwLock<Option<HashMap<String, DBResponse>>>>,
