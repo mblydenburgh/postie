@@ -13,7 +13,7 @@ use api::{
 use egui::{CollapsingResponse, InnerResponse, ScrollArea, SidePanel};
 
 pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
-  let collections = {
+  let collections_guard = {
     let lock = gui.collections.try_write().unwrap();
     lock.clone()
   };
@@ -25,7 +25,7 @@ pub fn content_side_panel(gui: &mut Gui, ctx: &egui::Context) {
     ui::ActiveWindow::COLLECTIONS => {
       ScrollArea::vertical().show(ui, |ui| {
         ui.label("Collections");
-        if let Some(cols) = collections {
+        if let Some(cols) = collections_guard {
           for c in cols {
             render_collection(ui, gui, &c);
           }
@@ -145,13 +145,11 @@ fn render_collection(
               )
               .clicked()
             {
-              // TODO - emit channel event to update gui fields
               app.url = item.request.url.raw.clone();
               app.selected_http_method =
                 HttpMethod::from_str(&item.request.method.clone()).unwrap();
               if let Some(body) = item.request.body {
                 if let Some(body_str) = body.raw {
-                  // TODO - emit event
                   app.body_str = body_str;
                 }
               }
