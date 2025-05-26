@@ -220,11 +220,7 @@ fn render_folder(
               {
                 app.url = i.request.url.raw;
                 app.selected_http_method = HttpMethod::from_str(&i.request.method.clone()).unwrap();
-                if let Some(body) = i.request.body {
-                  if let Some(body_str) = body.raw {
-                    app.body_str = body_str;
-                  }
-                }
+                app.body_str = i.request.body.and_then(|b| b.raw).unwrap_or_default();
                 if let Some(headers) = i.request.header {
                   let constructed_headers: Vec<(bool, String, String)> = headers
                     .into_iter()
