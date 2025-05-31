@@ -49,7 +49,7 @@ fn render_collection(
   c: &Collection,
 ) -> InnerResponse<CollapsingResponse<()>> {
   ui.horizontal(|ui| {
-    if ui.button("X").clicked() {
+    if ui.button("+").clicked() {
       let clicked_id = c.info.id.clone();
       // call to delete collection by id, refresh collections for ui
       let refresh_clone = app.collections.clone();
@@ -103,6 +103,7 @@ fn render_folder(
   f: CollectionFolder,
 ) -> InnerResponse<()> {
   ui.horizontal(|ui| {
+    // TODO fix delete
     if ui.button("X").clicked() {
       let clicked_col_id = c.clone().info.id;
       let refresh_clone = app.collections.clone();
@@ -117,6 +118,7 @@ fn render_folder(
         for f_item in f.clone().item {
           match f_item {
             CollectionItemOrFolder::Item(i) => ui.horizontal(|ui| {
+              // TODO fix delete
               if ui.button("X").clicked() {
                 let clicked_col_id = c.clone().info.id;
                 let clicked_req_name = i.name.clone();

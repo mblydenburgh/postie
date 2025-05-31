@@ -410,5 +410,5 @@ impl App for Gui {
 async fn main() {
   let app = Gui::new().await;
   let native_options = NativeOptions::default();
-  let _ = eframe::run_native("Postie", native_options, Box::new(|_cc| Box::new(app)));
+  let _ = eframe::run_native("Postie", native_options, Box::new(|_cc| Ok(Box::new(app))));
 }
