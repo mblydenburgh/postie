@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc, str::FromStr, sync::Arc};
 use crate::Gui;
 use api::{
   domain::{
-    collection::{Collection, CollectionFolder, CollectionItemOrFolder},
+    collection::{Collection, CollectionFolder, CollectionItem, CollectionItemOrFolder},
     request::{DBRequest, HttpMethod},
     response::ResponseData,
     ui,
@@ -49,43 +49,38 @@ fn render_collection(
   c: &Collection,
 ) -> InnerResponse<CollapsingResponse<()>> {
   ui.horizontal(|ui| {
-    if ui.button("+").clicked() {
-      let clicked_id = c.info.id.clone();
-      // call to delete collection by id, refresh collections for ui
-      let refresh_clone = app.collections.clone();
-      tokio::spawn(async move {
-        let _ = PostieApi::delete_collection(clicked_id).await;
-        Gui::refresh_collections(refresh_clone).await;
-      });
-    }
+    render_context_menu(ui, app, c, None, None);
     ui.collapsing(c.info.name.clone(), |ui| {
       for i in c.item.clone() {
         match i {
           CollectionItemOrFolder::Item(item) => {
-            if ui
-              .selectable_value(
-                &mut app.selected_request.clone(),
-                Rc::new(RefCell::from(Some(item.clone().request))),
-                item.name.to_string(),
-              )
-              .clicked()
-            {
-              app.url = item.request.url.raw.clone();
-              app.selected_http_method =
-                HttpMethod::from_str(&item.request.method.clone()).unwrap();
-              if let Some(body) = item.request.body {
-                if let Some(body_str) = body.raw {
-                  app.body_str = body_str;
+            ui.horizontal(|ui| {
+              render_context_menu(ui, app, c, None, None);
+              if ui
+                .selectable_value(
+                  &mut app.selected_request.clone(),
+                  Rc::new(RefCell::from(Some(item.clone().request))),
+                  item.name.to_string(),
+                )
+                .clicked()
+              {
+                app.url = item.request.url.raw.clone();
+                app.selected_http_method =
+                  HttpMethod::from_str(&item.request.method.clone()).unwrap();
+                if let Some(body) = item.request.body {
+                  if let Some(body_str) = body.raw {
+                    app.body_str = body_str;
+                  }
+                }
+                if let Some(headers) = item.request.header {
+                  let constructed_headers: Vec<(bool, String, String)> = headers
+                    .into_iter()
+                    .map(|h| (true, h.key, h.value))
+                    .collect();
+                  app.headers = Rc::new(RefCell::from(constructed_headers));
                 }
               }
-              if let Some(headers) = item.request.header {
-                let constructed_headers: Vec<(bool, String, String)> = headers
-                  .into_iter()
-                  .map(|h| (true, h.key, h.value))
-                  .collect();
-                app.headers = Rc::new(RefCell::from(constructed_headers));
-              }
-            }
+            });
           }
           CollectionItemOrFolder::Folder(folder) => {
             render_folder(ui, app, c, folder);
@@ -103,37 +98,13 @@ fn render_folder(
   f: CollectionFolder,
 ) -> InnerResponse<()> {
   ui.horizontal(|ui| {
-    // TODO fix delete
-    if ui.button("X").clicked() {
-      let clicked_col_id = c.clone().info.id;
-      let refresh_clone = app.collections.clone();
-      let folder_for_worker = f.clone();
-      tokio::spawn(async move {
-        let _ = PostieApi::delete_collection_folder(clicked_col_id, folder_for_worker.name);
-        Gui::refresh_collections(refresh_clone).await;
-      });
-    }
+    render_context_menu(ui, app, c, Some(&f), None);
     if ui
       .collapsing(f.clone().name, |ui| {
         for f_item in f.clone().item {
           match f_item {
             CollectionItemOrFolder::Item(i) => ui.horizontal(|ui| {
-              // TODO fix delete
-              if ui.button("X").clicked() {
-                let clicked_col_id = c.clone().info.id;
-                let clicked_req_name = i.name.clone();
-                let refresh_clone = app.collections.clone();
-                let folder_for_worker = f.clone();
-                tokio::spawn(async move {
-                  let _ = PostieApi::delete_collection_request(
-                    clicked_col_id,
-                    folder_for_worker.name,
-                    clicked_req_name,
-                  )
-                  .await;
-                  Gui::refresh_collections(refresh_clone).await;
-                });
-              }
+              render_context_menu(ui, app, c, Some(&f), Some(&i));
               if ui
                 .selectable_value(
                   &mut app.selected_request.clone(),
@@ -247,6 +218,80 @@ fn render_history(ui: &mut egui::Ui, app: &mut Gui) -> ScrollAreaOutput<()> {
             }
             None => *ui_response_guard = None,
           }
+        }
+      }
+    }
+  })
+}
+
+fn render_context_menu(
+  ui: &mut egui::Ui,
+  app: &mut Gui,
+  col: &Collection,
+  fol: Option<&CollectionFolder>,
+  req: Option<&CollectionItem>,
+) -> InnerResponse<Option<()>> {
+  ui.menu_button("...", |ui| {
+    ui.menu_button("New", |ui| {
+      if (ui.button("Request")).clicked() {
+        println!("adding request");
+      }
+      if (ui.button("Folder")).clicked() {
+        println!("adding folder");
+      }
+    });
+    if (ui.button("Delete")).clicked() {
+      // TODO - validate deletion of collection folder
+      if let Some(f) = fol {
+        if let None = req {
+          let clicked_col_id = col.clone().info.id;
+          let refresh_clone = app.collections.clone();
+          let folder_for_worker = f.clone();
+          tokio::spawn(async move {
+            let _ = PostieApi::delete_collection_folder(clicked_col_id, folder_for_worker.name);
+            Gui::refresh_collections(refresh_clone).await;
+          });
+        }
+      }
+      // TODO - validate deletion of folder request
+      if let Some(r) = req {
+        if let Some(f) = fol {
+          let clicked_col_id = col.clone().info.id;
+          let clicked_req_name = r.name.clone();
+          let refresh_clone = app.collections.clone();
+          let folder_for_worker = f.clone();
+          tokio::spawn(async move {
+            let _ = PostieApi::delete_folder_request(
+              clicked_col_id,
+              folder_for_worker.name,
+              clicked_req_name,
+            )
+            .await;
+            Gui::refresh_collections(refresh_clone).await;
+          });
+        }
+      }
+      // TODO - deleting collection request deletes entire collection
+      if let Some(r) = req {
+        if let None = fol {
+          let clicked_col_id = col.clone().info.id;
+          let clicked_req_name = r.name.clone();
+          let refresh_clone = app.collections.clone();
+          tokio::spawn(async move {
+            let _ = PostieApi::delete_collection_request(clicked_col_id, clicked_req_name).await;
+            Gui::refresh_collections(refresh_clone).await;
+          });
+        }
+      }
+      if let None = fol {
+        if let None = req {
+          let clicked_id = col.info.id.clone();
+          // call to delete collection by id, refresh collections for ui
+          let refresh_clone = app.collections.clone();
+          tokio::spawn(async move {
+            let _ = PostieApi::delete_collection(clicked_id).await;
+            Gui::refresh_collections(refresh_clone).await;
+          });
         }
       }
     }

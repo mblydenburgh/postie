@@ -217,7 +217,32 @@ impl PostieApi {
     }
     Ok(())
   }
-  pub async fn delete_collection_request(
+  pub async fn delete_collection_request(id: String, request_name: String) -> anyhow::Result<()> {
+    let mut api = PostieApi::new().await;
+    let collections = api.db.get_all_collections().await?;
+    for mut col in collections {
+      if col.info.id == id {
+        println!("matching collection found, looking for request to remove");
+        let mut collection_items: Vec<CollectionItemOrFolder> = vec![];
+        for (index, item) in &mut col.item.iter().enumerate() {
+          match item.clone() {
+            CollectionItemOrFolder::Folder(_) => (),
+            CollectionItemOrFolder::Item(i) => {
+              if i.name == request_name {
+                println!("removing top level request for collection {id}");
+              } else {
+                collection_items.push(CollectionItemOrFolder::Item(i));
+              }
+            }
+          }
+        }
+        col.item = collection_items;
+        let _ = api.db.save_collection(col).await;
+      }
+    }
+    Ok(())
+  }
+  pub async fn delete_folder_request(
     id: String,
     folder_name: String,
     request_name: String,
