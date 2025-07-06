@@ -4,7 +4,7 @@ use super::request::{HttpMethod, RequestHeaders};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tab {
-  pub id: String,
+  pub id: Uuid,
   pub method: HttpMethod,
   pub url: String,
   pub req_body: String,
@@ -16,7 +16,7 @@ pub struct Tab {
 impl Default for Tab {
   fn default() -> Self {
     Self {
-      id: Uuid::new_v4().to_string(),
+      id: Uuid::new_v4(),
       url: "".into(),
       req_body: "".into(),
       req_headers: RequestHeaders(vec![]),

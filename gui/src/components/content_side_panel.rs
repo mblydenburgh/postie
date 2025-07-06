@@ -1,14 +1,11 @@
 use std::{cell::RefCell, rc::Rc, str::FromStr, sync::Arc};
 
 use crate::Gui;
-use api::{
-  domain::{
-    collection::{Collection, CollectionFolder, CollectionItem, CollectionItemOrFolder},
-    request::{DBRequest, HttpMethod},
-    response::ResponseData,
-    ui,
-  },
-  PostieApi,
+use api::domain::{
+  collection::{Collection, CollectionFolder, CollectionItem, CollectionItemOrFolder},
+  request::{DBRequest, HttpMethod},
+  response::ResponseData,
+  ui,
 };
 use egui::{
   scroll_area::ScrollAreaOutput, CollapsingResponse, InnerResponse, ScrollArea, SidePanel,
@@ -16,21 +13,20 @@ use egui::{
 
 pub fn content_side_panel(app: &mut Gui, ctx: &egui::Context) {
   let collections_guard = {
-    let lock = app.collections.try_write().unwrap();
+    let lock = app.worker_state.collections.try_write().unwrap();
     lock.clone()
   };
   let active_winow_guard = {
-    let lock = app.active_window.try_write().unwrap();
+    let lock = app.gui_state.active_window.try_write().unwrap();
     lock.clone()
   };
   SidePanel::left("content_panel").show(ctx, |ui| match active_winow_guard {
     ui::ActiveWindow::COLLECTIONS => {
       ScrollArea::vertical().show(ui, |ui| {
         ui.label("Collections");
-        if let Some(cols) = collections_guard {
-          for c in cols {
-            render_collection(ui, app, &c);
-          }
+        let cols = collections_guard;
+        for c in cols {
+          render_collection(ui, app, &c);
         }
       });
     }
@@ -58,18 +54,18 @@ fn render_collection(
               render_context_menu(ui, app, c, None, None);
               if ui
                 .selectable_value(
-                  &mut app.selected_request.clone(),
+                  &mut app.gui_state.selected_request.clone(),
                   Rc::new(RefCell::from(Some(item.clone().request))),
                   item.name.to_string(),
                 )
                 .clicked()
               {
-                app.url = item.request.url.raw.clone();
-                app.selected_http_method =
+                app.gui_state.url = item.request.url.raw.clone();
+                app.gui_state.selected_http_method =
                   HttpMethod::from_str(&item.request.method.clone()).unwrap();
                 if let Some(body) = item.request.body {
                   if let Some(body_str) = body.raw {
-                    app.body_str = body_str;
+                    app.gui_state.body_str = body_str;
                   }
                 }
                 if let Some(headers) = item.request.header {
@@ -77,7 +73,7 @@ fn render_collection(
                     .into_iter()
                     .map(|h| (true, h.key, h.value))
                     .collect();
-                  app.headers = Rc::new(RefCell::from(constructed_headers));
+                  app.gui_state.headers = Rc::new(RefCell::from(constructed_headers));
                 }
               }
             });
@@ -107,15 +103,16 @@ fn render_folder(
               render_context_menu(ui, app, c, Some(&f), Some(&i));
               if ui
                 .selectable_value(
-                  &mut app.selected_request.clone(),
+                  &mut app.gui_state.selected_request.clone(),
                   Rc::new(RefCell::from(Some(i.clone().request))),
                   i.name.to_string(),
                 )
                 .clicked()
               {
-                app.url = i.request.url.raw;
-                app.selected_http_method = HttpMethod::from_str(&i.request.method.clone()).unwrap();
-                app.body_str = i.request.body.and_then(|b| b.raw).unwrap_or_default();
+                app.gui_state.url = i.request.url.raw;
+                app.gui_state.selected_http_method =
+                  HttpMethod::from_str(&i.request.method.clone()).unwrap();
+                app.gui_state.body_str = i.request.body.and_then(|b| b.raw).unwrap_or_default();
                 let constructed_headers: Vec<(bool, String, String)> = i
                   .request
                   .header
@@ -126,7 +123,7 @@ fn render_folder(
                       .collect()
                   })
                   .unwrap_or_default(); // default empty vec if none
-                app.headers = Rc::new(RefCell::from(constructed_headers));
+                app.gui_state.headers = Rc::new(RefCell::from(constructed_headers));
               }
             }),
             CollectionItemOrFolder::Folder(f) => render_folder(ui, app, c, f),
@@ -142,16 +139,15 @@ fn render_folder(
 fn render_environments(ui: &mut egui::Ui, app: &mut Gui) -> ScrollAreaOutput<()> {
   ScrollArea::vertical().show(ui, |ui| {
     ui.label("Environments");
-    let envs_clone = Arc::clone(&app.environments);
+    let envs_clone = Arc::clone(&app.worker_state.environments);
     let envs = envs_clone.try_write().unwrap();
-    if let Some(env_vec) = &*envs {
-      for env in env_vec {
-        ui.selectable_value(
-          &mut app.selected_environment,
-          Rc::new(RefCell::from(env.clone())),
-          env.name.to_string(),
-        );
-      }
+    let env_vec = &*envs;
+    for env in env_vec {
+      ui.selectable_value(
+        &mut app.gui_state.selected_environment,
+        Rc::new(RefCell::from(env.clone())),
+        env.name.to_string(),
+      );
     }
   })
 }
@@ -159,65 +155,64 @@ fn render_environments(ui: &mut egui::Ui, app: &mut Gui) -> ScrollAreaOutput<()>
 fn render_history(ui: &mut egui::Ui, app: &mut Gui) -> ScrollAreaOutput<()> {
   ScrollArea::vertical().show(ui, |ui| {
     ui.label("History");
-    let history_items_clone = Arc::clone(&app.request_history_items);
+    let history_items_clone = Arc::clone(&app.worker_state.request_history_items);
     let history_items = history_items_clone.try_write().unwrap();
-    let request_clone = app.saved_requests.try_write().unwrap();
-    if let Some(item_vec) = &*history_items {
-      for item in item_vec {
-        let history_reqs = request_clone.as_ref().unwrap();
-        let id = &item.clone().request_id;
-        let req_name = history_reqs
-          .get(id)
-          .unwrap_or(&DBRequest {
-            id: id.clone(),
-            method: "GET".into(),
-            url: "n/a".into(),
-            name: None,
-            headers: vec![],
-            body: None,
-          })
-          .url
-          .clone();
-        if ui
-          .selectable_value(
-            &mut app.selected_history_item,
-            Rc::new(RefCell::from(Some(item.clone()))),
-            format!("{:?}", req_name), // TODO - create function to get name
-          )
-          .clicked()
-        {
-          // TODO - replace url, method, request body, response body
-          let responses_clone = app.saved_responses.try_write().unwrap();
-          let requests = request_clone.as_ref().unwrap();
-          let responses = responses_clone.as_ref().unwrap();
-          let historical_request = requests.get(&item.request_id).unwrap();
-          let historical_response = responses.get(&item.response_id).unwrap();
-          app.url = historical_request.url.clone();
-          app.selected_http_method = HttpMethod::from_str(&historical_request.method).unwrap();
-          match &historical_request.body {
-            Some(body_json) => {
-              app.body_str = body_json.to_string();
-            }
-            None => app.body_str = String::from(""),
+    let request_clone = app.worker_state.saved_requests.try_write().unwrap();
+    let item_vec = &*history_items;
+    for item in item_vec {
+      let history_reqs = &request_clone;
+      let id = &item.clone().request_id;
+      let req_name = history_reqs
+        .get(id)
+        .unwrap_or(&DBRequest {
+          id: id.clone(),
+          method: "GET".into(),
+          url: "n/a".into(),
+          name: None,
+          headers: vec![],
+          body: None,
+        })
+        .url
+        .clone();
+      if ui
+        .selectable_value(
+          &mut app.gui_state.selected_history_item,
+          Rc::new(RefCell::from(Some(item.clone()))),
+          format!("{:?}", req_name), // TODO - create function to get name
+        )
+        .clicked()
+      {
+        // TODO - replace url, method, request body, response body
+        let responses_clone = app.worker_state.saved_responses.try_write().unwrap();
+        let responses = responses_clone;
+        let historical_request = request_clone.get(&item.request_id).unwrap();
+        let historical_response = responses.get(&item.response_id).unwrap();
+        app.gui_state.url = historical_request.url.clone();
+        app.gui_state.selected_http_method =
+          HttpMethod::from_str(&historical_request.method).unwrap();
+        match &historical_request.body {
+          Some(body_json) => {
+            app.gui_state.body_str = body_json.to_string();
           }
-          let ui_response_clone = app.response.clone();
-          let mut ui_response_guard = ui_response_clone.try_write().unwrap();
-          let response_body = &historical_response.body;
-          match response_body {
-            Some(body) => {
-              let json_val = serde_json::json!(&body);
-              println!("val: {}", json_val);
-              let parsed_body = match serde_json::from_str(body) {
-                Ok(b) => ResponseData::JSON(b),
-                Err(e) => {
-                  println!("{}", e);
-                  ResponseData::TEXT(body.clone())
-                }
-              };
-              *ui_response_guard = Some(parsed_body)
-            }
-            None => *ui_response_guard = None,
+          None => app.gui_state.body_str = String::from(""),
+        }
+        let ui_response_clone = app.worker_state.response.clone();
+        let mut ui_response_guard = ui_response_clone.try_write().unwrap();
+        let response_body = &historical_response.body;
+        match response_body {
+          Some(body) => {
+            let json_val = serde_json::json!(&body);
+            println!("val: {}", json_val);
+            let parsed_body = match serde_json::from_str(body) {
+              Ok(b) => ResponseData::JSON(b),
+              Err(e) => {
+                println!("{}", e);
+                ResponseData::TEXT(body.clone())
+              }
+            };
+            *ui_response_guard = Some(parsed_body)
           }
+          None => *ui_response_guard = None,
         }
       }
     }
@@ -241,45 +236,56 @@ fn render_context_menu(
       }
     });
     if (ui.button("Delete")).clicked() {
-      // TODO - validate deletion of collection folder
+      // TODO - fix validate deletion of collection folder
+      // currently nothing happens
       if let Some(f) = fol {
         if let None = req {
           let clicked_col_id = col.clone().info.id;
-          let refresh_clone = app.collections.clone();
           let folder_for_worker = f.clone();
+          let api_for_worker = Arc::clone(&app.worker_state.api);
+          let tx_clone = app.event_tx.clone();
           tokio::spawn(async move {
-            let _ = PostieApi::delete_collection_folder(clicked_col_id, folder_for_worker.name);
-            Gui::refresh_collections(refresh_clone).await;
+            let _ = api_for_worker
+              .try_write()
+              .unwrap()
+              .delete_collection_folder(clicked_col_id, folder_for_worker.name);
+            Gui::refresh_collections(&tx_clone);
           });
         }
       }
-      // TODO - validate deletion of folder request
+      // TODO - fix deletion of folder request
+      // currently throw index out of bounds error, no change
       if let Some(r) = req {
         if let Some(f) = fol {
           let clicked_col_id = col.clone().info.id;
           let clicked_req_name = r.name.clone();
-          let refresh_clone = app.collections.clone();
           let folder_for_worker = f.clone();
+          let api_for_worker = Arc::clone(&app.worker_state.api);
+          let tx_clone = app.event_tx.clone();
           tokio::spawn(async move {
-            let _ = PostieApi::delete_folder_request(
-              clicked_col_id,
-              folder_for_worker.name,
-              clicked_req_name,
-            )
-            .await;
-            Gui::refresh_collections(refresh_clone).await;
+            let _ = api_for_worker
+              .write()
+              .await
+              .delete_folder_request(clicked_col_id, folder_for_worker.name, clicked_req_name)
+              .await;
+            Gui::refresh_collections(&tx_clone);
           });
         }
       }
-      // TODO - deleting collection request deletes entire collection
+      // TODO - fix deleting collection request - deletes entire collection
       if let Some(r) = req {
         if let None = fol {
           let clicked_col_id = col.clone().info.id;
           let clicked_req_name = r.name.clone();
-          let refresh_clone = app.collections.clone();
+          let api_for_worker = Arc::clone(&app.worker_state.api);
+          let tx_clone = app.event_tx.clone();
           tokio::spawn(async move {
-            let _ = PostieApi::delete_collection_request(clicked_col_id, clicked_req_name).await;
-            Gui::refresh_collections(refresh_clone).await;
+            let _ = api_for_worker
+              .try_write()
+              .unwrap()
+              .delete_collection_request(clicked_col_id, clicked_req_name)
+              .await;
+            Gui::refresh_collections(&tx_clone);
           });
         }
       }
@@ -287,10 +293,15 @@ fn render_context_menu(
         if let None = req {
           let clicked_id = col.info.id.clone();
           // call to delete collection by id, refresh collections for ui
-          let refresh_clone = app.collections.clone();
+          let api_for_worker = Arc::clone(&app.worker_state.api);
+          let tx_clone = app.event_tx.clone();
           tokio::spawn(async move {
-            let _ = PostieApi::delete_collection(clicked_id).await;
-            Gui::refresh_collections(refresh_clone).await;
+            let _ = api_for_worker
+              .try_write()
+              .unwrap()
+              .delete_collection(clicked_id)
+              .await;
+            Gui::refresh_collections(&tx_clone);
           });
         }
       }

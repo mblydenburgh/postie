@@ -40,24 +40,23 @@ impl PostieApi {
       db: repository::PostieDb::new().await,
     }
   }
-  pub fn parse_collection(collection_json: &str) -> Collection {
+  pub fn parse_collection(&mut self, collection_json: &str) -> Collection {
     println!("Parsing collection from json");
     serde_json::from_str(collection_json).expect("Failed to parse collection")
   }
-  pub fn parse_environment(environment_json: &str) -> EnvironmentFile {
+  pub fn parse_environment(&mut self, environment_json: &str) -> EnvironmentFile {
     println!("Parsing environment from json");
     serde_json::from_str(environment_json).expect("Failed to parse environment")
   }
-  pub fn read_file(path: &str) -> anyhow::Result<String> {
+  pub fn read_file(&mut self, path: &str) -> anyhow::Result<String> {
     println!("Reading file: {}", path);
     Ok(fs::read_to_string(path)?)
   }
-  pub async fn import_collection(path: &str) -> anyhow::Result<String> {
-    let mut api = PostieApi::new().await;
-    let file_str = Self::read_file(path).unwrap();
-    let collection = Self::parse_collection(&file_str);
+  pub async fn import_collection(&mut self, path: &str) -> anyhow::Result<String> {
+    let file_str = self.read_file(path).unwrap();
+    let collection = self.parse_collection(&file_str);
     println!("Successfully parsed postman collection!");
-    match api.db.save_collection(collection).await {
+    match &self.db.save_collection(collection.clone()).await {
       Ok(_) => Ok(String::from("Import successful")),
       Err(_) => {
         println!("Error saving collection");
@@ -66,13 +65,13 @@ impl PostieApi {
     }
   }
   pub async fn add_request_to_collection(
+    &mut self,
     id: &str,
     req: HttpRequest,
     folder_name: String,
   ) -> anyhow::Result<()> {
-    let mut api = PostieApi::new().await;
     println!("finding collection {id} to update");
-    let collections = api.db.get_all_collections().await?;
+    let collections = self.db.get_all_collections().await?;
     for mut collection in collections {
       if collection.info.id == id {
         println!("adding request to {folder_name}");
@@ -124,18 +123,17 @@ impl PostieApi {
           item: updated_items,
           auth: collection.auth,
         };
-        api.db.save_collection(updated).await?;
+        self.db.save_collection(updated).await?;
       }
     }
     Ok(())
   }
   // TODO - better error handling
-  pub async fn import_environment(path: &str) -> anyhow::Result<String> {
-    let mut api = PostieApi::new().await;
-    let file_str = Self::read_file(path).unwrap();
-    let environment = Self::parse_environment(&file_str);
+  pub async fn import_environment(&mut self, path: &str) -> anyhow::Result<String> {
+    let file_str = self.read_file(path)?;
+    let environment = self.parse_environment(&file_str);
     println!("Successfully parsed postman environment!");
-    match api.db.save_environment(environment).await {
+    match self.db.save_environment(environment).await {
       Ok(_) => Ok(String::from("Import successful")),
       Err(_) => {
         println!("Error saving enviornment");
@@ -143,9 +141,8 @@ impl PostieApi {
       }
     }
   }
-  pub async fn save_environment(input: EnvironmentFile) -> anyhow::Result<()> {
-    let mut api = PostieApi::new().await;
-    match api.db.save_environment(input).await {
+  pub async fn save_environment(&mut self, input: EnvironmentFile) -> anyhow::Result<()> {
+    match self.db.save_environment(input).await {
       Ok(_) => Ok(()),
       Err(_) => {
         println!("Error saving environment");
@@ -153,9 +150,11 @@ impl PostieApi {
       }
     }
   }
-  pub async fn save_collection(input: Collection) -> anyhow::Result<()> {
-    let mut api = PostieApi::new().await;
-    match api.db.save_collection(input).await {
+  pub async fn save_collection(&mut self, input: Collection) -> anyhow::Result<()> {
+    // TODO - figure out a way to not have to call this in each method.
+    // unit tests are currently trying to make a realy connection after
+    // already connecting to in memory test.
+    match self.db.save_collection(input).await {
       Ok(_) => Ok(()),
       Err(_) => {
         println!("Error saving collection");
@@ -163,43 +162,39 @@ impl PostieApi {
       }
     }
   }
-  pub async fn load_environments() -> anyhow::Result<Vec<EnvironmentFile>> {
-    let mut api = PostieApi::new().await;
-    let envs = api.db.get_all_environments().await.unwrap();
+  pub async fn load_environments(&self) -> anyhow::Result<Vec<EnvironmentFile>> {
+    let envs = self.db.get_all_environments().await?;
     Ok(envs)
   }
-  pub async fn load_collections() -> anyhow::Result<Vec<Collection>> {
-    let mut api = PostieApi::new().await;
-    let collections = api.db.get_all_collections().await.unwrap();
+  pub async fn load_collections(&self) -> anyhow::Result<Vec<Collection>> {
+    let collections = self.db.get_all_collections().await?;
     Ok(collections)
   }
-  pub async fn load_tabs() -> anyhow::Result<Vec<Tab>> {
-    let mut api = PostieApi::new().await;
-    let tabs = api.db.get_all_tabs().await.unwrap();
+  pub async fn load_tabs(&mut self) -> anyhow::Result<Vec<Tab>> {
+    let tabs = self.db.get_all_tabs().await?;
     Ok(tabs)
   }
-  pub async fn load_request_response_items() -> anyhow::Result<Vec<RequestHistoryItem>> {
-    let mut api = PostieApi::new().await;
-    let items = api.db.get_request_response_items().await.unwrap();
+  pub async fn load_request_response_items(&mut self) -> anyhow::Result<Vec<RequestHistoryItem>> {
+    let items = self.db.get_request_response_items().await?;
     Ok(items)
   }
-  pub async fn load_saved_requests() -> anyhow::Result<Vec<DBRequest>> {
-    let mut api = PostieApi::new().await;
-    let requests = api.db.get_all_requests().await.unwrap();
+  pub async fn load_saved_requests(&mut self) -> anyhow::Result<Vec<DBRequest>> {
+    let requests = self.db.get_all_requests().await?;
     Ok(requests)
   }
-  pub async fn load_saved_responses() -> anyhow::Result<Vec<DBResponse>> {
-    let mut api = PostieApi::new().await;
-    let responses = api.db.get_all_responses().await.unwrap();
+  pub async fn load_saved_responses(&mut self) -> anyhow::Result<Vec<DBResponse>> {
+    let responses = self.db.get_all_responses().await?;
     Ok(responses)
   }
-  pub async fn delete_collection(id: String) -> anyhow::Result<()> {
-    let mut api = PostieApi::new().await;
-    api.db.delete_collection(id).await
+  pub async fn delete_collection(&mut self, id: String) -> anyhow::Result<()> {
+    self.db.delete_collection(id).await
   }
-  pub async fn delete_collection_folder(id: String, folder_name: String) -> anyhow::Result<()> {
-    let mut api = PostieApi::new().await;
-    let collections = api.db.get_all_collections().await?;
+  pub async fn delete_collection_folder(
+    &mut self,
+    id: String,
+    folder_name: String,
+  ) -> anyhow::Result<()> {
+    let collections = self.db.get_all_collections().await?;
     for mut col in collections {
       if col.info.id == id {
         println!("matching collection found, looking for folder to remove");
@@ -212,14 +207,17 @@ impl PostieApi {
           }
         }
         col.item = collection_items;
-        let _ = api.db.save_collection(col).await;
+        let _ = self.db.save_collection(col).await;
       }
     }
     Ok(())
   }
-  pub async fn delete_collection_request(id: String, request_name: String) -> anyhow::Result<()> {
-    let mut api = PostieApi::new().await;
-    let collections = api.db.get_all_collections().await?;
+  pub async fn delete_collection_request(
+    &mut self,
+    id: String,
+    request_name: String,
+  ) -> anyhow::Result<()> {
+    let collections = self.db.get_all_collections().await?;
     for mut col in collections {
       if col.info.id == id {
         println!("matching collection found, looking for request to remove");
@@ -237,18 +235,18 @@ impl PostieApi {
           }
         }
         col.item = collection_items;
-        let _ = api.db.save_collection(col).await;
+        let _ = self.db.save_collection(col).await;
       }
     }
     Ok(())
   }
   pub async fn delete_folder_request(
+    &mut self,
     id: String,
     folder_name: String,
     request_name: String,
   ) -> anyhow::Result<()> {
-    let mut api = PostieApi::new().await;
-    let collections = api.db.get_all_collections().await?;
+    let collections = self.db.get_all_collections().await?;
     for mut col in collections {
       if col.info.id == id {
         println!("matching collection found, looking for request to remove");
@@ -271,12 +269,16 @@ impl PostieApi {
           }
         }
         col.item = collection_items;
-        let _ = api.db.save_collection(col).await;
+        let _ = self.db.save_collection(col).await;
       }
     }
     Ok(())
   }
-  pub fn substitute_variables_in_url(environment: &EnvironmentFile, raw_url: String) -> String {
+  pub fn substitute_variables_in_url(
+    &mut self,
+    environment: &EnvironmentFile,
+    raw_url: String,
+  ) -> String {
     println!("substituting env vars");
     if let Some(values) = environment.clone().values {
       let url = values.iter().fold(raw_url, |acc, env_value| {
@@ -289,8 +291,7 @@ impl PostieApi {
       raw_url
     }
   }
-  pub async fn make_request(input: PostieRequest) -> anyhow::Result<Response> {
-    let api = PostieApi::new().await;
+  pub async fn make_request(&mut self, input: PostieRequest) -> anyhow::Result<Response> {
     match input {
       // request and save http request
       PostieRequest::HTTP(input) => {
@@ -306,8 +307,8 @@ impl PostieApi {
           }
         };
 
-        let url = Self::substitute_variables_in_url(&input.environment.clone(), input.url.clone());
-        let mut req = api.client.request(method, url).headers(headers.clone());
+        let url = self.substitute_variables_in_url(&input.environment.clone(), input.url.clone());
+        let mut req = self.client.request(method, url).headers(headers.clone());
         if let Some(ref request_body) = input.body {
           req = match request_body.clone() {
             RequestBody::JSON(j) => req.json(&j.clone()),
@@ -331,7 +332,6 @@ impl PostieApi {
           .into_iter()
           .map(|(key, value)| domain::request::RequestHeader { key, value })
           .collect();
-        let mut db = repository::PostieDb::new().await;
         let body = if let Some(req_body) = input.body {
           match req_body {
             RequestBody::JSON(j) => Some(j.to_string()),
@@ -348,7 +348,7 @@ impl PostieApi {
           url: input.url.clone(),
           headers: request_headers,
         };
-        db.save_request_history(&db_request).await?;
+        self.db.save_request_history(&db_request).await?;
         let response_headers: Vec<domain::response::ResponseHeader> = res_headers
           .borrow()
           .into_iter()
@@ -364,8 +364,10 @@ impl PostieApi {
           headers: response_headers,
           body: Some(res_text.clone()),
         };
-        db.save_response(&db_response).await?;
-        db.save_request_response_item(&db_request, &db_response, &now, &response_time)
+        self.db.save_response(&db_response).await?;
+        self
+          .db
+          .save_request_response_item(&db_request, &db_response, &now, &response_time)
           .await?;
         let response = utilities::response::build_response(res_type, res_status, res_text)?;
         let res_body = match &response.data {
@@ -375,7 +377,7 @@ impl PostieApi {
           ResponseData::UNKNOWN(t) => t.to_string(),
         };
         let updated_tab = Tab {
-          id: input.tab_id.to_string(),
+          id: input.tab_id,
           method: input.method.clone(),
           url: input.url.clone(),
           req_body: "".into(),
@@ -384,7 +386,7 @@ impl PostieApi {
           res_body,
           res_headers: RequestHeaders(vec![]),
         };
-        db.save_tab(&updated_tab).await?;
+        self.db.save_tab(&updated_tab).await?;
         Ok(response)
       }
       // if making an oauth token request, dont save to db
@@ -403,7 +405,7 @@ impl PostieApi {
           header::CONTENT_TYPE,
           HeaderValue::from_str("application/x-www-form-urlencoded").unwrap(),
         );
-        let mut req = api
+        let mut req = self
           .client
           .request(Method::POST, input.access_token_url)
           .headers(header_map);
@@ -418,9 +420,8 @@ impl PostieApi {
       }
     }
   }
-  pub async fn delete_tab(tab_id: Uuid) -> anyhow::Result<()> {
-    let mut db = repository::PostieDb::new().await;
-    db.delete_tab(tab_id).await?;
+  pub async fn delete_tab(&mut self, tab_id: Uuid) -> anyhow::Result<()> {
+    self.db.delete_tab(tab_id).await?;
     Ok(())
   }
 }

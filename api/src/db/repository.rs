@@ -1,8 +1,9 @@
-use std::path::Path;
-
 use chrono::{DateTime, Utc};
 use serde_json::from_str;
-use sqlx::{sqlite::SqliteRow, Connection, Row, SqliteConnection};
+use sqlx::{
+  sqlite::{SqlitePoolOptions, SqliteRow},
+  Row, SqliteConnection, SqlitePool,
+};
 use uuid::Uuid;
 
 use crate::domain::{
@@ -14,8 +15,8 @@ use crate::domain::{
   tab::Tab,
 };
 
-pub async fn initialize_db() -> anyhow::Result<SqliteConnection> {
-  println!("acquiring sqlite connection");
+pub async fn initialize_db() -> anyhow::Result<SqlitePool> {
+  println!("acquiring for reals sqlite connection");
   let args: Vec<String> = std::env::args().collect();
   if args.len() != 2 {
     println!("Usage: {} <sqlite db file>", args[0]);
@@ -23,23 +24,27 @@ pub async fn initialize_db() -> anyhow::Result<SqliteConnection> {
   }
   let db_path = &args[1];
   // if path does not exist, assume running locally and default to local copy
-  if !Path::new(db_path).exists() {
-    return Ok(SqliteConnection::connect("sqlite:postie.sqlite").await?);
+  if !std::path::Path::new(db_path).exists() {
+    return Ok(
+      SqlitePoolOptions::new()
+        .connect("sqlite:postie.sqlite")
+        .await?,
+    );
   }
-  let connection = SqliteConnection::connect(db_path).await?;
+  let connection = SqlitePoolOptions::new().connect(db_path).await?;
   println!("{:?} sqlite connection established", connection);
 
   Ok(connection)
 }
 
 pub struct PostieDb {
-  pub connection: SqliteConnection,
+  pub pool: SqlitePool,
 }
 
 impl PostieDb {
   pub async fn new() -> Self {
     PostieDb {
-      connection: initialize_db()
+      pool: initialize_db()
         .await
         .ok()
         .expect("could not establish database connection"),
@@ -48,7 +53,7 @@ impl PostieDb {
 
   pub async fn save_request_history(&mut self, request: &DBRequest) -> anyhow::Result<()> {
     println!("got request: {:?}", request);
-    let mut transaction = self.connection.begin().await?;
+    let mut transaction = self.pool.begin().await?;
     let header_json = serde_json::to_string(&request.headers)?;
     let _request = sqlx::query!(
       r#"
@@ -79,7 +84,7 @@ impl PostieDb {
     response_time: &u128,
   ) -> anyhow::Result<()> {
     println!("Saving request response history item");
-    let mut transaction = self.connection.begin().await?;
+    let mut transaction = self.pool.begin().await?;
     let id = Uuid::new_v4().to_string();
     let converted_sent = sent_at.to_string();
     let converted_response_time = response_time.to_string();
@@ -118,14 +123,14 @@ impl PostieDb {
           sent_at,
         }
       })
-      .fetch_all(&mut self.connection)
+      .fetch_all(&self.pool)
       .await
       .unwrap();
     Ok(rows)
   }
 
   pub async fn save_environment(&mut self, environment: EnvironmentFile) -> anyhow::Result<()> {
-    let mut transaction = self.connection.begin().await?;
+    let mut transaction = self.pool.begin().await?;
     let value_json = match environment.values {
       None => serde_json::json!("[]"),
       Some(values) => serde_json::Value::String(serde_json::to_string(&values).unwrap()),
@@ -149,7 +154,7 @@ impl PostieDb {
 
   pub async fn save_collection(&mut self, collection: Collection) -> anyhow::Result<()> {
     println!("Saving collection {:#?} to db", collection.info);
-    let mut transaction = self.connection.begin().await?;
+    let mut transaction = self.pool.begin().await?;
     let items_json = serde_json::to_string(&collection.item)?;
     let auth_json = serde_json::to_string(&collection.auth)?;
     _ = sqlx::query!(
@@ -172,7 +177,7 @@ impl PostieDb {
 
   pub async fn save_response(&mut self, response: &DBResponse) -> anyhow::Result<()> {
     println!("Saving response to db");
-    let mut transaction = self.connection.begin().await?;
+    let mut transaction = self.pool.begin().await?;
     let header_json = serde_json::to_string(&response.headers)?;
     _ = sqlx::query!(
       r#"
@@ -197,7 +202,8 @@ impl PostieDb {
     let method = tab.method.to_string();
     let req_headers = serde_json::to_string(&tab.req_headers).unwrap();
     let res_headers = serde_json::to_string(&tab.res_headers).unwrap();
-    let mut transaction = self.connection.begin().await?;
+    let mut transaction = self.pool.begin().await?;
+    let id = tab.clone().id.to_string();
     _ = sqlx::query!(
             r#"
             INSERT INTO tabs (id, method, url, req_body, req_headers, res_status, res_body, res_headers)
@@ -205,7 +211,7 @@ impl PostieDb {
             ON CONFLICT (id) DO UPDATE SET 
             method = $2, url = $3, req_body = $4, req_headers = $5, res_status = $6, res_body = $7, res_headers = $8
             "#,
-            tab.id,
+            id,
             method,
             tab.url,
             tab.req_body,
@@ -246,13 +252,13 @@ impl PostieDb {
           body,
         }
       })
-      .fetch_all(&mut self.connection)
+      .fetch_all(&self.pool)
       .await
       .unwrap();
     Ok(rows)
   }
 
-  pub async fn get_all_collections(&mut self) -> anyhow::Result<Vec<Collection>> {
+  pub async fn get_all_collections(&self) -> anyhow::Result<Vec<Collection>> {
     println!("getting all saved collections");
     let rows = sqlx::query("SELECT * from collections")
       .map(|row: SqliteRow| {
@@ -276,7 +282,7 @@ impl PostieDb {
           auth,
         }
       })
-      .fetch_all(&mut self.connection)
+      .fetch_all(&self.pool)
       .await
       .unwrap();
     Ok(rows)
@@ -305,13 +311,13 @@ impl PostieDb {
           body,
         }
       })
-      .fetch_all(&mut self.connection)
+      .fetch_all(&self.pool)
       .await
       .unwrap();
     Ok(rows)
   }
 
-  pub async fn get_all_environments(&mut self) -> anyhow::Result<Vec<EnvironmentFile>> {
+  pub async fn get_all_environments(&self) -> anyhow::Result<Vec<EnvironmentFile>> {
     println!("getting all envs");
     let rows = sqlx::query("SELECT * FROM environment")
       .map(|row: SqliteRow| {
@@ -346,7 +352,7 @@ impl PostieDb {
           }
         }
       })
-      .fetch_all(&mut self.connection)
+      .fetch_all(&self.pool)
       .await
       .unwrap();
 
@@ -379,7 +385,7 @@ impl PostieDb {
           res_body = body
         }
         Tab {
-          id,
+          id: Uuid::parse_str(&id).unwrap(),
           url,
           req_body: req_body.unwrap_or_default(),
           method: match method.as_str() {
@@ -395,7 +401,7 @@ impl PostieDb {
           res_headers: RequestHeaders(vec![]),
         }
       })
-      .fetch_all(&mut self.connection)
+      .fetch_all(&self.pool)
       .await
       .unwrap();
     Ok(rows)
@@ -404,7 +410,7 @@ impl PostieDb {
   pub async fn delete_tab(&mut self, tab_id: Uuid) -> anyhow::Result<()> {
     let id = tab_id.to_string();
     sqlx::query!("DELETE FROM tabs WHERE id = $1", id)
-      .execute(&mut self.connection)
+      .execute(&self.pool)
       .await?;
     Ok(())
   }
@@ -412,7 +418,7 @@ impl PostieDb {
   pub async fn delete_collection(&mut self, collection_id: String) -> anyhow::Result<()> {
     let id = collection_id.to_string();
     sqlx::query!("DELETE FROM collections WHERE id = $1", id)
-      .execute(&mut self.connection)
+      .execute(&self.pool)
       .await?;
     Ok(())
   }

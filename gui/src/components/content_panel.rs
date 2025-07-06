@@ -10,12 +10,11 @@ use egui::{CentralPanel, ComboBox, ScrollArea, TextEdit, TextStyle, TopBottomPan
 use egui_extras::{Column, TableBuilder};
 use egui_json_tree::JsonTree;
 
+use crate::events;
 use crate::Gui;
 
 pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
-  let sender = &mut gui.sender.clone();
-  let receiver = &mut gui.receiver;
-  if let Ok(request_window_mode) = gui.request_window_mode.try_read() {
+  if let Ok(request_window_mode) = gui.gui_state.request_window_mode.try_read() {
     match *request_window_mode {
       ui::RequestWindowMode::BODY => {
         TopBottomPanel::top("request_panel")
@@ -24,7 +23,7 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
           .show(ctx, |ui| {
             ScrollArea::vertical().show(ui, |ui| {
               ui.add(
-                TextEdit::multiline(&mut gui.body_str)
+                TextEdit::multiline(&mut gui.gui_state.body_str)
                   .code_editor()
                   .desired_rows(20)
                   .lock_focus(true)
@@ -33,11 +32,11 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
               );
             });
           });
-        match gui.response.try_read() {
+        match gui.worker_state.response.try_read() {
           Ok(response) => {
             if response.is_some() {
               CentralPanel::default().show(ctx, |ui| {
-                let binding = gui.response.try_read().unwrap();
+                let binding = gui.worker_state.response.try_read().unwrap();
                 let r = binding.as_ref().unwrap();
                 match r {
                   ResponseData::JSON(json) => {
@@ -82,87 +81,106 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
             .resizable(true)
             .show(ctx, |ui| {
               ComboBox::from_label("")
-                .selected_text(format!("{:?}", gui.selected_auth_mode))
+                .selected_text(format!("{:?}", gui.gui_state.selected_auth_mode))
                 .show_ui(ui, |ui| {
-                  ui.selectable_value(&mut gui.selected_auth_mode, ui::AuthMode::BEARER, "Bearer");
-                  ui.selectable_value(&mut gui.selected_auth_mode, ui::AuthMode::APIKEY, "Api Key");
-                  ui.selectable_value(&mut gui.selected_auth_mode, ui::AuthMode::OAUTH2, "OAuth2");
-                  ui.selectable_value(&mut gui.selected_auth_mode, ui::AuthMode::NONE, "None");
+                  ui.selectable_value(
+                    &mut gui.gui_state.selected_auth_mode,
+                    ui::AuthMode::BEARER,
+                    "Bearer",
+                  );
+                  ui.selectable_value(
+                    &mut gui.gui_state.selected_auth_mode,
+                    ui::AuthMode::APIKEY,
+                    "Api Key",
+                  );
+                  ui.selectable_value(
+                    &mut gui.gui_state.selected_auth_mode,
+                    ui::AuthMode::OAUTH2,
+                    "OAuth2",
+                  );
+                  ui.selectable_value(
+                    &mut gui.gui_state.selected_auth_mode,
+                    ui::AuthMode::NONE,
+                    "None",
+                  );
                 });
-              match gui.selected_auth_mode {
+              match gui.gui_state.selected_auth_mode {
                 ui::AuthMode::APIKEY => {
                   ui.label("Api Key Value");
-                  ui.text_edit_multiline(&mut gui.api_key);
+                  ui.text_edit_multiline(&mut gui.gui_state.api_key);
                   ui.label("Header Name");
-                  ui.text_edit_singleline(&mut gui.api_key_name);
+                  ui.text_edit_singleline(&mut gui.gui_state.api_key_name);
                 }
                 ui::AuthMode::BEARER => {
                   ScrollArea::vertical().show(ui, |ui| {
                     ui.label("Enter Bearer Token");
-                    ui.add(TextEdit::multiline(&mut gui.bearer_token).desired_rows(25));
+                    ui.add(TextEdit::multiline(&mut gui.gui_state.bearer_token).desired_rows(25));
                   });
                 }
                 ui::AuthMode::OAUTH2 => {
                   ui.heading("Configure New Token");
                   ui.horizontal(|ui| {
                     ui.label("Access Token Url");
-                    ui.text_edit_singleline(&mut gui.oauth_config.access_token_url);
+                    ui.text_edit_singleline(&mut gui.gui_state.oauth_config.access_token_url);
                   });
                   ui.horizontal(|ui| {
                     ui.label("Client ID");
-                    ui.text_edit_singleline(&mut gui.oauth_config.client_id);
+                    ui.text_edit_singleline(&mut gui.gui_state.oauth_config.client_id);
                   });
                   ui.horizontal(|ui| {
                     ui.label("Client Secret");
-                    ui.text_edit_singleline(&mut gui.oauth_config.client_secret);
+                    ui.text_edit_singleline(&mut gui.gui_state.oauth_config.client_secret);
                   });
                   ui.horizontal(|ui| {
                     ui.label("Scope");
-                    ui.text_edit_singleline(&mut gui.oauth_config.request.scope);
+                    ui.text_edit_singleline(&mut gui.gui_state.oauth_config.request.scope);
                   });
                   ui.horizontal(|ui| {
                     ui.label("Audience");
-                    ui.text_edit_singleline(&mut gui.oauth_config.request.audience);
+                    ui.text_edit_singleline(&mut gui.gui_state.oauth_config.request.audience);
                   });
 
                   if ui.button("Request Token").clicked() {
                     println!("requesting token");
                     let oauth_input = request::OAuth2Request {
-                      access_token_url: gui.oauth_config.access_token_url.clone(),
-                      refresh_url: gui.oauth_config.refresh_url.clone(),
-                      client_id: gui.oauth_config.client_id.clone(),
-                      client_secret: gui.oauth_config.client_secret.clone(),
+                      access_token_url: gui.gui_state.oauth_config.access_token_url.clone(),
+                      refresh_url: gui.gui_state.oauth_config.refresh_url.clone(),
+                      client_id: gui.gui_state.oauth_config.client_id.clone(),
+                      client_secret: gui.gui_state.oauth_config.client_secret.clone(),
                       request: request::OAuthRequestBody {
-                        grant_type: gui.oauth_config.request.grant_type.clone(),
-                        scope: gui.oauth_config.request.scope.clone(),
-                        audience: gui.oauth_config.request.audience.clone(),
+                        grant_type: gui.gui_state.oauth_config.request.grant_type.clone(),
+                        scope: gui.gui_state.oauth_config.request.scope.clone(),
+                        audience: gui.gui_state.oauth_config.request.audience.clone(),
                       },
                     };
-                    let _ = Gui::spawn_ouath_request(sender, oauth_input);
+                    gui
+                      .event_tx
+                      .send(events::GuiEvent::SubmitOAuth2Request(oauth_input));
                   };
-                  if !gui.oauth_token.is_empty() {
+                  if !gui.gui_state.oauth_token.is_empty() {
                     ui.horizontal(|ui| {
                       ui.label("Token Result:");
-                      ui.add(egui::Label::new(gui.oauth_token.clone()).wrap());
+                      ui.add(egui::Label::new(gui.gui_state.oauth_token.clone()).wrap());
                     });
                   }
 
-                  // listener for oauth token response and setting the String
-                  // value in Gui to render
-                  let mut lock = gui.received_token.lock().expect("couldnt lock");
+                  let mut lock = gui
+                    .worker_state
+                    .received_token
+                    .lock()
+                    .expect("couldnt lock");
                   if !*lock {
-                    if let Ok(res) = receiver.try_recv() {
+                    let oauth_res = &gui.worker_state.oauth_response.try_read().unwrap();
+
+                    if let Some(res) = oauth_res.as_ref() {
                       *lock = true;
-                      if let Some(r) = res {
-                        println!("{:?}", &r);
-                        match r {
-                          ResponseData::JSON(j) => {
-                            let data = serde_json::from_value::<OAuthResponse>(j).unwrap();
-                            ui.label(data.access_token.clone());
-                            gui.oauth_token = data.access_token.clone();
-                          }
-                          _ => todo!(),
+                      match res {
+                        ResponseData::JSON(j) => {
+                          let data = serde_json::from_value::<OAuthResponse>(j.clone()).unwrap();
+                          ui.label(data.access_token.clone());
+                          gui.gui_state.oauth_token = data.access_token.clone();
                         }
+                        _ => todo!(),
                       }
                     }
                   }
@@ -194,7 +212,7 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
               });
             })
             .body(|mut body| {
-              for header in gui.headers.borrow_mut().iter_mut() {
+              for header in gui.gui_state.headers.borrow_mut().iter_mut() {
                 body.row(30.0, |mut row| {
                   let (enabled, key, value) = header;
                   row.col(|ui| {
@@ -211,10 +229,11 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
               body.row(30.0, |mut row| {
                 row.col(|ui| {
                   if ui.button("Add").clicked() {
-                    gui
-                      .headers
-                      .borrow_mut()
-                      .push((true, String::from(""), String::from("")));
+                    gui.gui_state.headers.borrow_mut().push((
+                      true,
+                      String::from(""),
+                      String::from(""),
+                    ));
                   };
                 });
               });
@@ -247,7 +266,7 @@ pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
               });
             })
             .body(|mut body| {
-              let selected_environment = gui.selected_environment.borrow_mut();
+              let selected_environment = gui.gui_state.selected_environment.borrow_mut();
               let mut values_ref = RefMut::map(selected_environment, |env| &mut env.values);
               if let Some(values) = values_ref.as_mut() {
                 for env_var in values {
