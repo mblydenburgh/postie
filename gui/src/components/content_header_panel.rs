@@ -1,15 +1,16 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
 
 use api::domain::{
+  environment::EnvironmentFile,
   request::{self, HttpMethod, HttpRequest},
+  tab::Tab,
   ui::{self, RequestWindowMode},
 };
 use egui::{ComboBox, InnerResponse, TopBottomPanel};
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc::Sender, RwLock};
 use uuid::Uuid;
 
-use crate::events;
-use crate::Gui;
+use crate::events::{self, GuiEvent};
 
 pub struct ContentHeaderPanel {
   pub selected_http_method: HttpMethod,
@@ -25,11 +26,48 @@ impl ContentHeaderPanel {
       request_window_mode: Arc::new(RwLock::new(RequestWindowMode::BODY)),
     }
   }
-  pub fn show(&mut self, ui: &mut egui::Ui, app: &Gui) -> InnerResponse<Option<HttpRequest>> {
-    TopBottomPanel::top("top_panel").show(ui.ctx(), |ui| self.render_url_bar(ui, app))
+  pub fn show(
+    &mut self,
+    ctx: &egui::Context,
+    event_tx: &Sender<GuiEvent>,
+    active_tab: Arc<RwLock<Tab>>,
+    environment: Rc<RefCell<EnvironmentFile>>,
+    headers: Rc<RefCell<Vec<(bool, String, String)>>>,
+    auth_mode: ui::AuthMode,
+    api_key_name: String,
+    api_key: String,
+    bearer_token: String,
+    oauth_token: String,
+  ) -> InnerResponse<Option<HttpRequest>> {
+    TopBottomPanel::top("top_panel").show(ctx, |ui| {
+      self.render_url_bar(
+        ui,
+        event_tx,
+        active_tab,
+        environment,
+        headers,
+        auth_mode,
+        api_key_name,
+        api_key,
+        bearer_token,
+        oauth_token,
+      )
+    })
   }
 
-  fn render_url_bar(&mut self, ui: &mut egui::Ui, app: &Gui) -> Option<HttpRequest> {
+  fn render_url_bar(
+    &mut self,
+    ui: &mut egui::Ui,
+    event_tx: &Sender<GuiEvent>,
+    active_tab: Arc<RwLock<Tab>>,
+    environment: Rc<RefCell<EnvironmentFile>>,
+    headers: Rc<RefCell<Vec<(bool, String, String)>>>,
+    auth_mode: ui::AuthMode,
+    api_key_name: String,
+    api_key: String,
+    bearer_token: String,
+    oauth_token: String,
+  ) -> Option<HttpRequest> {
     ui.horizontal(|ui| {
       // HTTP Method Selector
       self.render_method_selector(ui);
@@ -40,8 +78,17 @@ impl ContentHeaderPanel {
 
       // Submit Button
       if ui.button("Submit").clicked() {
-        if let Some(req) = self.build_request(app) {
-          app.event_tx.send(events::GuiEvent::SubmitRequest(req));
+        if let Some(req) = self.build_request(
+          active_tab,
+          environment,
+          headers,
+          auth_mode,
+          api_key_name,
+          api_key,
+          bearer_token,
+          oauth_token,
+        ) {
+          event_tx.send(events::GuiEvent::SubmitRequest(req));
         };
       }
     });
@@ -66,11 +113,7 @@ impl ContentHeaderPanel {
         ];
 
         for (method, label) in variants {
-          ui.selectable_value(
-            &mut self.selected_http_method,
-            method, // This moves `method` (ok because it's Copy)
-            label,  // Use pre-formatted string
-          );
+          ui.selectable_value(&mut self.selected_http_method, method, label);
         }
       });
   }
@@ -91,54 +134,72 @@ impl ContentHeaderPanel {
     }
   }
 
-  fn build_request(&self, app: &Gui) -> Option<request::HttpRequest> {
-    let body = if self.selected_http_method != request::HttpMethod::GET {
+  fn build_request(
+    &self,
+    active_tab: Arc<RwLock<Tab>>,
+    environment: Rc<RefCell<EnvironmentFile>>,
+    headers: Rc<RefCell<Vec<(bool, String, String)>>>,
+    auth_mode: ui::AuthMode,
+    api_key_name: String,
+    api_key: String,
+    bearer_token: String,
+    oauth_token: String,
+  ) -> Option<request::HttpRequest> {
+    let body = if active_tab.try_read().unwrap().method != request::HttpMethod::GET {
       Some(request::RequestBody::JSON(
-        serde_json::from_str(&app.gui_state.body_str).unwrap_or_default(),
+        serde_json::from_str(&active_tab.try_read().unwrap().req_body).unwrap_or_default(),
       ))
     } else {
       None
     };
-    let active_tab_guard = Arc::clone(&app.worker_state.active_tab);
+    let active_tab_guard = Arc::clone(&active_tab);
+    let processed_headers = self.process_headers(
+      &*headers.borrow(),
+      auth_mode,
+      api_key_name,
+      api_key,
+      bearer_token,
+      oauth_token,
+    );
 
     match active_tab_guard.clone().try_read() {
       Ok(tab) => Some(request::HttpRequest {
         tab_id: tab.id,
         id: Uuid::new_v4(),
         name: None,
-        headers: Some(self.process_headers(app)),
+        headers: Some(processed_headers),
         body,
-        method: self.selected_http_method.clone(),
-        url: self.url.clone(),
-        environment: app.gui_state.selected_environment.borrow().clone(),
+        method: tab.method.clone(),
+        url: tab.url.clone(),
+        environment: environment.borrow().clone(),
       }),
       Err(_) => None,
     }
   }
 
-  fn process_headers(&self, app: &Gui) -> Vec<(String, String)> {
-    let mut headers = app
-      .gui_state
-      .headers
-      .borrow()
+  fn process_headers(
+    &self,
+    headers: &Vec<(bool, String, String)>,
+    auth_mode: ui::AuthMode,
+    api_key_name: String,
+    api_key: String,
+    bearer_token: String,
+    oauth_token: String,
+  ) -> Vec<(String, String)> {
+    let mut headers = headers
       .iter()
       .filter(|h| h.0)
       .map(|h| (h.1.clone(), h.2.clone()))
       .collect::<Vec<_>>();
 
-    match app.gui_state.selected_auth_mode {
-      ui::AuthMode::APIKEY => headers.push((
-        app.gui_state.api_key_name.clone(),
-        app.gui_state.api_key.clone(),
-      )),
-      ui::AuthMode::BEARER => headers.push((
-        "Authorization".into(),
-        format!("Bearer {}", app.gui_state.bearer_token),
-      )),
-      ui::AuthMode::OAUTH2 => headers.push((
-        "Authorization".into(),
-        format!("Bearer {}", app.gui_state.oauth_token),
-      )),
+    match auth_mode {
+      ui::AuthMode::APIKEY => headers.push((api_key_name, api_key)),
+      ui::AuthMode::BEARER => {
+        headers.push(("Authorization".into(), format!("Bearer {}", bearer_token)))
+      }
+      ui::AuthMode::OAUTH2 => {
+        headers.push(("Authorization".into(), format!("Bearer {}", oauth_token)))
+      }
       _ => (),
     }
 

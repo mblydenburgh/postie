@@ -418,6 +418,18 @@ impl App for Gui {
   fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
     menu_panel(self, ctx);
     side_panel(self, ctx);
+    self.content_header_panel.show(
+      ctx,
+      &self.event_tx,
+      Arc::clone(&self.worker_state.active_tab),
+      self.gui_state.selected_environment.clone(),
+      self.gui_state.headers.clone(),
+      self.gui_state.selected_auth_mode.clone(),
+      self.gui_state.api_key_name.clone(),
+      self.gui_state.api_key.clone(),
+      self.gui_state.bearer_token.clone(),
+      self.gui_state.oauth_token.clone(),
+    );
     content_side_panel(self, ctx);
     content_panel(self, ctx);
     import_modal(self, ctx);
