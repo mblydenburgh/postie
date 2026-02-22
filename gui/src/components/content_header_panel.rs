@@ -90,7 +90,9 @@ impl ContentHeaderPanel {
           bearer_token,
           oauth_token,
         ) {
-          event_tx.send(events::GuiEvent::SubmitRequest(req));
+          event_tx
+            .try_send(events::GuiEvent::SubmitRequest(req))
+            .unwrap();
         };
       }
     });
