@@ -421,7 +421,7 @@ impl App for Gui {
     self.content_header_panel.show(
       ctx,
       &self.event_tx,
-      Arc::clone(&self.worker_state.active_tab),
+      self.worker_state.active_tab.clone(),
       self.gui_state.selected_environment.clone(),
       self.gui_state.headers.clone(),
       self.gui_state.selected_auth_mode.clone(),

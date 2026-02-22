@@ -207,7 +207,7 @@ fn render_history(ui: &mut egui::Ui, app: &mut Gui) -> ScrollAreaOutput<()> {
               Ok(b) => ResponseData::JSON(b),
               Err(e) => {
                 println!("{}", e);
-                ResponseData::TEXT(body.clone())
+                ResponseData::TEXT(body.clone().into())
               }
             };
             *ui_response_guard = Some(parsed_body)

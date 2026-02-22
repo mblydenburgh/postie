@@ -72,9 +72,11 @@ impl ContentHeaderPanel {
       // HTTP Method Selector
       self.render_method_selector(ui);
 
-      // URL Input
-      ui.label("URL:");
-      ui.add(egui::TextEdit::singleline(&mut self.url).desired_width(400.0));
+      if let Ok(mut tab) = active_tab.try_write() {
+        // URL Input
+        ui.label("URL:");
+        ui.add(egui::TextEdit::singleline(&mut tab.url).desired_width(400.0));
+      }
 
       // Submit Button
       if ui.button("Submit").clicked() {
