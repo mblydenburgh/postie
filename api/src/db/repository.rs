@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde_json::from_str;
 use sqlx::{
   sqlite::{SqlitePoolOptions, SqliteRow},
-  Row, SqliteConnection, SqlitePool,
+  Row, SqlitePool,
 };
 use uuid::Uuid;
 

@@ -6,7 +6,7 @@ use api::{
   domain::{
     collection::Collection,
     environment::{EnvironmentFile, EnvironmentValue},
-    request::{DBRequest, HttpRequest, OAuth2Request, OAuthRequestBody, PostieRequest},
+    request::{DBRequest, OAuth2Request, OAuthRequestBody, PostieRequest},
     request_item::RequestHistoryItem,
     response::{DBResponse, ResponseData},
     tab::Tab,
@@ -14,24 +14,22 @@ use api::{
   PostieApi,
 };
 use components::{
-  content_header_panel::ContentHeaderPanel, content_panel::content_panel,
+  content_header_panel::ContentHeaderPanel, content_panel::ContentPanel,
   content_side_panel::content_side_panel, import_modal::import_modal, menu_panel::menu_panel,
   new_modal::new_modal, save_window::save_window, side_panel::side_panel,
 };
 use eframe::{egui, App, NativeOptions};
 use std::{
   cell::RefCell,
-  collections::{HashMap, HashSet},
+  collections::HashMap,
   rc::Rc,
   sync::{Arc, Mutex},
 };
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use crate::events::GuiEvent;
-
 // Holds app state that needs to be thread safe
-struct ThreadSafeState {
+pub struct ThreadSafeState {
   pub api: Arc<RwLock<PostieApi>>,
   pub environments: Arc<RwLock<Vec<EnvironmentFile>>>,
   pub collections: Arc<RwLock<Vec<Collection>>>,
@@ -48,7 +46,7 @@ struct ThreadSafeState {
   pub import_result: Arc<Mutex<Option<String>>>,
 }
 
-struct GuiState {
+pub struct GuiState {
   pub headers: Rc<RefCell<Vec<(bool, String, String)>>>,
   pub selected_history_item: Rc<RefCell<Option<api::domain::request_item::RequestHistoryItem>>>,
   pub selected_environment: Rc<RefCell<api::domain::environment::EnvironmentFile>>,
@@ -83,6 +81,7 @@ pub struct Gui {
   pub event_tx: tokio::sync::mpsc::Sender<events::GuiEvent>,
   pub res_rx: tokio::sync::mpsc::Receiver<events::GuiEvent>,
   pub content_header_panel: ContentHeaderPanel,
+  pub content_panel: ContentPanel,
 }
 
 unsafe impl Send for Gui {}
@@ -245,26 +244,28 @@ impl Gui {
   ) -> Self {
     // Initialize Postie with values from db
     let content_header_panel = ContentHeaderPanel::new();
+    let content_panel = ContentPanel::new();
     let gui = Gui {
       worker_state,
       event_tx,
       res_rx,
       gui_state,
       content_header_panel,
+      content_panel,
     };
     gui
   }
   async fn start_event_worker(
     mut event_rx: tokio::sync::mpsc::Receiver<events::GuiEvent>,
-    mut res_tx: tokio::sync::mpsc::Sender<events::GuiEvent>,
+    res_tx: tokio::sync::mpsc::Sender<events::GuiEvent>,
     api: Arc<RwLock<PostieApi>>,
     active_tab: Arc<RwLock<Tab>>,
     tabs: Arc<RwLock<HashMap<String, Tab>>>,
     ctx: egui::Context,
     collections: Arc<RwLock<Vec<Collection>>>,
     environments: Arc<RwLock<Vec<EnvironmentFile>>>,
-    requests: Arc<RwLock<HashMap<String, DBRequest>>>,
-    request_history_items: Arc<RwLock<Vec<RequestHistoryItem>>>,
+    _requests: Arc<RwLock<HashMap<String, DBRequest>>>,
+    _request_history_items: Arc<RwLock<Vec<RequestHistoryItem>>>,
   ) {
     while let Some(event) = event_rx.recv().await {
       let api_for_worker = Arc::clone(&api);
@@ -286,7 +287,7 @@ impl Gui {
                 println!("Res: {:?}", res);
                 let mut active_tab_writer = active_tab_for_worker.write().await;
                 active_tab_writer.res_status = Some(res.status);
-                active_tab_writer.res_body = format!("{:?}", res.data);
+                active_tab_writer.res_body = res.data.to_raw_string();
 
                 let mut tabs_writer = tabs_for_worker.write().await;
                 if let Some(tab_match) = tabs_writer.get_mut(&active_tab_writer.id.to_string()) {
@@ -318,7 +319,7 @@ impl Gui {
               .ok()
               .unwrap();
             println!("{:?}", &res);
-            Ok::<ResponseData, Error>(res.data);
+            let _ = Ok::<ResponseData, Error>(res.data);
           });
         }
         events::GuiEvent::RefreshCollections() => {
@@ -376,7 +377,7 @@ impl Gui {
           *tabs_write_guard = tabs_by_id;
         }
         events::GuiEvent::NewCollection(data) => {
-          let blank_collection = api::domain::collection::Collection {
+          let _blank_collection = api::domain::collection::Collection {
             info: api::domain::collection::CollectionInfo {
               id: Uuid::new_v4().to_string(),
               name: data.unwrap_or(String::from("New Collection")),
@@ -387,7 +388,7 @@ impl Gui {
           };
         }
         events::GuiEvent::NewEnvironment(data) => {
-          let blank_env = api::domain::environment::EnvironmentFile {
+          let _blank_env = api::domain::environment::EnvironmentFile {
             id: Uuid::new_v4().to_string(),
             name: data.unwrap_or(String::from("New Environment")),
             values: None,
@@ -405,7 +406,7 @@ impl Gui {
     }
   }
 
-  fn refresh_request_data(
+  fn _refresh_request_data(
     &mut self,
     request_history: Arc<tokio::sync::RwLock<Vec<RequestHistoryItem>>>,
     responses: Arc<tokio::sync::RwLock<HashMap<String, DBResponse>>>,
@@ -445,6 +446,7 @@ impl Gui {
     self.worker_state.res_status = Arc::new(RwLock::new(
       active_tab.res_status.clone().unwrap_or("".into()),
     ));
+    println!("setting res body to {:?}", &active_tab.res_body);
     let response_data = ResponseData::JSON(
       serde_json::from_str(&active_tab.res_body).unwrap_or(serde_json::Value::Null),
     );
@@ -480,7 +482,9 @@ impl App for Gui {
       self.gui_state.oauth_token.clone(),
     );
     content_side_panel(self, ctx);
-    content_panel(self, ctx);
+    self
+      .content_panel
+      .show(ctx, &self.gui_state, &self.worker_state, &self.event_tx);
     import_modal(self, ctx);
     new_modal(self, ctx);
     save_window(self, ctx);

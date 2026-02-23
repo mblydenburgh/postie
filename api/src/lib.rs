@@ -222,7 +222,7 @@ impl PostieApi {
       if col.info.id == id {
         println!("matching collection found, looking for request to remove");
         let mut collection_items: Vec<CollectionItemOrFolder> = vec![];
-        for (index, item) in &mut col.item.iter().enumerate() {
+        for (_index, item) in &mut col.item.iter().enumerate() {
           match item.clone() {
             CollectionItemOrFolder::Folder(_) => (),
             CollectionItemOrFolder::Item(i) => {

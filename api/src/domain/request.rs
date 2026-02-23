@@ -144,7 +144,7 @@ pub enum RequestBody {
   FORM(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct OAuth2Request {
   pub access_token_url: String,
   pub refresh_url: String,
@@ -153,7 +153,7 @@ pub struct OAuth2Request {
   pub request: OAuthRequestBody,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct OAuthRequestBody {
   pub grant_type: String,
   pub scope: String,

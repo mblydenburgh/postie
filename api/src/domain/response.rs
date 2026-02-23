@@ -39,3 +39,14 @@ pub enum ResponseData {
   XML(String),
   UNKNOWN(String),
 }
+impl ResponseData {
+  /// Returns the raw content as a string without the enum variant wrapper
+  pub fn to_raw_string(&self) -> String {
+    match self {
+      ResponseData::JSON(value) => {
+        serde_json::to_string_pretty(value).unwrap_or_else(|_| "null".to_string())
+      }
+      ResponseData::TEXT(s) | ResponseData::XML(s) | ResponseData::UNKNOWN(s) => s.clone(),
+    }
+  }
+}

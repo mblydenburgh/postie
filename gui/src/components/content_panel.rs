@@ -1,308 +1,458 @@
-use std::cell::RefMut;
-
-use api::{
-  domain::environment::EnvironmentValue,
-  domain::request,
-  domain::response::{OAuthResponse, ResponseData},
-  domain::ui,
+use std::{
+  cell::RefCell,
+  rc::Rc,
+  sync::{Arc, Mutex},
 };
-use egui::{CentralPanel, ComboBox, ScrollArea, TextEdit, TextStyle, TopBottomPanel};
+
+use api::domain::{
+  environment::{EnvironmentFile, EnvironmentValue},
+  request,
+  response::{OAuthResponse, ResponseData},
+  ui::{self},
+};
+use egui::{CentralPanel, ScrollArea, TextEdit, TextStyle, TopBottomPanel};
 use egui_extras::{Column, TableBuilder};
 use egui_json_tree::JsonTree;
+use tokio::sync::RwLock;
 
-use crate::events;
-use crate::Gui;
+use crate::{events, GuiState, ThreadSafeState};
 
-pub fn content_panel(gui: &mut Gui, ctx: &egui::Context) {
-  if let Ok(request_window_mode) = gui.gui_state.request_window_mode.try_read() {
-    match *request_window_mode {
+pub struct ContentPanel {}
+
+impl ContentPanel {
+  pub fn new() -> Self {
+    Self {}
+  }
+
+  pub fn show(
+    &mut self,
+    ctx: &egui::Context,
+    gui_state: &GuiState,
+    worker_state: &ThreadSafeState,
+    event_tx: &tokio::sync::mpsc::Sender<events::GuiEvent>,
+  ) {
+    let mode = if let Ok(mode_guard) = gui_state.request_window_mode.try_read() {
+      *mode_guard
+    } else {
+      ui::RequestWindowMode::BODY
+    };
+
+    match mode {
       ui::RequestWindowMode::BODY => {
-        TopBottomPanel::top("request_panel")
-          .resizable(true)
-          .min_height(250.0)
-          .show(ctx, |ui| {
-            ScrollArea::vertical().show(ui, |ui| {
-              ui.add(
-                TextEdit::multiline(&mut gui.gui_state.body_str)
-                  .code_editor()
-                  .desired_rows(20)
-                  .lock_focus(true)
-                  .desired_width(f32::INFINITY)
-                  .font(TextStyle::Monospace),
-              );
-            });
-          });
-        match gui.worker_state.response.try_read() {
-          Ok(response) => {
-            if response.is_some() {
-              CentralPanel::default().show(ctx, |ui| {
-                let binding = gui.worker_state.response.try_read().unwrap();
-                let r = binding.as_ref().unwrap();
-                match r {
-                  ResponseData::JSON(json) => {
-                    ScrollArea::vertical().show(ui, |ui| {
-                      JsonTree::new("response-json", json).show(ui);
-                    });
-                  }
-                  ResponseData::TEXT(text) => {
-                    ScrollArea::vertical().show(ui, |ui| {
-                      ui.label(text);
-                    });
-                  }
-                  ResponseData::XML(x) => {
-                    ScrollArea::vertical().show(ui, |ui| {
-                      ui.label(x);
-                    });
-                  }
-                  ResponseData::UNKNOWN(text) => {
-                    ScrollArea::vertical().show(ui, |ui| {
-                      ui.label(text);
-                    });
-                  }
-                };
-              });
-            }
-          }
-          Err(_) => {
-            CentralPanel::default().show(ctx, |ui| {
-              ui.label("");
-            });
-          }
-        };
-      }
-      ui::RequestWindowMode::PARAMS => {
-        CentralPanel::default().show(ctx, |ui| {
-          ui.label("params");
-        });
+        self.render_body_tab(ctx, &mut gui_state.body_str.clone(), &worker_state.response)
       }
       ui::RequestWindowMode::AUTHORIZATION => {
-        CentralPanel::default().show(ctx, |_ui| {
-          TopBottomPanel::top("oauth_request")
-            .resizable(true)
-            .show(ctx, |ui| {
-              ComboBox::from_label("")
-                .selected_text(format!("{:?}", gui.gui_state.selected_auth_mode))
-                .show_ui(ui, |ui| {
-                  ui.selectable_value(
-                    &mut gui.gui_state.selected_auth_mode,
-                    ui::AuthMode::BEARER,
-                    "Bearer",
-                  );
-                  ui.selectable_value(
-                    &mut gui.gui_state.selected_auth_mode,
-                    ui::AuthMode::APIKEY,
-                    "Api Key",
-                  );
-                  ui.selectable_value(
-                    &mut gui.gui_state.selected_auth_mode,
-                    ui::AuthMode::OAUTH2,
-                    "OAuth2",
-                  );
-                  ui.selectable_value(
-                    &mut gui.gui_state.selected_auth_mode,
-                    ui::AuthMode::NONE,
-                    "None",
-                  );
-                });
-              match gui.gui_state.selected_auth_mode {
-                ui::AuthMode::APIKEY => {
-                  ui.label("Api Key Value");
-                  ui.text_edit_multiline(&mut gui.gui_state.api_key);
-                  ui.label("Header Name");
-                  ui.text_edit_singleline(&mut gui.gui_state.api_key_name);
-                }
-                ui::AuthMode::BEARER => {
-                  ScrollArea::vertical().show(ui, |ui| {
-                    ui.label("Enter Bearer Token");
-                    ui.add(TextEdit::multiline(&mut gui.gui_state.bearer_token).desired_rows(25));
-                  });
-                }
-                ui::AuthMode::OAUTH2 => {
-                  ui.heading("Configure New Token");
-                  ui.horizontal(|ui| {
-                    ui.label("Access Token Url");
-                    ui.text_edit_singleline(&mut gui.gui_state.oauth_config.access_token_url);
-                  });
-                  ui.horizontal(|ui| {
-                    ui.label("Client ID");
-                    ui.text_edit_singleline(&mut gui.gui_state.oauth_config.client_id);
-                  });
-                  ui.horizontal(|ui| {
-                    ui.label("Client Secret");
-                    ui.text_edit_singleline(&mut gui.gui_state.oauth_config.client_secret);
-                  });
-                  ui.horizontal(|ui| {
-                    ui.label("Scope");
-                    ui.text_edit_singleline(&mut gui.gui_state.oauth_config.request.scope);
-                  });
-                  ui.horizontal(|ui| {
-                    ui.label("Audience");
-                    ui.text_edit_singleline(&mut gui.gui_state.oauth_config.request.audience);
-                  });
-
-                  if ui.button("Request Token").clicked() {
-                    println!("requesting token");
-                    let oauth_input = request::OAuth2Request {
-                      access_token_url: gui.gui_state.oauth_config.access_token_url.clone(),
-                      refresh_url: gui.gui_state.oauth_config.refresh_url.clone(),
-                      client_id: gui.gui_state.oauth_config.client_id.clone(),
-                      client_secret: gui.gui_state.oauth_config.client_secret.clone(),
-                      request: request::OAuthRequestBody {
-                        grant_type: gui.gui_state.oauth_config.request.grant_type.clone(),
-                        scope: gui.gui_state.oauth_config.request.scope.clone(),
-                        audience: gui.gui_state.oauth_config.request.audience.clone(),
-                      },
-                    };
-                    gui
-                      .event_tx
-                      .send(events::GuiEvent::SubmitOAuth2Request(oauth_input));
-                  };
-                  if !gui.gui_state.oauth_token.is_empty() {
-                    ui.horizontal(|ui| {
-                      ui.label("Token Result:");
-                      ui.add(egui::Label::new(gui.gui_state.oauth_token.clone()).wrap());
-                    });
-                  }
-
-                  let mut lock = gui
-                    .worker_state
-                    .received_token
-                    .lock()
-                    .expect("couldnt lock");
-                  if !*lock {
-                    let oauth_res = &gui.worker_state.oauth_response.try_read().unwrap();
-
-                    if let Some(res) = oauth_res.as_ref() {
-                      *lock = true;
-                      match res {
-                        ResponseData::JSON(j) => {
-                          let data = serde_json::from_value::<OAuthResponse>(j.clone()).unwrap();
-                          ui.label(data.access_token.clone());
-                          gui.gui_state.oauth_token = data.access_token.clone();
-                        }
-                        _ => todo!(),
-                      }
-                    }
-                  }
-                }
-                ui::AuthMode::NONE => (),
-              };
-            });
-        });
+        self.render_auth_tab(
+          ctx,
+          &mut gui_state.selected_auth_mode.clone(),
+          &mut gui_state.api_key_name.clone(),
+          &mut gui_state.api_key.clone(),
+          &mut gui_state.bearer_token.clone(),
+          &mut gui_state.oauth_config.clone(),
+          &mut gui_state.oauth_token.clone(),
+          &worker_state.received_token,
+          &worker_state.oauth_response,
+          event_tx,
+        );
       }
-      ui::RequestWindowMode::HEADERS => {
-        CentralPanel::default().show(ctx, |ui| {
-          let table = TableBuilder::new(ui)
-            .striped(true)
-            .resizable(true)
-            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-            .column(Column::auto())
-            .column(Column::auto())
-            .column(Column::auto());
-          table
-            .header(20.0, |mut header| {
-              header.col(|ui| {
-                ui.strong("Enabled");
-              });
-              header.col(|ui| {
-                ui.strong("Key");
-              });
-              header.col(|ui| {
-                ui.strong("Value");
-              });
-            })
-            .body(|mut body| {
-              for header in gui.gui_state.headers.borrow_mut().iter_mut() {
-                body.row(30.0, |mut row| {
-                  let (enabled, key, value) = header;
-                  row.col(|ui| {
-                    ui.checkbox(enabled, "");
-                  });
-                  row.col(|ui| {
-                    ui.text_edit_singleline(key);
-                  });
-                  row.col(|ui| {
-                    ui.text_edit_singleline(value);
-                  });
-                });
-              }
-              body.row(30.0, |mut row| {
-                row.col(|ui| {
-                  if ui.button("Add").clicked() {
-                    gui.gui_state.headers.borrow_mut().push((
-                      true,
-                      String::from(""),
-                      String::from(""),
-                    ));
-                  };
-                });
-              });
-            });
-        });
-      }
+      ui::RequestWindowMode::HEADERS => self.render_headers_tab(ctx, &gui_state.headers),
       ui::RequestWindowMode::ENVIRONMENT => {
-        CentralPanel::default().show(ctx, |ui| {
-          let table = TableBuilder::new(ui)
-            .striped(true)
-            .resizable(true)
-            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-            .column(Column::auto())
-            .column(Column::auto())
-            .column(Column::auto())
-            .column(Column::auto());
-          table
-            .header(20.0, |mut header| {
-              header.col(|ui| {
-                ui.strong("Enabled");
-              });
-              header.col(|ui| {
-                ui.strong("Key");
-              });
-              header.col(|ui| {
-                ui.strong("Value");
-              });
-              header.col(|ui| {
-                ui.strong("Type");
-              });
-            })
-            .body(|mut body| {
-              let selected_environment = gui.gui_state.selected_environment.borrow_mut();
-              let mut values_ref = RefMut::map(selected_environment, |env| &mut env.values);
-              if let Some(values) = values_ref.as_mut() {
-                for env_var in values {
-                  body.row(30.0, |mut row| {
-                    row.col(|ui| {
-                      ui.checkbox(&mut env_var.enabled, "");
-                    });
-                    row.col(|ui| {
-                      ui.text_edit_singleline(&mut env_var.key);
-                    });
-                    row.col(|ui| {
-                      ui.text_edit_singleline(&mut env_var.value);
-                    });
-                    row.col(|ui| {
-                      ui.text_edit_singleline(&mut env_var.r#type);
-                    });
-                  });
+        self.render_environment_tab(ctx, &gui_state.selected_environment)
+      }
+      ui::RequestWindowMode::PARAMS => {
+        self.render_params_tab(ctx, &mut gui_state.url.clone());
+      }
+    }
+  }
+
+  fn render_body_tab(
+    &mut self,
+    ctx: &egui::Context,
+    body_str: &mut String,
+    response_lock: &Arc<RwLock<Option<ResponseData>>>,
+  ) {
+    TopBottomPanel::top("request_panel")
+      .resizable(true)
+      .min_height(250.0)
+      .show(ctx, |ui| {
+        ScrollArea::vertical().show(ui, |ui| {
+          ui.add(
+            TextEdit::multiline(body_str)
+              .code_editor()
+              .desired_width(f32::INFINITY)
+              .font(TextStyle::Monospace),
+          );
+        });
+      });
+
+    CentralPanel::default().show(ctx, |ui| {
+      if let Ok(res_guard) = response_lock.try_read() {
+        if let Some(res) = res_guard.as_ref() {
+          ScrollArea::vertical().show(ui, |ui| match res {
+            ResponseData::JSON(json) => {
+              JsonTree::new("res", json).show(ui);
+            }
+            ResponseData::TEXT(t) | ResponseData::XML(t) | ResponseData::UNKNOWN(t) => {
+              ui.label(t);
+            }
+          });
+        }
+      }
+    });
+  }
+
+  fn render_auth_tab(
+    &mut self,
+    ctx: &egui::Context,
+    auth_mode: &mut ui::AuthMode,
+    api_key_name: &mut String,
+    api_key_value: &mut String,
+    bearer_token: &mut String,
+    oauth_config: &mut request::OAuth2Request,
+    oauth_token: &mut String,
+    received_token_lock: &Arc<Mutex<bool>>,
+    oauth_response_lock: &Arc<RwLock<Option<ResponseData>>>,
+    event_tx: &tokio::sync::mpsc::Sender<events::GuiEvent>,
+  ) {
+    CentralPanel::default().show(ctx, |ui| {
+      ui.heading("Authentication");
+
+      ui.horizontal(|ui| {
+        ui.label("Type:");
+        egui::ComboBox::from_id_salt("auth_type_selector")
+          .selected_text(format!("{:?}", auth_mode))
+          .show_ui(ui, |ui| {
+            ui.selectable_value(auth_mode, ui::AuthMode::NONE, "No Auth");
+            ui.selectable_value(auth_mode, ui::AuthMode::APIKEY, "API Key");
+            ui.selectable_value(auth_mode, ui::AuthMode::BEARER, "Bearer Token");
+            ui.selectable_value(auth_mode, ui::AuthMode::OAUTH2, "OAuth 2.0");
+          });
+      });
+
+      ui.separator();
+
+      match auth_mode {
+        ui::AuthMode::APIKEY => {
+          egui::Grid::new("api_key_leaf_grid")
+            .num_columns(2)
+            .show(ui, |ui| {
+              ui.label("Header Name:");
+              ui.text_edit_singleline(api_key_name);
+              ui.end_row();
+              ui.label("Value:");
+              ui.text_edit_singleline(api_key_value);
+              ui.end_row();
+            });
+        }
+        ui::AuthMode::BEARER => {
+          ui.label("Bearer Token:");
+          ui.add(
+            egui::TextEdit::multiline(bearer_token)
+              .hint_text("eyJhbGciOiJIUzI1...")
+              .desired_rows(8)
+              .font(egui::TextStyle::Monospace)
+              .desired_width(f32::INFINITY),
+          );
+        }
+        ui::AuthMode::OAUTH2 => {
+          // Sub-leaf for the OAuth configuration grid
+          self.render_oauth_details(ui, oauth_config, oauth_token, event_tx);
+
+          // Logic to ingest the token from the background worker
+          if let Ok(mut lock) = received_token_lock.lock() {
+            if !*lock {
+              if let Ok(res_guard) = oauth_response_lock.try_read() {
+                if let Some(ResponseData::JSON(j)) = res_guard.as_ref() {
+                  if let Ok(data) = serde_json::from_value::<OAuthResponse>(j.clone()) {
+                    *oauth_token = data.access_token;
+                    *lock = true;
+                  }
                 }
               }
-              body.row(30.0, |mut row| {
-                row.col(|ui| {
-                  if ui.button("Add").clicked() {
-                    if let Some(vals) = values_ref.as_mut() {
-                      vals.push(EnvironmentValue {
-                        key: String::from(""),
-                        value: String::from(""),
-                        r#type: String::from("default"),
-                        enabled: true,
-                      });
-                    }
-                  };
-                });
+            }
+          }
+        }
+        ui::AuthMode::NONE => {
+          ui.weak("No authentication headers will be sent with this request.");
+        }
+      }
+    });
+  }
+
+  fn render_oauth_details(
+    &mut self,
+    ui: &mut egui::Ui,
+    config: &mut request::OAuth2Request,
+    current_token: &String,
+    event_tx: &tokio::sync::mpsc::Sender<events::GuiEvent>,
+  ) {
+    egui::Grid::new("oauth_details")
+      .num_columns(2)
+      .spacing([20.0, 8.0])
+      .show(ui, |ui| {
+        ui.label("Access Token URL:");
+        ui.text_edit_singleline(&mut config.access_token_url);
+        ui.end_row();
+
+        ui.label("Client ID:");
+        ui.text_edit_singleline(&mut config.client_id);
+        ui.end_row();
+
+        ui.label("Client Secret:");
+        ui.add(egui::TextEdit::singleline(&mut config.client_secret).password(true));
+        ui.end_row();
+      });
+
+    if ui.button("Get New Access Token").clicked() {
+      let _ = event_tx.try_send(events::GuiEvent::SubmitOAuth2Request(config.clone()));
+    }
+
+    if !current_token.is_empty() {
+      ui.add_space(10.0);
+      ui.label("Current Token:");
+      ui.add(egui::Label::new(current_token).wrap().selectable(true));
+    }
+  }
+
+  fn render_headers_tab(
+    &mut self,
+    ctx: &egui::Context,
+    headers_rc: &Rc<RefCell<Vec<(bool, String, String)>>>,
+  ) {
+    CentralPanel::default().show(ctx, |ui| {
+      let mut _add_clicked = false;
+      TableBuilder::new(ui)
+        .column(Column::auto())
+        .column(Column::remainder())
+        .column(Column::remainder())
+        .header(20.0, |mut h| {
+          h.col(|ui| {
+            ui.label("On");
+          });
+          h.col(|ui| {
+            ui.label("Key");
+          });
+          h.col(|ui| {
+            ui.label("Value");
+          });
+        })
+        .body(|mut body| {
+          let mut headers = headers_rc.borrow_mut();
+          for (enabled, key, value) in headers.iter_mut() {
+            body.row(25.0, |mut row| {
+              row.col(|ui| {
+                ui.checkbox(enabled, "");
+              });
+              row.col(|ui| {
+                ui.text_edit_singleline(key);
+              });
+              row.col(|ui| {
+                ui.text_edit_singleline(value);
               });
             });
+          }
         });
+
+      if ui.button("Add Header").clicked() {
+        headers_rc.borrow_mut().push((true, "".into(), "".into()));
       }
-    };
+    });
+  }
+
+  //fn render_headers_tab(&mut self, _ctx: &egui::Context, gui: &mut Gui) {
+  //  CentralPanel::default().show(_ctx, |ui| {
+  //    TableBuilder::new(ui)
+  //      .striped(true)
+  //      .column(Column::auto())
+  //      .column(Column::remainder())
+  //      .column(Column::remainder())
+  //      .header(20.0, |mut header| {
+  //        header.col(|ui| {
+  //          ui.strong("Enabled");
+  //        });
+  //        header.col(|ui| {
+  //          ui.strong("Key");
+  //        });
+  //        header.col(|ui| {
+  //          ui.strong("Value");
+  //        });
+  //      })
+  //      .body(|mut body| {
+  //        let mut headers = gui.gui_state.headers.borrow_mut();
+  //        for (enabled, key, value) in headers.iter_mut() {
+  //          body.row(30.0, |mut row| {
+  //            row.col(|ui| {
+  //              ui.checkbox(enabled, "");
+  //            });
+  //            row.col(|ui| {
+  //              ui.text_edit_singleline(key);
+  //            });
+  //            row.col(|ui| {
+  //              ui.text_edit_singleline(value);
+  //            });
+  //          });
+  //        }
+  //        body.row(30.0, |mut row| {
+  //          row.col(|ui| {
+  //            if ui.button("Add").clicked() {
+  //              // Handled after the loop to avoid borrow checker issues
+  //            }
+  //          });
+  //        });
+  //      });
+  //    // Handle the "Add" click outside the table body if needed,
+  //    // or use a temporary flag.
+  //  });
+  //}
+
+  fn render_environment_tab(&mut self, ctx: &egui::Context, env_rc: &Rc<RefCell<EnvironmentFile>>) {
+    CentralPanel::default().show(ctx, |ui| {
+      ui.heading("Environment Variables");
+
+      let mut add_clicked = false;
+
+      egui::ScrollArea::vertical().show(ui, |ui| {
+        TableBuilder::new(ui)
+          .striped(true)
+          .column(Column::auto()) // Enabled
+          .column(Column::remainder()) // Key
+          .column(Column::remainder()) // Value
+          .column(Column::auto()) // Type
+          .header(20.0, |mut header| {
+            header.col(|ui| {
+              ui.strong("On");
+            });
+            header.col(|ui| {
+              ui.strong("Key");
+            });
+            header.col(|ui| {
+              ui.strong("Value");
+            });
+            header.col(|ui| {
+              ui.strong("Type");
+            });
+          })
+          .body(|mut body| {
+            let mut env = env_rc.borrow_mut();
+            if let Some(values) = env.values.as_mut() {
+              for var in values {
+                body.row(25.0, |mut row| {
+                  row.col(|ui| {
+                    ui.checkbox(&mut var.enabled, "");
+                  });
+                  row.col(|ui| {
+                    ui.text_edit_singleline(&mut var.key);
+                  });
+                  row.col(|ui| {
+                    ui.text_edit_singleline(&mut var.value);
+                  });
+                  row.col(|ui| {
+                    ui.text_edit_singleline(&mut var.r#type);
+                  });
+                });
+              }
+            }
+          });
+      });
+
+      if ui.button("Add Variable").clicked() {
+        add_clicked = true;
+      }
+
+      if add_clicked {
+        let mut env = env_rc.borrow_mut();
+        let new_var = EnvironmentValue {
+          key: "".into(),
+          value: "".into(),
+          r#type: "default".into(),
+          enabled: true,
+        };
+        if let Some(values) = env.values.as_mut() {
+          values.push(new_var);
+        } else {
+          env.values = Some(vec![new_var]);
+        }
+      }
+    });
+  }
+  fn render_params_tab(&mut self, ctx: &egui::Context, url: &mut String) {
+    CentralPanel::default().show(ctx, |ui| {
+      ui.heading("Query Parameters");
+
+      let parts: Vec<&str> = url.splitn(2, '?').collect();
+      let base_url = parts[0].to_string();
+      let mut params: Vec<(String, String)> = parts
+        .get(1)
+        .map(|p| {
+          p.split('&')
+            .filter(|s| !s.is_empty())
+            .map(|pair| {
+              let kv: Vec<&str> = pair.splitn(2, '=').collect();
+              (kv[0].to_string(), kv.get(1).unwrap_or(&"").to_string())
+            })
+            .collect()
+        })
+        .unwrap_or_default();
+
+      let mut changed = false;
+
+      TableBuilder::new(ui)
+        .column(Column::remainder())
+        .column(Column::remainder())
+        .column(Column::auto())
+        .header(20.0, |mut h| {
+          h.col(|ui| {
+            ui.strong("Key");
+          });
+          h.col(|ui| {
+            ui.strong("Value");
+          });
+          h.col(|ui| {
+            ui.label("");
+          });
+        })
+        .body(|mut body| {
+          for i in 0..params.len() {
+            body.row(25.0, |mut row| {
+              row.col(|ui| {
+                if ui.text_edit_singleline(&mut params[i].0).changed() {
+                  changed = true;
+                }
+              });
+              row.col(|ui| {
+                if ui.text_edit_singleline(&mut params[i].1).changed() {
+                  changed = true;
+                }
+              });
+              row.col(|ui| {
+                if ui.button("🗑").clicked() {
+                  params.remove(i);
+                  changed = true;
+                }
+              });
+            });
+          }
+        });
+
+      if ui.button("Add Param").clicked() {
+        params.push(("".into(), "".into()));
+        changed = true;
+      }
+
+      // Reconstruct the URL if the table changed
+      if changed {
+        if params.is_empty() {
+          *url = base_url;
+        } else {
+          let query = params
+            .iter()
+            .filter(|(k, _)| !k.is_empty())
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join("&");
+          *url = format!("{}?{}", base_url, query);
+        }
+      }
+    });
   }
 }
