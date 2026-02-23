@@ -19,7 +19,7 @@ pub struct RefreshRequestDataPayload {
 
 #[derive(Debug)]
 pub struct TabPayload {
-  url: Arc<String>,
+  pub url: String,
 }
 
 #[derive(Debug)]
@@ -29,7 +29,7 @@ pub enum GuiEvent {
   RefreshCollections(),
   RefreshEnvironments(),
   RefreshRequestData(RefreshRequestDataPayload),
-  SetGuiValuesFromTab(TabPayload),
+  SetGuiValuesFromTab(String),
   SaveCollection(),
   SaveEnvironment(),
   NewCollection(Option<String>),

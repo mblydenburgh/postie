@@ -81,6 +81,7 @@ pub struct Gui {
   pub worker_state: ThreadSafeState,
   pub gui_state: GuiState,
   pub event_tx: tokio::sync::mpsc::Sender<events::GuiEvent>,
+  pub res_rx: tokio::sync::mpsc::Receiver<events::GuiEvent>,
   pub content_header_panel: ContentHeaderPanel,
 }
 
@@ -210,12 +211,12 @@ impl Gui {
   pub fn spawn_event_worker(
     &self,
     ctx: egui::Context,
-    event_rx: tokio::sync::mpsc::Receiver<GuiEvent>,
+    event_rx: tokio::sync::mpsc::Receiver<events::GuiEvent>,
+    res_tx: tokio::sync::mpsc::Sender<events::GuiEvent>,
   ) {
     let api = self.worker_state.api.clone();
-    let tabs = self.worker_state.tabs.clone();
     let active_tab = self.worker_state.active_tab.clone();
-    let event_tx = self.event_tx.clone();
+    let tabs = self.worker_state.tabs.clone();
     let collections = self.worker_state.collections.clone();
     let environments = self.worker_state.environments.clone();
     let requests = self.worker_state.saved_requests.clone();
@@ -223,9 +224,10 @@ impl Gui {
     tokio::spawn(async move {
       Self::start_event_worker(
         event_rx,
-        event_tx,
+        res_tx,
         api,
         active_tab,
+        tabs,
         ctx,
         collections,
         environments,
@@ -235,16 +237,18 @@ impl Gui {
       .await
     });
   }
-  pub fn new(
+  fn new(
     worker_state: ThreadSafeState,
     gui_state: GuiState,
-    event_tx: tokio::sync::mpsc::Sender<GuiEvent>,
+    event_tx: tokio::sync::mpsc::Sender<events::GuiEvent>,
+    res_rx: tokio::sync::mpsc::Receiver<events::GuiEvent>,
   ) -> Self {
     // Initialize Postie with values from db
     let content_header_panel = ContentHeaderPanel::new();
     let gui = Gui {
       worker_state,
       event_tx,
+      res_rx,
       gui_state,
       content_header_panel,
     };
@@ -252,9 +256,10 @@ impl Gui {
   }
   async fn start_event_worker(
     mut event_rx: tokio::sync::mpsc::Receiver<events::GuiEvent>,
-    mut event_tx: tokio::sync::mpsc::Sender<events::GuiEvent>,
+    mut res_tx: tokio::sync::mpsc::Sender<events::GuiEvent>,
     api: Arc<RwLock<PostieApi>>,
     active_tab: Arc<RwLock<Tab>>,
+    tabs: Arc<RwLock<HashMap<String, Tab>>>,
     ctx: egui::Context,
     collections: Arc<RwLock<Vec<Collection>>>,
     environments: Arc<RwLock<Vec<EnvironmentFile>>>,
@@ -264,9 +269,12 @@ impl Gui {
     while let Some(event) = event_rx.recv().await {
       let api_for_worker = Arc::clone(&api);
       let active_tab_for_worker = Arc::clone(&active_tab);
+      let tabs_for_worker = Arc::clone(&tabs);
+      let ctx_for_worker = ctx.clone();
+      let event_tx_for_worker = res_tx.clone();
       match event {
         events::GuiEvent::SubmitRequest(input) => {
-          let active_tab_for_worker = &println!("handling submit request");
+          println!("handling submit request");
           tokio::spawn(async move {
             match api_for_worker
               .write()
@@ -276,13 +284,26 @@ impl Gui {
             {
               Ok(res) => {
                 println!("Res: {:?}", res);
-                // TODO - update ui with response values
+                let mut active_tab_writer = active_tab_for_worker.write().await;
+                active_tab_writer.res_status = Some(res.status);
+                active_tab_writer.res_body = format!("{:?}", res.data);
+
+                let mut tabs_writer = tabs_for_worker.write().await;
+                if let Some(tab_match) = tabs_writer.get_mut(&active_tab_writer.id.to_string()) {
+                  tab_match.res_status = active_tab_writer.res_status.clone();
+                  tab_match.res_body = active_tab_writer.res_body.clone();
+                  tab_match.url = active_tab_writer.url.clone();
+                }
+
+                ctx_for_worker.request_repaint();
               }
               Err(err) => {
                 println!("Error with request: {:?}", err);
               }
             };
-
+            event_tx_for_worker.try_send(events::GuiEvent::SetGuiValuesFromTab(String::from(
+              (*active_tab_for_worker.try_read().unwrap()).id,
+            )))
             // TODO after response is saved, re-run db calls to refresh request/response data
           });
         }
@@ -383,6 +404,7 @@ impl Gui {
       }
     }
   }
+
   fn refresh_request_data(
     &mut self,
     request_history: Arc<tokio::sync::RwLock<Vec<RequestHistoryItem>>>,
@@ -402,36 +424,13 @@ impl Gui {
       ))
       .unwrap();
   }
+
   fn refresh_collections(tx: &tokio::sync::mpsc::Sender<events::GuiEvent>) {
     tx.try_send(events::GuiEvent::RefreshCollections()).unwrap();
   }
-  //fn refresh_environments(&mut self) {
-  //  self
-  //    .event_tx
-  //    .try_send(events::GuiEvent::RefreshEnvironments())
-  //    .unwrap();
-  //}
-  //fn submit(&mut self, input: HttpRequest) {
-  //  self
-  //    .event_tx
-  //    .try_send(events::GuiEvent::SubmitRequest(input))
-  //    .unwrap();
-  //}
-
-  //fn remove_duplicate_headers(&mut self, headers: Vec<(String, String)>) -> Vec<(String, String)> {
-  //  let mut unique_keys = HashSet::new();
-  //  let mut result = Vec::new();
-  //  for (key, value) in headers {
-  //    if !unique_keys.contains(&key) {
-  //      unique_keys.insert(key.clone());
-  //      result.push((key.clone(), value.clone()));
-  //    }
-  //  }
-  //  result
-  //}
 
   fn set_active_tab(&mut self, id: &str) {
-    let tabs = self.worker_state.tabs.try_read().unwrap();
+    let tabs = self.worker_state.tabs.try_write().unwrap();
     let active_tab = tabs.get(id).unwrap().clone();
     let mut active_tab_write_guard = self.worker_state.active_tab.try_write().unwrap();
     *active_tab_write_guard = active_tab;
@@ -455,6 +454,17 @@ impl Gui {
 
 impl App for Gui {
   fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    while let Ok(event) = self.res_rx.try_recv() {
+      match event {
+        events::GuiEvent::SetGuiValuesFromTab(tab_id) => {
+          println!("setting gui values from tab");
+          self.set_active_tab(&tab_id);
+          self.set_gui_values_from_active_tab();
+          ctx.request_repaint();
+        }
+        _ => {}
+      }
+    }
     menu_panel(self, ctx);
     side_panel(self, ctx);
     self.content_header_panel.show(
@@ -480,15 +490,16 @@ impl App for Gui {
 #[tokio::main]
 async fn main() {
   let app = PostieApi::new().await;
-  let (event_tx, event_rx) = tokio::sync::mpsc::channel(32);
+  let (req_tx, req_rx) = tokio::sync::mpsc::channel(32);
+  let (res_tx, res_rx) = tokio::sync::mpsc::channel(32);
   let (worker_state, gui_state) = Gui::load_initial_data(app).await;
   let native_options = NativeOptions::default();
   let _ = eframe::run_native(
     "Postie",
     native_options,
     Box::new(|cc| {
-      let app = Gui::new(worker_state, gui_state, event_tx);
-      app.spawn_event_worker(cc.egui_ctx.clone(), event_rx);
+      let app = Gui::new(worker_state, gui_state, req_tx, res_rx);
+      app.spawn_event_worker(cc.egui_ctx.clone(), req_rx, res_tx);
       Ok(Box::new(app))
     }),
   );
