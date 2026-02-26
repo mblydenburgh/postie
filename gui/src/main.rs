@@ -15,7 +15,7 @@ use api::{
 };
 use components::{
   content_header_panel::ContentHeaderPanel, content_panel::ContentPanel,
-  content_side_panel::content_side_panel, import_modal::import_modal, menu_panel::menu_panel,
+  content_side_panel::content_side_panel, import_modal::import_modal, menu_panel::MenuPanel,
   new_modal::new_modal, save_window::save_window, side_panel::side_panel,
 };
 use eframe::{egui, App, NativeOptions};
@@ -27,6 +27,8 @@ use std::{
 };
 use tokio::sync::RwLock;
 use uuid::Uuid;
+
+use crate::components::menu_panel;
 
 // Holds app state that needs to be thread safe
 pub struct ThreadSafeState {
@@ -82,10 +84,12 @@ pub struct Gui {
   pub res_rx: tokio::sync::mpsc::Receiver<events::GuiEvent>,
   pub content_header_panel: ContentHeaderPanel,
   pub content_panel: ContentPanel,
+  pub menu_panel: MenuPanel,
 }
 
 unsafe impl Send for Gui {}
 impl Gui {
+  // Initialize Postie with values from db
   pub async fn load_initial_data(app: PostieApi) -> (ThreadSafeState, GuiState) {
     let api = Arc::new(RwLock::new(app));
 
@@ -207,6 +211,8 @@ impl Gui {
     };
     (worker_state, gui_state)
   }
+
+  // Spawns event worker in separate worker thread
   pub fn spawn_event_worker(
     &self,
     ctx: egui::Context,
@@ -242,9 +248,9 @@ impl Gui {
     event_tx: tokio::sync::mpsc::Sender<events::GuiEvent>,
     res_rx: tokio::sync::mpsc::Receiver<events::GuiEvent>,
   ) -> Self {
-    // Initialize Postie with values from db
     let content_header_panel = ContentHeaderPanel::new();
     let content_panel = ContentPanel::new();
+    let menu_panel = MenuPanel::new();
     let gui = Gui {
       worker_state,
       event_tx,
@@ -252,9 +258,12 @@ impl Gui {
       gui_state,
       content_header_panel,
       content_panel,
+      menu_panel,
     };
     gui
   }
+
+  // Async event listener spawned from start_event_worker
   async fn start_event_worker(
     mut event_rx: tokio::sync::mpsc::Receiver<events::GuiEvent>,
     res_tx: tokio::sync::mpsc::Sender<events::GuiEvent>,
@@ -272,8 +281,13 @@ impl Gui {
       let active_tab_for_worker = Arc::clone(&active_tab);
       let tabs_for_worker = Arc::clone(&tabs);
       let ctx_for_worker = ctx.clone();
-      let event_tx_for_worker = res_tx.clone();
+      let res_tx_for_worker = res_tx.clone();
       match event {
+        events::GuiEvent::SetActiveTab(input) => {
+          tokio::spawn(
+            async move { res_tx_for_worker.try_send(events::GuiEvent::SetActiveTab(input)) },
+          );
+        }
         events::GuiEvent::SubmitRequest(input) => {
           println!("handling submit request");
           tokio::spawn(async move {
@@ -302,7 +316,7 @@ impl Gui {
                 println!("Error with request: {:?}", err);
               }
             };
-            event_tx_for_worker.try_send(events::GuiEvent::SetGuiValuesFromTab(String::from(
+            res_tx_for_worker.try_send(events::GuiEvent::SetActiveTab(String::from(
               (*active_tab_for_worker.try_read().unwrap()).id,
             )))
             // TODO after response is saved, re-run db calls to refresh request/response data
@@ -458,8 +472,8 @@ impl App for Gui {
   fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
     while let Ok(event) = self.res_rx.try_recv() {
       match event {
-        events::GuiEvent::SetGuiValuesFromTab(tab_id) => {
-          println!("setting gui values from tab");
+        events::GuiEvent::SetActiveTab(tab_id) => {
+          println!("setting gui values from active tab");
           self.set_active_tab(&tab_id);
           self.set_gui_values_from_active_tab();
           ctx.request_repaint();
@@ -467,7 +481,9 @@ impl App for Gui {
         _ => {}
       }
     }
-    menu_panel(self, ctx);
+    self
+      .menu_panel
+      .show(ctx, &self.event_tx, &self.gui_state, &self.worker_state);
     side_panel(self, ctx);
     self.content_header_panel.show(
       ctx,

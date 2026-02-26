@@ -18,18 +18,13 @@ pub struct RefreshRequestDataPayload {
 }
 
 #[derive(Debug)]
-pub struct TabPayload {
-  pub url: String,
-}
-
-#[derive(Debug)]
 pub enum GuiEvent {
   SubmitRequest(HttpRequest),
   SubmitOAuth2Request(OAuth2Request),
   RefreshCollections(),
   RefreshEnvironments(),
   RefreshRequestData(RefreshRequestDataPayload),
-  SetGuiValuesFromTab(String),
+  SetActiveTab(String),
   SaveCollection(),
   SaveEnvironment(),
   NewCollection(Option<String>),
