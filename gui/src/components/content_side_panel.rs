@@ -182,7 +182,7 @@ fn render_history(ui: &mut egui::Ui, app: &mut Gui) -> ScrollAreaOutput<()> {
         )
         .clicked()
       {
-        // TODO - replace url, method, request body, response body
+        // TODO - replace url, method
         let responses_clone = app.worker_state.saved_responses.try_write().unwrap();
         let responses = responses_clone;
         let historical_request = request_clone.get(&item.request_id).unwrap();

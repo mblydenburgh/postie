@@ -50,12 +50,16 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                     let tx_clone2 = gui.event_tx.clone();
                     let name_for_worker = gui.gui_state.new_name.clone();
                     let _ = tokio::spawn(async move {
-                      tx_clone.send(events::GuiEvent::NewCollection(Some(name_for_worker)));
+                      tx_clone
+                        .try_send(events::GuiEvent::NewCollection(Some(name_for_worker)))
+                        .unwrap();
                     });
                     _ = tokio::spawn(async move {
                       let sleep = time::Duration::from_millis(50);
                       thread::sleep(sleep);
-                      tx_clone2.send(events::GuiEvent::RefreshCollections());
+                      tx_clone2
+                        .try_send(events::GuiEvent::RefreshCollections())
+                        .unwrap();
                     });
                   }
                   NewWindowMode::ENVIRONMENT => {
@@ -64,12 +68,17 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                     let tx_clone2 = gui.event_tx.clone();
                     let name_clone2 = gui.gui_state.new_name.clone();
                     let _ = tokio::spawn(async move {
-                      tx_clone.send(events::GuiEvent::NewEnvironment(Some(name_clone2)));
+                      tx_clone
+                        .try_send(events::GuiEvent::NewEnvironment(Some(name_clone2)))
+                        .unwrap();
                     });
+                    // TODO - why have two threads?
                     _ = tokio::spawn(async move {
                       let sleep = time::Duration::from_millis(50);
                       thread::sleep(sleep);
-                      tx_clone2.send(events::GuiEvent::RefreshEnvironments());
+                      tx_clone2
+                        .try_send(events::GuiEvent::RefreshEnvironments())
+                        .unwrap();
                     });
                   }
                   NewWindowMode::FOLDER => {
@@ -98,13 +107,16 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                         auth: collection_for_worker.auth,
                       };
 
-                      // TODO pass updated_collection
-                      tx_clone.send(events::GuiEvent::SaveCollection());
+                      tx_clone
+                        .try_send(events::GuiEvent::SaveCollection(updated_collection))
+                        .unwrap();
 
                       // refresh collections with new folder now added
                       let sleep = time::Duration::from_millis(50);
                       thread::sleep(sleep);
-                      tx_clone.send(events::GuiEvent::RefreshCollections());
+                      tx_clone
+                        .try_send(events::GuiEvent::RefreshCollections())
+                        .unwrap();
                     });
                   }
                 }

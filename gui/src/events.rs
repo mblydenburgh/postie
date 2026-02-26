@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
 use api::domain::{
+  collection::Collection,
   request::{DBRequest, HttpRequest, OAuth2Request},
   request_item::RequestHistoryItem,
   response::DBResponse,
@@ -25,7 +26,7 @@ pub enum GuiEvent {
   RefreshEnvironments(),
   RefreshRequestData(RefreshRequestDataPayload),
   SetActiveTab(String),
-  SaveCollection(),
+  SaveCollection(Collection),
   SaveEnvironment(),
   NewCollection(Option<String>),
   NewEnvironment(Option<String>),

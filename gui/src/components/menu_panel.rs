@@ -165,7 +165,9 @@ impl MenuPanel {
               event_tx.try_send(events::GuiEvent::RemoveTab(id)).unwrap();
             }
             if ui.button(&name).clicked() {
-              event_tx.try_send(events::GuiEvent::SetActiveTab(id.to_string()));
+              event_tx
+                .try_send(events::GuiEvent::SetActiveTab(id.to_string()))
+                .unwrap();
             }
           });
         }

@@ -28,8 +28,6 @@ use std::{
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use crate::components::menu_panel;
-
 // Holds app state that needs to be thread safe
 pub struct ThreadSafeState {
   pub api: Arc<RwLock<PostieApi>>,

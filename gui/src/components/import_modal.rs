@@ -40,7 +40,8 @@ pub fn import_modal(gui: &mut Gui, ctx: &egui::Context) {
                     });
                     gui
                       .event_tx
-                      .send(crate::events::GuiEvent::RefreshCollections());
+                      .try_send(crate::events::GuiEvent::RefreshCollections())
+                      .unwrap();
                   }
                   ui::ImportMode::ENVIRONMENT => {
                     let api_for_worker = std::sync::Arc::clone(&gui.worker_state.api);
@@ -56,7 +57,8 @@ pub fn import_modal(gui: &mut Gui, ctx: &egui::Context) {
                     });
                     gui
                       .event_tx
-                      .send(crate::events::GuiEvent::RefreshEnvironments());
+                      .try_send(crate::events::GuiEvent::RefreshEnvironments())
+                      .unwrap();
                   }
                 };
               }
