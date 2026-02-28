@@ -58,7 +58,7 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                       let sleep = time::Duration::from_millis(50);
                       thread::sleep(sleep);
                       tx_clone2
-                        .try_send(events::GuiEvent::RefreshCollections())
+                        .try_send(events::GuiEvent::RefreshCollections(None))
                         .unwrap();
                     });
                   }
@@ -115,7 +115,7 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                       let sleep = time::Duration::from_millis(50);
                       thread::sleep(sleep);
                       tx_clone
-                        .try_send(events::GuiEvent::RefreshCollections())
+                        .try_send(events::GuiEvent::RefreshCollections(None))
                         .unwrap();
                     });
                   }

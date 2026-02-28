@@ -40,7 +40,7 @@ pub fn import_modal(gui: &mut Gui, ctx: &egui::Context) {
                     });
                     gui
                       .event_tx
-                      .try_send(crate::events::GuiEvent::RefreshCollections())
+                      .try_send(crate::events::GuiEvent::RefreshCollections(None))
                       .unwrap();
                   }
                   ui::ImportMode::ENVIRONMENT => {

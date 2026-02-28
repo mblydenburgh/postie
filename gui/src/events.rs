@@ -19,10 +19,16 @@ pub struct RefreshRequestDataPayload {
 }
 
 #[derive(Debug)]
+pub struct RemoveCollectionFolderPayload {
+  pub id: String,
+  pub name: String,
+}
+
+#[derive(Debug)]
 pub enum GuiEvent {
   SubmitRequest(HttpRequest),
   SubmitOAuth2Request(OAuth2Request),
-  RefreshCollections(),
+  RefreshCollections(Option<Vec<Collection>>),
   RefreshEnvironments(),
   RefreshRequestData(RefreshRequestDataPayload),
   SetActiveTab(String),
@@ -32,4 +38,6 @@ pub enum GuiEvent {
   NewEnvironment(Option<String>),
   NewRequest(),
   RemoveTab(Uuid),
+  RemoveCollectionFolder(RemoveCollectionFolderPayload),
+  RequestRepaint(),
 }

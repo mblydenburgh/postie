@@ -109,7 +109,7 @@ pub fn save_window(gui: &mut Gui, ctx: &egui::Context) {
                 .add_request_to_collection(&selected_collection_id, request, folder_name.unwrap())
                 .await;
               tx_clone
-                .try_send(crate::events::GuiEvent::RefreshCollections())
+                .try_send(crate::events::GuiEvent::RefreshCollections(None))
                 .unwrap();
             });
           }

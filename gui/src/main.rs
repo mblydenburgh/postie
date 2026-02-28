@@ -127,7 +127,7 @@ impl Gui {
         url: "".into(),
         req_body: "".into(),
         req_headers: api::domain::request::RequestHeaders(vec![]),
-        res_status: None,
+        res_status: Some("".into()),
         res_body: "".into(),
         res_headers: api::domain::request::RequestHeaders(vec![]),
       };
@@ -280,6 +280,7 @@ impl Gui {
       let tabs_for_worker = Arc::clone(&tabs);
       let ctx_for_worker = ctx.clone();
       let res_tx_for_worker = res_tx.clone();
+      let collections_for_worker = Arc::clone(&collections);
       match event {
         events::GuiEvent::SetActiveTab(input) => {
           tokio::spawn(
@@ -334,10 +335,10 @@ impl Gui {
             let _ = Ok::<ResponseData, Error>(res.data);
           });
         }
-        events::GuiEvent::RefreshCollections() => {
+        events::GuiEvent::RefreshCollections(_) => {
           let api_guard = api.write().await;
           match api_guard.load_collections().await {
-            Ok(data) => *collections.write().await = data,
+            Ok(data) => *collections_for_worker.write().await = data,
             Err(_) => todo!(),
           }
         }
@@ -411,6 +412,23 @@ impl Gui {
           // TODO - refresh request history after tab deletion
           api.write().await.delete_tab(data).await.unwrap();
         }
+        events::GuiEvent::RemoveCollectionFolder(data) => {
+          println!("removing collection folder");
+          tokio::spawn(async move {
+            let mut api = api_for_worker.write().await;
+            if api
+              .delete_collection_folder(data.id, data.name)
+              .await
+              .is_ok()
+            {
+              if let Ok(new_cols) = api.load_collections().await {
+                let _ =
+                  res_tx_for_worker.try_send(events::GuiEvent::RefreshCollections(Some(new_cols)));
+                ctx_for_worker.request_repaint();
+              }
+            }
+          });
+        }
         _ => {
           println!("unknown event");
         }
@@ -439,7 +457,8 @@ impl Gui {
   }
 
   fn refresh_collections(tx: &tokio::sync::mpsc::Sender<events::GuiEvent>) {
-    tx.try_send(events::GuiEvent::RefreshCollections()).unwrap();
+    tx.try_send(events::GuiEvent::RefreshCollections(None))
+      .unwrap();
   }
 
   fn set_active_tab(&mut self, id: &str) {
@@ -475,6 +494,12 @@ impl App for Gui {
           self.set_active_tab(&tab_id);
           self.set_gui_values_from_active_tab();
           ctx.request_repaint();
+        }
+        events::GuiEvent::RefreshCollections(data) => {
+          let cols = data.unwrap();
+          if let Ok(mut cols_lock) = self.worker_state.collections.try_write() {
+            *cols_lock = cols;
+          };
         }
         _ => {}
       }

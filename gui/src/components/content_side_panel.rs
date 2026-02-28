@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc, str::FromStr, sync::Arc};
 
-use crate::Gui;
+use crate::{events, Gui};
 use api::domain::{
   collection::{Collection, CollectionFolder, CollectionItem, CollectionItemOrFolder},
   request::{DBRequest, HttpMethod},
@@ -12,14 +12,8 @@ use egui::{
 };
 
 pub fn content_side_panel(app: &mut Gui, ctx: &egui::Context) {
-  let collections_guard = {
-    let lock = app.worker_state.collections.try_write().unwrap();
-    lock.clone()
-  };
-  let active_winow_guard = {
-    let lock = app.gui_state.active_window.try_write().unwrap();
-    lock.clone()
-  };
+  let collections_guard = app.worker_state.collections.try_read().unwrap().clone();
+  let active_winow_guard = app.gui_state.active_window.try_read().unwrap().clone();
   SidePanel::left("content_panel").show(ctx, |ui| match active_winow_guard {
     ui::ActiveWindow::COLLECTIONS => {
       ScrollArea::vertical().show(ui, |ui| {
@@ -242,15 +236,15 @@ fn render_context_menu(
         if let None = req {
           let clicked_col_id = col.clone().info.id;
           let folder_for_worker = f.clone();
-          let api_for_worker = Arc::clone(&app.worker_state.api);
-          let tx_clone = app.event_tx.clone();
-          tokio::spawn(async move {
-            let _ = api_for_worker
-              .try_write()
-              .unwrap()
-              .delete_collection_folder(clicked_col_id, folder_for_worker.name);
-            Gui::refresh_collections(&tx_clone);
-          });
+          app
+            .event_tx
+            .try_send(events::GuiEvent::RemoveCollectionFolder(
+              events::RemoveCollectionFolderPayload {
+                id: clicked_col_id,
+                name: folder_for_worker.name,
+              },
+            ))
+            .unwrap();
         }
       }
       // TODO - fix deletion of folder request
