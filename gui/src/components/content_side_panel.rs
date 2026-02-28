@@ -45,7 +45,7 @@ fn render_collection(
         match i {
           CollectionItemOrFolder::Item(item) => {
             ui.horizontal(|ui| {
-              render_context_menu(ui, app, c, None, None);
+              render_context_menu(ui, app, c, None, Some(&item));
               if ui
                 .selectable_value(
                   &mut app.gui_state.selected_request.clone(),
@@ -229,69 +229,51 @@ fn render_context_menu(
         println!("adding folder");
       }
     });
-    if (ui.button("Delete")).clicked() {
-      // TODO - fix validate deletion of collection folder
-      // currently nothing happens
-      if let Some(f) = fol {
-        if let None = req {
-          let clicked_col_id = col.clone().info.id;
-          let folder_for_worker = f.clone();
+    if ui.button("Delete").clicked() {
+      println!("clicked {:?}", (fol, req));
+      match (fol, req) {
+        (Some(f), Some(r)) => {
           app
             .event_tx
-            .try_send(events::GuiEvent::RemoveCollectionFolder(
-              events::RemoveCollectionFolderPayload {
-                id: clicked_col_id,
-                name: folder_for_worker.name,
+            .try_send(events::GuiEvent::RemoveCollectionFolderRequest(
+              events::RemoveCollectionRequestPayload {
+                col_id: col.info.id.clone(),
+                folder_name: f.name.clone(),
+                req_name: r.name.clone(),
               },
             ))
             .unwrap();
         }
-      }
-      // TODO - fix deletion of folder request
-      // currently throw index out of bounds error, no change
-      if let Some(r) = req {
-        if let Some(f) = fol {
-          let clicked_col_id = col.clone().info.id;
-          let clicked_req_name = r.name.clone();
-          let folder_for_worker = f.clone();
-          let api_for_worker = Arc::clone(&app.worker_state.api);
-          let tx_clone = app.event_tx.clone();
-          tokio::spawn(async move {
-            let _ = api_for_worker
-              .write()
-              .await
-              .delete_folder_request(clicked_col_id, folder_for_worker.name, clicked_req_name)
-              .await;
-            Gui::refresh_collections(&tx_clone);
-          });
-        }
-      }
-      // TODO - fix deleting collection request - deletes entire collection
-      if let Some(r) = req {
-        if let None = fol {
-          let clicked_col_id = col.clone().info.id;
-          let clicked_req_name = r.name.clone();
-          let api_for_worker = Arc::clone(&app.worker_state.api);
-          let tx_clone = app.event_tx.clone();
-          tokio::spawn(async move {
-            let _ = api_for_worker
-              .try_write()
-              .unwrap()
-              .delete_collection_request(clicked_col_id, clicked_req_name)
-              .await;
-            Gui::refresh_collections(&tx_clone);
-          });
-        }
-      }
-      if let None = fol {
-        if let None = req {
-          let clicked_id = col.info.id.clone();
+        (Some(f), None) => {
           app
             .event_tx
-            .try_send(events::GuiEvent::RemoveCollection(clicked_id))
+            .try_send(events::GuiEvent::RemoveCollectionFolder(
+              events::RemoveCollectionItemPayload {
+                id: col.info.id.clone(),
+                name: f.name.clone(),
+              },
+            ))
+            .unwrap();
+        }
+        (None, Some(r)) => {
+          app
+            .event_tx
+            .try_send(events::GuiEvent::RemoveCollectionRequest(
+              events::RemoveCollectionItemPayload {
+                id: col.info.id.clone(),
+                name: r.name.clone(),
+              },
+            ))
+            .unwrap();
+        }
+        (None, None) => {
+          app
+            .event_tx
+            .try_send(events::GuiEvent::RemoveCollection(col.info.id.clone()))
             .unwrap();
         }
       }
+      ui.close_menu();
     }
   })
 }

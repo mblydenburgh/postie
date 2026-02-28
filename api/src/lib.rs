@@ -217,25 +217,30 @@ impl PostieApi {
     id: String,
     request_name: String,
   ) -> anyhow::Result<()> {
+    // TODO - createa get collection by id
     let collections = self.db.get_all_collections().await?;
     for mut col in collections {
       if col.info.id == id {
         println!("matching collection found, looking for request to remove");
-        let mut collection_items: Vec<CollectionItemOrFolder> = vec![];
-        for (_index, item) in &mut col.item.iter().enumerate() {
-          match item.clone() {
-            CollectionItemOrFolder::Folder(_) => (),
-            CollectionItemOrFolder::Item(i) => {
-              if i.name == request_name {
-                println!("removing top level request for collection {id}");
-              } else {
-                collection_items.push(CollectionItemOrFolder::Item(i));
-              }
+
+        col.item.retain(|item| match item {
+          CollectionItemOrFolder::Item(collection_item) => {
+            if collection_item.name == request_name {
+              println!("removing request {}", request_name);
+              false
+            } else {
+              println!("keeping request");
+              true
             }
           }
-        }
-        col.item = collection_items;
+          CollectionItemOrFolder::Folder(_) => {
+            println!("keeping folder");
+            true
+          }
+        });
+
         let _ = self.db.save_collection(col).await;
+        break;
       }
     }
     Ok(())

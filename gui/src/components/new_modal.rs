@@ -45,7 +45,7 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
               if ui.button("Save").clicked() {
                 match *new_window_mode {
                   NewWindowMode::COLLECTION => {
-                    let collections_for_worker = gui.worker_state.collections.clone();
+                    let _collections_for_worker = gui.worker_state.collections.clone();
                     let tx_clone = gui.event_tx.clone();
                     let tx_clone2 = gui.event_tx.clone();
                     let name_for_worker = gui.gui_state.new_name.clone();
@@ -63,7 +63,7 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                     });
                   }
                   NewWindowMode::ENVIRONMENT => {
-                    let envs_for_worker = gui.worker_state.environments.clone();
+                    let _envs_for_worker = gui.worker_state.environments.clone();
                     let tx_clone = gui.event_tx.clone();
                     let tx_clone2 = gui.event_tx.clone();
                     let name_clone2 = gui.gui_state.new_name.clone();
@@ -88,7 +88,7 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                       .selected_save_window_collection
                       .clone()
                       .unwrap();
-                    let collections_for_worker = gui.worker_state.collections.clone();
+                    let _collections_for_worker = gui.worker_state.collections.clone();
                     let name_for_worker = gui.gui_state.new_name.clone();
 
                     let tx_clone = gui.event_tx.clone();

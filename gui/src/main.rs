@@ -425,6 +425,23 @@ impl Gui {
             }
           });
         }
+        events::GuiEvent::RemoveCollectionRequest(data) => {
+          println!("removing collection top level request");
+          tokio::spawn(async move {
+            let mut api = api_for_worker.write().await;
+            if api
+              .delete_collection_request(data.id, data.name)
+              .await
+              .is_ok()
+            {
+              if let Ok(new_cols) = api.load_collections().await {
+                let _ =
+                  res_tx_for_worker.try_send(events::GuiEvent::RefreshCollections(Some(new_cols)));
+                ctx_for_worker.request_repaint();
+              }
+            }
+          });
+        }
         events::GuiEvent::RemoveCollectionFolder(data) => {
           println!("removing collection folder");
           tokio::spawn(async move {
@@ -442,36 +459,28 @@ impl Gui {
             }
           });
         }
+        events::GuiEvent::RemoveCollectionFolderRequest(data) => {
+          println!("removing collection folder request");
+          tokio::spawn(async move {
+            let mut api = api_for_worker.write().await;
+            if api
+              .delete_folder_request(data.col_id, data.folder_name, data.req_name)
+              .await
+              .is_ok()
+            {
+              if let Ok(new_cols) = api.load_collections().await {
+                let _ =
+                  res_tx_for_worker.try_send(events::GuiEvent::RefreshCollections(Some(new_cols)));
+                ctx_for_worker.request_repaint();
+              }
+            }
+          });
+        }
         _ => {
           println!("unknown event");
         }
       }
     }
-  }
-
-  fn _refresh_request_data(
-    &mut self,
-    request_history: Arc<tokio::sync::RwLock<Vec<RequestHistoryItem>>>,
-    responses: Arc<tokio::sync::RwLock<HashMap<String, DBResponse>>>,
-    requests: Arc<tokio::sync::RwLock<HashMap<String, DBRequest>>>,
-    tabs: Arc<tokio::sync::RwLock<HashMap<Uuid, Tab>>>,
-  ) {
-    self
-      .event_tx
-      .try_send(events::GuiEvent::RefreshRequestData(
-        events::RefreshRequestDataPayload {
-          request_history,
-          responses,
-          requests,
-          tabs,
-        },
-      ))
-      .unwrap();
-  }
-
-  fn refresh_collections(tx: &tokio::sync::mpsc::Sender<events::GuiEvent>) {
-    tx.try_send(events::GuiEvent::RefreshCollections(None))
-      .unwrap();
   }
 
   fn set_active_tab(&mut self, id: &str) {

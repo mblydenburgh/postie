@@ -19,9 +19,16 @@ pub struct RefreshRequestDataPayload {
 }
 
 #[derive(Debug)]
-pub struct RemoveCollectionFolderPayload {
+pub struct RemoveCollectionItemPayload {
   pub id: String,
   pub name: String,
+}
+
+#[derive(Debug)]
+pub struct RemoveCollectionRequestPayload {
+  pub col_id: String,
+  pub folder_name: String,
+  pub req_name: String,
 }
 
 #[derive(Debug)]
@@ -39,5 +46,7 @@ pub enum GuiEvent {
   NewRequest(),
   RemoveTab(Uuid),
   RemoveCollection(String),
-  RemoveCollectionFolder(RemoveCollectionFolderPayload),
+  RemoveCollectionFolder(RemoveCollectionItemPayload),
+  RemoveCollectionRequest(RemoveCollectionItemPayload),
+  RemoveCollectionFolderRequest(RemoveCollectionRequestPayload),
 }
