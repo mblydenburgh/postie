@@ -230,7 +230,6 @@ fn render_context_menu(
       }
     });
     if ui.button("Delete").clicked() {
-      println!("clicked {:?}", (fol, req));
       match (fol, req) {
         (Some(f), Some(r)) => {
           app
