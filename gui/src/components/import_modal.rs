@@ -62,7 +62,7 @@ pub fn import_modal(gui: &mut Gui, ctx: &egui::Context) {
                   }
                 };
               }
-              ui.close_menu();
+              ui.close();
             }
             let i = gui.worker_state.import_result.lock().unwrap();
             if let Some(import_res) = &*i {

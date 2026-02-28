@@ -2,6 +2,7 @@ pub mod db;
 pub mod domain;
 pub mod utilities;
 
+use base64::Engine as _;
 use chrono::prelude::*;
 use db::repository;
 use domain::environment::EnvironmentFile;
@@ -397,8 +398,8 @@ impl PostieApi {
       // if making an oauth token request, dont save to db
       PostieRequest::OAUTH(input) => {
         println!("making ouath request");
-        let auth_header_value =
-          base64::encode(format!("{}:{}", &input.client_id, &input.client_secret));
+        let auth_header_value = base64::engine::general_purpose::STANDARD
+          .encode(format!("{}:{}", &input.client_id, &input.client_secret));
         let mut header_map = HeaderMap::new();
         let header_value = &format!("Basic {:?}", &auth_header_value);
         println!("auth header: {}", &header_value);

@@ -112,10 +112,10 @@ impl MenuPanel {
           });
           ui.menu_button("Export", |ui| {
             if ui.button("Collection").clicked() {
-              ui.close_menu();
+              ui.close();
             };
             if ui.button("Environment").clicked() {
-              ui.close_menu();
+              ui.close();
             };
           });
         });

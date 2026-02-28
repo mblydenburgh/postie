@@ -272,7 +272,7 @@ fn render_context_menu(
             .unwrap();
         }
       }
-      ui.close_menu();
+      ui.close();
     }
   })
 }
