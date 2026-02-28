@@ -286,17 +286,10 @@ fn render_context_menu(
       if let None = fol {
         if let None = req {
           let clicked_id = col.info.id.clone();
-          // call to delete collection by id, refresh collections for ui
-          let api_for_worker = Arc::clone(&app.worker_state.api);
-          let tx_clone = app.event_tx.clone();
-          tokio::spawn(async move {
-            let _ = api_for_worker
-              .try_write()
-              .unwrap()
-              .delete_collection(clicked_id)
-              .await;
-            Gui::refresh_collections(&tx_clone);
-          });
+          app
+            .event_tx
+            .try_send(events::GuiEvent::RemoveCollection(clicked_id))
+            .unwrap();
         }
       }
     }

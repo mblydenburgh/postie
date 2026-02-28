@@ -38,6 +38,6 @@ pub enum GuiEvent {
   NewEnvironment(Option<String>),
   NewRequest(),
   RemoveTab(Uuid),
+  RemoveCollection(String),
   RemoveCollectionFolder(RemoveCollectionFolderPayload),
-  RequestRepaint(),
 }

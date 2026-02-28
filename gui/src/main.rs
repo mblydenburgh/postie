@@ -407,10 +407,23 @@ impl Gui {
             values: None,
           };
         }
-        events::GuiEvent::RemoveTab(data) => {
-          println!("removing tab {data}");
+        events::GuiEvent::RemoveTab(id) => {
+          println!("removing tab {id}");
           // TODO - refresh request history after tab deletion
-          api.write().await.delete_tab(data).await.unwrap();
+          api.write().await.delete_tab(id).await.unwrap();
+        }
+        events::GuiEvent::RemoveCollection(id) => {
+          println!("removing collection {id}");
+          tokio::spawn(async move {
+            let mut api = api_for_worker.write().await;
+            if api.delete_collection(id).await.is_ok() {
+              if let Ok(new_cols) = api.load_collections().await {
+                let _ =
+                  res_tx_for_worker.try_send(events::GuiEvent::RefreshCollections(Some(new_cols)));
+                ctx_for_worker.request_repaint();
+              }
+            }
+          });
         }
         events::GuiEvent::RemoveCollectionFolder(data) => {
           println!("removing collection folder");
