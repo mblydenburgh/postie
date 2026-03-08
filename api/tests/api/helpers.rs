@@ -1,10 +1,10 @@
 use api::{db::repository::PostieDb, PostieApi};
-use sqlx::{sqlite::SqlitePoolOptions, Connection, SqliteConnection};
+use sqlx::sqlite::SqlitePoolOptions;
 use wiremock::MockServer;
 
 pub struct TestApp {
   pub app: PostieApi,
-  pub test_server: MockServer,
+  pub _test_server: MockServer,
 }
 
 impl TestApp {
@@ -13,7 +13,7 @@ impl TestApp {
     let mock_client = reqwest::Client::builder().build().unwrap();
     let db = initialize_test_db().await.unwrap();
     Self {
-      test_server: mock_server,
+      _test_server: mock_server,
       app: PostieApi {
         client: mock_client,
         db,
@@ -21,14 +21,6 @@ impl TestApp {
         collection: Some("test_collection.json".to_string()),
       },
     }
-  }
-
-  pub fn load_test_collection(&self) -> &str {
-    include_str!("test_collection.json")
-  }
-
-  pub fn load_test_environment(&self) -> &str {
-    include_str!("test_environment.json")
   }
 }
 

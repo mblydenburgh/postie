@@ -6,7 +6,8 @@ use api::{
   domain::{
     collection::Collection,
     environment::{EnvironmentFile, EnvironmentValue},
-    request::{DBRequest, OAuth2Request, OAuthRequestBody, PostieRequest},
+    header::Headers,
+    request::{DBRequest, HttpMethod, OAuth2Request, OAuthRequestBody, PostieRequest},
     request_item::RequestHistoryItem,
     response::{DBResponse, ResponseData},
     tab::Tab,
@@ -15,7 +16,7 @@ use api::{
 };
 use components::{
   content_header_panel::ContentHeaderPanel, content_panel::ContentPanel,
-  content_side_panel::content_side_panel, import_modal::import_modal, menu_panel::MenuPanel,
+  content_side_panel::ContentSidePanel, import_modal::import_modal, menu_panel::MenuPanel,
   new_modal::new_modal, save_window::save_window, side_panel::side_panel,
 };
 use eframe::{egui, App, NativeOptions};
@@ -23,6 +24,7 @@ use std::{
   cell::RefCell,
   collections::HashMap,
   rc::Rc,
+  str::FromStr,
   sync::{Arc, Mutex},
 };
 use tokio::sync::RwLock;
@@ -60,7 +62,6 @@ pub struct GuiState {
   pub bearer_token: String,
   pub oauth_config: OAuth2Request,
   pub oauth_token: String,
-  pub selected_request: Rc<RefCell<Option<api::domain::collection::CollectionRequest>>>,
   pub url: String,
   pub body_str: String,
   pub import_window_open: RwLock<bool>,
@@ -81,6 +82,7 @@ pub struct Gui {
   pub event_tx: tokio::sync::mpsc::Sender<events::GuiEvent>,
   pub res_rx: tokio::sync::mpsc::Receiver<events::GuiEvent>,
   pub content_header_panel: ContentHeaderPanel,
+  pub content_side_panel: ContentSidePanel,
   pub content_panel: ContentPanel,
   pub menu_panel: MenuPanel,
 }
@@ -126,10 +128,10 @@ impl Gui {
         method: api::domain::request::HttpMethod::GET,
         url: "".into(),
         req_body: "".into(),
-        req_headers: api::domain::request::RequestHeaders(vec![]),
+        req_headers: Headers(vec![]),
         res_status: Some("".into()),
         res_body: "".into(),
-        res_headers: api::domain::request::RequestHeaders(vec![]),
+        res_headers: Headers(vec![]),
       };
       let mut default_tab_map: HashMap<String, Tab> = HashMap::new();
       default_tab_map.insert(Uuid::new_v4().to_string(), default_tab);
@@ -183,7 +185,6 @@ impl Gui {
       selected_auth_mode: api::domain::ui::AuthMode::NONE,
       selected_save_window_collection: None,
       selected_save_window_folder: None,
-      selected_request: Rc::new(RefCell::new(None)),
       api_key_name: "".into(),
       api_key: "".into(),
       bearer_token: "".into(),
@@ -248,6 +249,7 @@ impl Gui {
   ) -> Self {
     let content_header_panel = ContentHeaderPanel::new();
     let content_panel = ContentPanel::new();
+    let content_side_panel = ContentSidePanel::new();
     let menu_panel = MenuPanel::new();
     let gui = Gui {
       worker_state,
@@ -256,6 +258,7 @@ impl Gui {
       gui_state,
       content_header_panel,
       content_panel,
+      content_side_panel,
       menu_panel,
     };
     gui
@@ -333,6 +336,52 @@ impl Gui {
               .unwrap();
             println!("{:?}", &res);
             let _ = Ok::<ResponseData, Error>(res.data);
+          });
+        }
+        events::GuiEvent::SelectRequest { col_id: _, request } => {
+          println!("request selected");
+          tokio::spawn(async move {
+            let mut tabs_guard = tabs_for_worker.write().await;
+
+            let existing_tab_id = tabs_guard
+              .values()
+              .find(|t| {
+                t.url == request.url.raw
+                  && t.method == HttpMethod::from_str(&request.method).unwrap_or(HttpMethod::GET)
+              })
+              .map(|t| t.id.to_string());
+
+            let target_id = match existing_tab_id {
+              Some(id) => {
+                println!("Found existing tab: {}", id);
+                id
+              }
+              None => {
+                println!("Creating new tab for request: {:?}", request.url);
+                let mut new_tab = Tab::default();
+                let new_id = new_tab.id.to_string();
+
+                new_tab.url = request.url.raw;
+                new_tab.method = HttpMethod::from_str(&request.method).unwrap_or(HttpMethod::GET);
+
+                if let Some(body) = request.body {
+                  new_tab.req_body = body.raw.unwrap_or_default();
+                }
+
+                if let Some(headers) = request.header {
+                  new_tab.req_headers = headers.into_iter().map(|h| (h.key, h.value)).collect();
+                }
+
+                tabs_guard.insert(new_id.clone(), new_tab);
+                new_id
+              }
+            };
+
+            let _ = res_tx_for_worker
+              .send(events::GuiEvent::SetActiveTab(target_id))
+              .await;
+
+            ctx_for_worker.request_repaint();
           });
         }
         events::GuiEvent::RefreshCollections(_) => {
@@ -542,7 +591,9 @@ impl App for Gui {
       self.gui_state.bearer_token.clone(),
       self.gui_state.oauth_token.clone(),
     );
-    content_side_panel(self, ctx);
+    self
+      .content_side_panel
+      .show(ctx, &self.gui_state, &self.worker_state, &self.event_tx);
     self
       .content_panel
       .show(ctx, &self.gui_state, &self.worker_state, &self.event_tx);

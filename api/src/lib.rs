@@ -6,7 +6,7 @@ use base64::Engine as _;
 use chrono::prelude::*;
 use db::repository;
 use domain::environment::EnvironmentFile;
-use domain::request::RequestHeaders;
+use domain::header::Headers;
 use domain::{
   collection::{
     Collection, CollectionItem, CollectionItemOrFolder, CollectionRequest, CollectionRequestHeader,
@@ -23,6 +23,7 @@ use reqwest::{
 use std::{borrow::Borrow, fs};
 use uuid::Uuid;
 
+use crate::domain::header::Header;
 use crate::domain::{request::DBRequest, request_item::RequestHistoryItem, response::DBResponse};
 
 pub struct PostieApi {
@@ -336,7 +337,7 @@ impl PostieApi {
           .clone()
           .unwrap()
           .into_iter()
-          .map(|(key, value)| domain::request::RequestHeader { key, value })
+          .map(|(key, value)| Header { key, value })
           .collect();
         let body = if let Some(req_body) = input.body {
           match req_body {
@@ -355,10 +356,10 @@ impl PostieApi {
           headers: request_headers,
         };
         self.db.save_request_history(&db_request).await?;
-        let response_headers: Vec<domain::response::ResponseHeader> = res_headers
+        let response_headers: Vec<Header> = res_headers
           .borrow()
           .into_iter()
-          .map(|(key, value)| domain::response::ResponseHeader {
+          .map(|(key, value)| Header {
             key: String::from(HeaderName::as_str(key)),
             value: String::from(HeaderValue::to_str(value).unwrap()),
           })
@@ -387,10 +388,10 @@ impl PostieApi {
           method: input.method.clone(),
           url: input.url.clone(),
           req_body: "".into(),
-          req_headers: RequestHeaders(vec![]),
+          req_headers: Headers(vec![]),
           res_status: Some(res_status.to_string()),
           res_body,
-          res_headers: RequestHeaders(vec![]),
+          res_headers: Headers(vec![]),
         };
         self.db.save_tab(&updated_tab).await?;
         Ok(response)

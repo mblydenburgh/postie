@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
 use api::domain::{
-  collection::Collection,
+  collection::{Collection, CollectionRequest},
   request::{DBRequest, HttpRequest, OAuth2Request},
   request_item::RequestHistoryItem,
   response::DBResponse,
@@ -33,6 +33,11 @@ pub struct RemoveCollectionRequestPayload {
 
 #[derive(Debug)]
 pub enum GuiEvent {
+  SelectRequest {
+    col_id: String,
+    request: CollectionRequest,
+  },
+  SelectEnvironment(String),
   SubmitRequest(HttpRequest),
   SubmitOAuth2Request(OAuth2Request),
   RefreshCollections(Option<Vec<Collection>>),

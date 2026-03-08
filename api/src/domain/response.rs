@@ -1,5 +1,7 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use sqlx;
+
+use crate::domain::header;
 
 #[derive(Debug, sqlx::FromRow, sqlx::Encode, sqlx::Decode)]
 pub struct DBResponse {
@@ -7,16 +9,8 @@ pub struct DBResponse {
   pub status_code: u16,
   pub name: Option<String>,
   #[sqlx(default)]
-  pub headers: Vec<ResponseHeader>,
+  pub headers: Vec<header::Header>,
   pub body: Option<String>,
-}
-
-#[derive(
-  Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug, sqlx::Encode, sqlx::Decode,
-)]
-pub struct ResponseHeader {
-  pub key: String,
-  pub value: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]

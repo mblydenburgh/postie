@@ -9,9 +9,10 @@ use uuid::Uuid;
 use crate::domain::{
   collection::{Collection, CollectionAuth, CollectionInfo, CollectionItemOrFolder},
   environment::EnvironmentFile,
-  request::{self, DBRequest, HttpMethod, RequestHeader, RequestHeaders},
+  header::{Header, Headers},
+  request::{DBRequest, HttpMethod},
   request_item::RequestHistoryItem,
-  response::{DBResponse, ResponseHeader},
+  response::DBResponse,
   tab::Tab,
 };
 
@@ -238,8 +239,7 @@ impl PostieDb {
         let raw_body: Option<String> = row.get("body");
         let raw_headers: String = row.get("headers");
         let mut body: Option<String> = None;
-        let headers: Vec<request::RequestHeader> =
-          serde_json::from_str::<Vec<RequestHeader>>(&raw_headers).unwrap();
+        let headers: Vec<Header> = serde_json::from_str::<Vec<Header>>(&raw_headers).unwrap();
         if let Some(body_str) = raw_body {
           body = Some(body_str)
         }
@@ -297,7 +297,7 @@ impl PostieDb {
         let name: Option<String> = row.get("name");
         let raw_headers: String = row.get("headers");
         let raw_body: String = row.get("body");
-        let headers = serde_json::from_str::<Vec<ResponseHeader>>(&raw_headers).unwrap();
+        let headers = serde_json::from_str::<Vec<Header>>(&raw_headers).unwrap();
         let body = if raw_body.is_empty() {
           None
         } else {
@@ -376,8 +376,8 @@ impl PostieDb {
         println!("raw_req_headers: {:?}", raw_req_headers);
         let mut req_body: Option<String> = None;
         let mut res_body: String = "".into();
-        let headers: RequestHeaders = serde_json::from_str::<RequestHeaders>(&raw_req_headers)
-          .unwrap_or(RequestHeaders(vec![]));
+        let headers: Headers =
+          serde_json::from_str::<Headers>(&raw_req_headers).unwrap_or(Headers(vec![]));
         if let Some(body_str) = raw_req_body {
           req_body = Some(body_str)
         }
@@ -398,7 +398,7 @@ impl PostieDb {
           res_status,
           req_headers: headers,
           res_body,
-          res_headers: RequestHeaders(vec![]),
+          res_headers: Headers(vec![]),
         }
       })
       .fetch_all(&self.pool)
