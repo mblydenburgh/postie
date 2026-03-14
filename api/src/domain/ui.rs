@@ -17,7 +17,7 @@ pub enum NewWindowMode {
   ENVIRONMENT,
   FOLDER,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Copy, Clone)]
 pub enum RequestWindowMode {
   AUTHORIZATION,
   PARAMS,

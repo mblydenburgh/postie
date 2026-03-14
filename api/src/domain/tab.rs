@@ -1,29 +1,30 @@
 use uuid::Uuid;
 
-use super::request::{HttpMethod, RequestHeaders};
+use super::header::Headers;
+use super::request::HttpMethod;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tab {
-  pub id: String,
+  pub id: Uuid,
   pub method: HttpMethod,
   pub url: String,
   pub req_body: String,
-  pub req_headers: RequestHeaders,
+  pub req_headers: Headers,
   pub res_status: Option<String>,
   pub res_body: String,
-  pub res_headers: RequestHeaders,
+  pub res_headers: Headers,
 }
 impl Default for Tab {
   fn default() -> Self {
     Self {
-      id: Uuid::new_v4().to_string(),
+      id: Uuid::new_v4(),
       url: "".into(),
       req_body: "".into(),
-      req_headers: RequestHeaders(vec![]),
+      req_headers: Headers(vec![]),
       method: HttpMethod::GET,
       res_status: None,
       res_body: "".into(),
-      res_headers: RequestHeaders(vec![]),
+      res_headers: Headers(vec![]),
     }
   }
 }

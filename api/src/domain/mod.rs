@@ -1,5 +1,6 @@
 pub mod collection;
 pub mod environment;
+pub mod header;
 pub mod request;
 pub mod request_item;
 pub mod response;

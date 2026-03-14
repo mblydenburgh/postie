@@ -2,10 +2,11 @@ pub mod db;
 pub mod domain;
 pub mod utilities;
 
+use base64::Engine as _;
 use chrono::prelude::*;
 use db::repository;
 use domain::environment::EnvironmentFile;
-use domain::request::RequestHeaders;
+use domain::header::Headers;
 use domain::{
   collection::{
     Collection, CollectionItem, CollectionItemOrFolder, CollectionRequest, CollectionRequestHeader,
@@ -22,6 +23,8 @@ use reqwest::{
 use std::{borrow::Borrow, fs};
 use uuid::Uuid;
 
+use crate::domain::collection::CollectionFolder;
+use crate::domain::header::Header;
 use crate::domain::{request::DBRequest, request_item::RequestHistoryItem, response::DBResponse};
 
 pub struct PostieApi {
@@ -40,24 +43,23 @@ impl PostieApi {
       db: repository::PostieDb::new().await,
     }
   }
-  pub fn parse_collection(collection_json: &str) -> Collection {
+  pub fn parse_collection(&mut self, collection_json: &str) -> Collection {
     println!("Parsing collection from json");
     serde_json::from_str(collection_json).expect("Failed to parse collection")
   }
-  pub fn parse_environment(environment_json: &str) -> EnvironmentFile {
+  pub fn parse_environment(&mut self, environment_json: &str) -> EnvironmentFile {
     println!("Parsing environment from json");
     serde_json::from_str(environment_json).expect("Failed to parse environment")
   }
-  pub fn read_file(path: &str) -> anyhow::Result<String> {
+  pub fn read_file(&mut self, path: &str) -> anyhow::Result<String> {
     println!("Reading file: {}", path);
     Ok(fs::read_to_string(path)?)
   }
-  pub async fn import_collection(path: &str) -> anyhow::Result<String> {
-    let mut api = PostieApi::new().await;
-    let file_str = Self::read_file(path).unwrap();
-    let collection = Self::parse_collection(&file_str);
+  pub async fn import_collection(&mut self, path: &str) -> anyhow::Result<String> {
+    let file_str = self.read_file(path).unwrap();
+    let collection = self.parse_collection(&file_str);
     println!("Successfully parsed postman collection!");
-    match api.db.save_collection(collection).await {
+    match &self.db.save_collection(collection.clone()).await {
       Ok(_) => Ok(String::from("Import successful")),
       Err(_) => {
         println!("Error saving collection");
@@ -66,76 +68,175 @@ impl PostieApi {
     }
   }
   pub async fn add_request_to_collection(
+    &mut self,
     id: &str,
     req: HttpRequest,
-    folder_name: String,
+    folder_name: Option<String>,
   ) -> anyhow::Result<()> {
-    let mut api = PostieApi::new().await;
     println!("finding collection {id} to update");
-    let collections = api.db.get_all_collections().await?;
+    let collections = self.db.get_all_collections().await?;
     for mut collection in collections {
       if collection.info.id == id {
-        println!("adding request to {folder_name}");
-        for item in &mut collection.item {
-          if let CollectionItemOrFolder::Folder(ref mut folder) = item {
-            if folder.name == folder_name {
-              println!("found matching folder name, updating collection");
-              let mut res: Vec<CollectionRequestHeader> = vec![];
-              let headers: Vec<CollectionRequestHeader> = req
-                .headers
-                .clone()
-                .map(|headers| {
-                  for h in headers {
-                    res.push(CollectionRequestHeader {
-                      key: h.0,
-                      value: h.1,
-                      r#type: String::from(""),
-                    });
-                  }
-                  res
-                })
-                .unwrap();
-              folder
-                .item
-                .push(CollectionItemOrFolder::Item(CollectionItem {
-                  name: req.clone().url,
-                  request: CollectionRequest {
-                    auth: None,
-                    body: Some(domain::collection::RequestBody {
-                      mode: String::from(""),
-                      raw: None,
-                      options: None,
-                    }),
-                    header: Some(headers),
-                    method: req.method.to_string(),
-                    url: CollectionUrl {
-                      raw: req.clone().url,
-                      path: None,
-                      host: None,
+        if let Some(fol_name) = folder_name.clone() {
+          println!("adding request to {fol_name}");
+          for item in &mut collection.item {
+            if let CollectionItemOrFolder::Folder(ref mut folder) = item {
+              if folder.name == fol_name {
+                println!("found matching folder name, updating collection");
+                let mut res: Vec<CollectionRequestHeader> = vec![];
+                let headers: Vec<CollectionRequestHeader> = req
+                  .headers
+                  .clone()
+                  .map(|headers| {
+                    for h in headers {
+                      res.push(CollectionRequestHeader {
+                        key: h.0,
+                        value: h.1,
+                        r#type: String::from(""),
+                      });
+                    }
+                    res
+                  })
+                  .unwrap_or(vec![]);
+                folder
+                  .item
+                  .push(CollectionItemOrFolder::Item(CollectionItem {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    name: if req.clone().name.is_some() {
+                      req.name.clone().unwrap()
+                    } else {
+                      req.url.clone()
                     },
-                  },
-                }));
+                    request: CollectionRequest {
+                      auth: None,
+                      body: Some(domain::collection::RequestBody {
+                        mode: String::from(""),
+                        raw: None,
+                        options: None,
+                      }),
+                      header: Some(headers),
+                      method: req.method.to_string(),
+                      url: CollectionUrl {
+                        raw: req.clone().url,
+                        path: None,
+                        host: None,
+                      },
+                    },
+                  }));
+              }
             }
           }
+          let updated_items = collection.item;
+          let updated = Collection {
+            info: collection.info,
+            item: updated_items,
+            auth: collection.auth,
+          };
+          self.db.save_collection(updated).await?;
+        } else {
+          println!("saving to collection root");
+          let mut col_items = collection.item.clone();
+          let mut res: Vec<CollectionRequestHeader> = vec![];
+          let headers: Vec<CollectionRequestHeader> = req
+            .headers
+            .clone()
+            .map(|headers| {
+              for h in headers {
+                res.push(CollectionRequestHeader {
+                  key: h.0,
+                  value: h.1,
+                  r#type: String::from(""),
+                });
+              }
+              res
+            })
+            .unwrap_or(vec![]);
+          col_items.push(CollectionItemOrFolder::Item(CollectionItem {
+            id: uuid::Uuid::new_v4().to_string(),
+            name: if req.name.is_some() {
+              req.name.clone().unwrap()
+            } else {
+              req.url.clone()
+            },
+            request: CollectionRequest {
+              method: req.method.to_string(),
+              url: CollectionUrl {
+                raw: req.url.clone(),
+                host: None,
+                path: None,
+              },
+              auth: None,
+              header: Some(headers),
+              body: Some(domain::collection::RequestBody {
+                mode: String::from(""),
+                raw: None,
+                options: None,
+              }),
+            },
+          }));
+          let updated = Collection {
+            info: collection.info,
+            item: col_items,
+            auth: collection.auth,
+          };
+          self.db.save_collection(updated).await?;
         }
-        let updated_items = collection.item;
-        let updated = Collection {
-          info: collection.info,
-          item: updated_items,
-          auth: collection.auth,
-        };
-        api.db.save_collection(updated).await?;
       }
     }
     Ok(())
   }
+
+  pub async fn add_folder_to_collection(
+    &mut self,
+    col_id: String,
+    sub_folder: Option<CollectionFolder>,
+    folder: CollectionFolder,
+  ) -> anyhow::Result<()> {
+    let collections = self.db.get_all_collections().await?;
+    if let Some(mut collection) = collections.into_iter().find(|c| c.info.id == col_id) {
+      if let Some(target_folder) = sub_folder {
+        println!("adding new folder to {}", target_folder.name);
+        match self.add_folder_recursive(&mut collection.item, &target_folder.id, &folder) {
+          true => {}
+          false => anyhow::bail!("couldnt find matching subfolder to save new folder to"),
+        }
+      } else {
+        collection.item.push(CollectionItemOrFolder::Folder(folder));
+      }
+      self.db.save_collection(collection).await?;
+    }
+    Ok(())
+  }
+  fn add_folder_recursive(
+    &mut self,
+    items: &mut Vec<CollectionItemOrFolder>,
+    target_folder_id: &str,
+    new_folder: &CollectionFolder,
+  ) -> bool {
+    println!("add folder rescursive");
+    for item in items.iter_mut() {
+      if let CollectionItemOrFolder::Folder(ref mut current_folder) = item {
+        if current_folder.id == target_folder_id {
+          current_folder
+            .item
+            .push(CollectionItemOrFolder::Folder(new_folder.clone()));
+          return true;
+        }
+
+        if self.add_folder_recursive(&mut current_folder.item, target_folder_id, new_folder) {
+          return true;
+        }
+      }
+    }
+    false
+  }
+
   // TODO - better error handling
-  pub async fn import_environment(path: &str) -> anyhow::Result<String> {
-    let mut api = PostieApi::new().await;
-    let file_str = Self::read_file(path).unwrap();
-    let environment = Self::parse_environment(&file_str);
+  pub async fn import_environment(&mut self, path: &str) -> anyhow::Result<String> {
+    let file_str = self.read_file(path)?;
+    let environment = self.parse_environment(&file_str);
     println!("Successfully parsed postman environment!");
-    match api.db.save_environment(environment).await {
+    match self.db.save_environment(environment).await {
       Ok(_) => Ok(String::from("Import successful")),
       Err(_) => {
         println!("Error saving enviornment");
@@ -143,9 +244,8 @@ impl PostieApi {
       }
     }
   }
-  pub async fn save_environment(input: EnvironmentFile) -> anyhow::Result<()> {
-    let mut api = PostieApi::new().await;
-    match api.db.save_environment(input).await {
+  pub async fn save_environment(&mut self, input: EnvironmentFile) -> anyhow::Result<()> {
+    match self.db.save_environment(input).await {
       Ok(_) => Ok(()),
       Err(_) => {
         println!("Error saving environment");
@@ -153,9 +253,11 @@ impl PostieApi {
       }
     }
   }
-  pub async fn save_collection(input: Collection) -> anyhow::Result<()> {
-    let mut api = PostieApi::new().await;
-    match api.db.save_collection(input).await {
+  pub async fn save_collection(&mut self, input: Collection) -> anyhow::Result<()> {
+    // TODO - figure out a way to not have to call this in each method.
+    // unit tests are currently trying to make a realy connection after
+    // already connecting to in memory test.
+    match self.db.save_collection(input).await {
       Ok(_) => Ok(()),
       Err(_) => {
         println!("Error saving collection");
@@ -163,67 +265,116 @@ impl PostieApi {
       }
     }
   }
-  pub async fn load_environments() -> anyhow::Result<Vec<EnvironmentFile>> {
-    let mut api = PostieApi::new().await;
-    let envs = api.db.get_all_environments().await.unwrap();
+  pub async fn load_environments(&self) -> anyhow::Result<Vec<EnvironmentFile>> {
+    let envs = self.db.get_all_environments().await?;
     Ok(envs)
   }
-  pub async fn load_collections() -> anyhow::Result<Vec<Collection>> {
-    let mut api = PostieApi::new().await;
-    let collections = api.db.get_all_collections().await.unwrap();
+  pub async fn load_collections(&self) -> anyhow::Result<Vec<Collection>> {
+    let collections = self.db.get_all_collections().await?;
     Ok(collections)
   }
-  pub async fn load_tabs() -> anyhow::Result<Vec<Tab>> {
-    let mut api = PostieApi::new().await;
-    let tabs = api.db.get_all_tabs().await.unwrap();
+  pub async fn load_tabs(&mut self) -> anyhow::Result<Vec<Tab>> {
+    let tabs = self.db.get_all_tabs().await?;
     Ok(tabs)
   }
-  pub async fn load_request_response_items() -> anyhow::Result<Vec<RequestHistoryItem>> {
-    let mut api = PostieApi::new().await;
-    let items = api.db.get_request_response_items().await.unwrap();
+  pub async fn load_request_response_items(&mut self) -> anyhow::Result<Vec<RequestHistoryItem>> {
+    let items = self.db.get_request_response_items().await?;
     Ok(items)
   }
-  pub async fn load_saved_requests() -> anyhow::Result<Vec<DBRequest>> {
-    let mut api = PostieApi::new().await;
-    let requests = api.db.get_all_requests().await.unwrap();
+  pub async fn load_saved_requests(&mut self) -> anyhow::Result<Vec<DBRequest>> {
+    let requests = self.db.get_all_requests().await?;
     Ok(requests)
   }
-  pub async fn load_saved_responses() -> anyhow::Result<Vec<DBResponse>> {
-    let mut api = PostieApi::new().await;
-    let responses = api.db.get_all_responses().await.unwrap();
+  pub async fn load_saved_responses(&mut self) -> anyhow::Result<Vec<DBResponse>> {
+    let responses = self.db.get_all_responses().await?;
     Ok(responses)
   }
-  pub async fn delete_collection(id: String) -> anyhow::Result<()> {
-    let mut api = PostieApi::new().await;
-    api.db.delete_collection(id).await
+  pub async fn delete_collection(&mut self, id: String) -> anyhow::Result<()> {
+    self.db.delete_collection(id).await
   }
-  pub async fn delete_collection_folder(id: String, folder_name: String) -> anyhow::Result<()> {
-    let mut api = PostieApi::new().await;
-    let collections = api.db.get_all_collections().await?;
-    for mut col in collections {
-      if col.info.id == id {
-        println!("matching collection found, looking for folder to remove");
-        let mut collection_items: Vec<CollectionItemOrFolder> = vec![];
-        for item in &mut col.item {
-          if let CollectionItemOrFolder::Folder(ref mut f) = item {
-            if f.name != folder_name {
-              collection_items.push(CollectionItemOrFolder::Folder(f.clone()));
-            }
-          }
-        }
-        col.item = collection_items;
-        let _ = api.db.save_collection(col).await;
+  pub async fn delete_collection_folder(
+    &mut self,
+    id: String,
+    folder_id: String,
+  ) -> anyhow::Result<()> {
+    let collections = self.db.get_all_collections().await?;
+    if let Some(mut collection) = collections.into_iter().find(|c| c.info.id == id) {
+      println!("removing folder {} from colleciton {}", folder_id, id);
+      let found = self.delete_folder_recursive(&mut collection.item, &folder_id);
+      if found {
+        self.db.save_collection(collection).await?;
+      } else {
+        println!("no matching folder found");
       }
     }
     Ok(())
   }
+
+  fn delete_folder_recursive(
+    &mut self,
+    items: &mut Vec<CollectionItemOrFolder>,
+    folder_id: &str,
+  ) -> bool {
+    let initial_len = items.len();
+    items.retain(|item| {
+      if let CollectionItemOrFolder::Folder(f) = item {
+        return f.id != folder_id; // keep items that do have matching id
+      }
+      true
+    });
+
+    // if the length changed, it has been removed
+    if items.len() != initial_len {
+      return true;
+    }
+
+    // if not found, call recursively
+    for item in items.iter_mut() {
+      if let CollectionItemOrFolder::Folder(ref mut f) = item {
+        if self.delete_folder_recursive(&mut f.item, folder_id) {
+          return true; // found, stop
+        }
+      }
+    }
+
+    false
+  }
+
   pub async fn delete_collection_request(
+    &mut self,
     id: String,
-    folder_name: String,
-    request_name: String,
+    request_id: String,
   ) -> anyhow::Result<()> {
-    let mut api = PostieApi::new().await;
-    let collections = api.db.get_all_collections().await?;
+    // TODO - create a get collection by id
+    let collections = self.db.get_all_collections().await?;
+    for mut col in collections {
+      if col.info.id == id {
+        println!("matching collection found, looking for request to remove");
+
+        col.item.retain(|item| match item {
+          CollectionItemOrFolder::Item(collection_item) => {
+            if collection_item.id == request_id {
+              false
+            } else {
+              true
+            }
+          }
+          CollectionItemOrFolder::Folder(_) => true,
+        });
+
+        let _ = self.db.save_collection(col).await;
+        break;
+      }
+    }
+    Ok(())
+  }
+  pub async fn delete_folder_request(
+    &mut self,
+    id: String,
+    folder_id: String,
+    request_id: String,
+  ) -> anyhow::Result<()> {
+    let collections = self.db.get_all_collections().await?;
     for mut col in collections {
       if col.info.id == id {
         println!("matching collection found, looking for request to remove");
@@ -234,7 +385,7 @@ impl PostieApi {
               collection_items.push(CollectionItemOrFolder::Folder(f.clone()));
               for (f_index, f_item) in &mut f.item.iter().enumerate() {
                 if let CollectionItemOrFolder::Item(i) = f_item {
-                  if i.name == request_name && f.name.clone() == folder_name.clone() {
+                  if i.id == request_id && f.id.clone() == folder_id.clone() {
                     if let CollectionItemOrFolder::Folder(ref mut cf) = collection_items[index] {
                       cf.item.remove(f_index);
                     }
@@ -242,16 +393,20 @@ impl PostieApi {
                 }
               }
             }
-            CollectionItemOrFolder::Item(i) => if i.name == request_name {},
+            CollectionItemOrFolder::Item(i) => if i.id == request_id {},
           }
         }
         col.item = collection_items;
-        let _ = api.db.save_collection(col).await;
+        let _ = self.db.save_collection(col).await;
       }
     }
     Ok(())
   }
-  pub fn substitute_variables_in_url(environment: &EnvironmentFile, raw_url: String) -> String {
+  pub fn substitute_variables_in_url(
+    &mut self,
+    environment: &EnvironmentFile,
+    raw_url: String,
+  ) -> String {
     println!("substituting env vars");
     if let Some(values) = environment.clone().values {
       let url = values.iter().fold(raw_url, |acc, env_value| {
@@ -264,8 +419,7 @@ impl PostieApi {
       raw_url
     }
   }
-  pub async fn make_request(input: PostieRequest) -> anyhow::Result<Response> {
-    let api = PostieApi::new().await;
+  pub async fn make_request(&mut self, input: PostieRequest) -> anyhow::Result<Response> {
     match input {
       // request and save http request
       PostieRequest::HTTP(input) => {
@@ -281,8 +435,8 @@ impl PostieApi {
           }
         };
 
-        let url = Self::substitute_variables_in_url(&input.environment.clone(), input.url.clone());
-        let mut req = api.client.request(method, url).headers(headers.clone());
+        let url = self.substitute_variables_in_url(&input.environment.clone(), input.url.clone());
+        let mut req = self.client.request(method, url).headers(headers.clone());
         if let Some(ref request_body) = input.body {
           req = match request_body.clone() {
             RequestBody::JSON(j) => req.json(&j.clone()),
@@ -304,9 +458,8 @@ impl PostieApi {
           .clone()
           .unwrap()
           .into_iter()
-          .map(|(key, value)| domain::request::RequestHeader { key, value })
+          .map(|(key, value)| Header { key, value })
           .collect();
-        let mut db = repository::PostieDb::new().await;
         let body = if let Some(req_body) = input.body {
           match req_body {
             RequestBody::JSON(j) => Some(j.to_string()),
@@ -323,11 +476,11 @@ impl PostieApi {
           url: input.url.clone(),
           headers: request_headers,
         };
-        db.save_request_history(&db_request).await?;
-        let response_headers: Vec<domain::response::ResponseHeader> = res_headers
+        self.db.save_request_history(&db_request).await?;
+        let response_headers: Vec<Header> = res_headers
           .borrow()
           .into_iter()
-          .map(|(key, value)| domain::response::ResponseHeader {
+          .map(|(key, value)| Header {
             key: String::from(HeaderName::as_str(key)),
             value: String::from(HeaderValue::to_str(value).unwrap()),
           })
@@ -339,8 +492,10 @@ impl PostieApi {
           headers: response_headers,
           body: Some(res_text.clone()),
         };
-        db.save_response(&db_response).await?;
-        db.save_request_response_item(&db_request, &db_response, &now, &response_time)
+        self.db.save_response(&db_response).await?;
+        self
+          .db
+          .save_request_response_item(&db_request, &db_response, &now, &response_time)
           .await?;
         let response = utilities::response::build_response(res_type, res_status, res_text)?;
         let res_body = match &response.data {
@@ -350,23 +505,23 @@ impl PostieApi {
           ResponseData::UNKNOWN(t) => t.to_string(),
         };
         let updated_tab = Tab {
-          id: input.tab_id.to_string(),
+          id: input.tab_id,
           method: input.method.clone(),
           url: input.url.clone(),
           req_body: "".into(),
-          req_headers: RequestHeaders(vec![]),
+          req_headers: Headers(vec![]),
           res_status: Some(res_status.to_string()),
           res_body,
-          res_headers: RequestHeaders(vec![]),
+          res_headers: Headers(vec![]),
         };
-        db.save_tab(&updated_tab).await?;
+        self.db.save_tab(&updated_tab).await?;
         Ok(response)
       }
       // if making an oauth token request, dont save to db
       PostieRequest::OAUTH(input) => {
         println!("making ouath request");
-        let auth_header_value =
-          base64::encode(format!("{}:{}", &input.client_id, &input.client_secret));
+        let auth_header_value = base64::engine::general_purpose::STANDARD
+          .encode(format!("{}:{}", &input.client_id, &input.client_secret));
         let mut header_map = HeaderMap::new();
         let header_value = &format!("Basic {:?}", &auth_header_value);
         println!("auth header: {}", &header_value);
@@ -378,7 +533,7 @@ impl PostieApi {
           header::CONTENT_TYPE,
           HeaderValue::from_str("application/x-www-form-urlencoded").unwrap(),
         );
-        let mut req = api
+        let mut req = self
           .client
           .request(Method::POST, input.access_token_url)
           .headers(header_map);
@@ -393,9 +548,8 @@ impl PostieApi {
       }
     }
   }
-  pub async fn delete_tab(tab_id: Uuid) -> anyhow::Result<()> {
-    let mut db = repository::PostieDb::new().await;
-    db.delete_tab(tab_id).await?;
+  pub async fn delete_tab(&mut self, tab_id: Uuid) -> anyhow::Result<()> {
+    self.db.delete_tab(tab_id).await?;
     Ok(())
   }
 }

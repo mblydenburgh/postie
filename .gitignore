@@ -9,3 +9,5 @@ postie.sqlite
 
 *.dmg
 *.DS_Store
+
+test_collection.json

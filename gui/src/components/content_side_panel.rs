@@ -1,197 +1,199 @@
-use std::{cell::RefCell, rc::Rc, str::FromStr, sync::Arc};
+use crate::{GuiState, Tab, ThreadSafeState};
+use std::{collections::HashMap, str::FromStr as _, sync::Arc};
 
-use crate::Gui;
-use api::{
-  domain::{
-    collection::{Collection, CollectionFolder, CollectionItemOrFolder},
-    request::{DBRequest, HttpMethod},
-    response::ResponseData,
-    ui,
+use crate::events;
+use api::domain::{
+  collection::{
+    Collection, CollectionFolder, CollectionItem, CollectionItemOrFolder, CollectionRequest,
   },
-  PostieApi,
+  environment::EnvironmentFile,
+  header::Headers,
+  request::{DBRequest, HttpMethod},
+  request_item::RequestHistoryItem,
+  response::DBResponse,
+  tab,
+  ui::{self, ActiveWindow},
 };
-use egui::{
-  scroll_area::ScrollAreaOutput, CollapsingResponse, InnerResponse, ScrollArea, SidePanel,
-};
+use egui::{InnerResponse, ScrollArea, SidePanel};
+use tokio::sync::RwLock;
 
-pub fn content_side_panel(app: &mut Gui, ctx: &egui::Context) {
-  let collections_guard = {
-    let lock = app.collections.try_write().unwrap();
-    lock.clone()
-  };
-  let active_winow_guard = {
-    let lock = app.active_window.try_write().unwrap();
-    lock.clone()
-  };
-  SidePanel::left("content_panel").show(ctx, |ui| match active_winow_guard {
-    ui::ActiveWindow::COLLECTIONS => {
-      ScrollArea::vertical().show(ui, |ui| {
-        ui.label("Collections");
-        if let Some(cols) = collections_guard {
-          for c in cols {
-            render_collection(ui, app, &c);
-          }
-        }
-      });
-    }
-    ui::ActiveWindow::ENVIRONMENT => {
-      render_environments(ui, app);
-    }
-    ui::ActiveWindow::HISTORY => {
-      render_history(ui, app);
-    }
-  });
+pub struct ContentSidePanel {
+  selected_request: Option<CollectionRequest>,
+  selected_environment: Option<EnvironmentFile>,
+  selected_history_item: Option<RequestHistoryItem>,
 }
-
-fn render_collection(
-  ui: &mut egui::Ui,
-  app: &mut Gui,
-  c: &Collection,
-) -> InnerResponse<CollapsingResponse<()>> {
-  ui.horizontal(|ui| {
-    if ui.button("X").clicked() {
-      let clicked_id = c.info.id.clone();
-      // call to delete collection by id, refresh collections for ui
-      let refresh_clone = app.collections.clone();
-      tokio::spawn(async move {
-        let _ = PostieApi::delete_collection(clicked_id).await;
-        Gui::refresh_collections(refresh_clone).await;
-      });
+impl ContentSidePanel {
+  pub fn new() -> Self {
+    Self {
+      selected_request: None,
+      selected_environment: None,
+      selected_history_item: None,
     }
-    ui.collapsing(c.info.name.clone(), |ui| {
-      for i in c.item.clone() {
-        match i {
-          CollectionItemOrFolder::Item(item) => {
-            if ui
-              .selectable_value(
-                &mut app.selected_request.clone(),
-                Rc::new(RefCell::from(Some(item.clone().request))),
-                item.name.to_string(),
-              )
-              .clicked()
-            {
-              app.url = item.request.url.raw.clone();
-              app.selected_http_method =
-                HttpMethod::from_str(&item.request.method.clone()).unwrap();
-              if let Some(body) = item.request.body {
-                if let Some(body_str) = body.raw {
-                  app.body_str = body_str;
+  }
+
+  pub fn show(
+    &mut self,
+    ctx: &egui::Context,
+    gui_state: &GuiState,
+    worker_state: &ThreadSafeState,
+    event_tx: &tokio::sync::mpsc::Sender<events::GuiEvent>,
+  ) {
+    let window_mode = if let Ok(guard) = gui_state.active_window.try_read() {
+      (*guard).clone()
+    } else {
+      ActiveWindow::COLLECTIONS
+    };
+    SidePanel::left("content_panel").show(ctx, |ui| match window_mode {
+      ui::ActiveWindow::COLLECTIONS => {
+        ScrollArea::vertical().show(ui, |ui| {
+          ui.label("Collections");
+          self.render_collections(
+            ctx,
+            ui,
+            &worker_state.collections.clone(),
+            &worker_state.tabs.clone(),
+            event_tx,
+          );
+        });
+      }
+      ui::ActiveWindow::ENVIRONMENT => {
+        self.render_environments(ui, &worker_state.environments);
+      }
+      ui::ActiveWindow::HISTORY => {
+        self.render_history(
+          ui,
+          &worker_state.request_history_items.clone(),
+          &worker_state.saved_requests.clone(),
+          &worker_state.saved_responses.clone(),
+          &worker_state.tabs.clone(),
+          event_tx,
+        );
+      }
+    });
+  }
+
+  fn render_collections(
+    &mut self,
+    ctx: &egui::Context,
+    ui: &mut egui::Ui,
+    collections: &Arc<RwLock<Vec<Collection>>>,
+    tabs: &Arc<RwLock<HashMap<String, tab::Tab>>>,
+    event_tx: &tokio::sync::mpsc::Sender<events::GuiEvent>,
+  ) {
+    let collections_read = collections.try_read();
+    if let Ok(guard) = collections_read {
+      for c in guard.iter() {
+        ui.horizontal(|ui| {
+          self.render_context_menu(ui, tabs, &c, None, None, event_tx);
+          ui.collapsing(c.info.name.clone(), |ui| {
+            for i in c.item.clone() {
+              match i {
+                CollectionItemOrFolder::Item(item) => {
+                  self.render_request(ui, ctx, &c, None, &item, tabs, event_tx);
                 }
+                CollectionItemOrFolder::Folder(folder) => {
+                  self.render_collection_folder(ui, ctx, tabs, &c, &folder, event_tx);
+                }
+              };
+            }
+          })
+        });
+      }
+    };
+  }
+
+  fn render_request(
+    &mut self,
+    ui: &mut egui::Ui,
+    ctx: &egui::Context,
+    collection: &Collection,
+    folder: Option<&CollectionFolder>,
+    item: &CollectionItem,
+    tabs: &Arc<RwLock<HashMap<String, tab::Tab>>>,
+    event_tx: &tokio::sync::mpsc::Sender<events::GuiEvent>,
+  ) {
+    ui.horizontal(|ui| {
+      self.render_context_menu(ui, tabs, collection, folder, Some(item), event_tx);
+
+      let is_selected = self.selected_request.as_ref() == Some(&item.request);
+
+      if ui.selectable_label(is_selected, &item.name).clicked() {
+        self.selected_request = Some(item.request.clone());
+
+        let _ = event_tx.try_send(events::GuiEvent::SelectRequest {
+          col_id: collection.info.id.clone(),
+          request: item.request.clone(),
+        });
+
+        ctx.request_repaint();
+      }
+    });
+  }
+
+  fn render_collection_folder(
+    &mut self,
+    ui: &mut egui::Ui,
+    ctx: &egui::Context,
+    tabs: &Arc<RwLock<HashMap<String, tab::Tab>>>,
+    c: &Collection,
+    f: &CollectionFolder,
+    event_tx: &tokio::sync::mpsc::Sender<events::GuiEvent>,
+  ) {
+    ui.horizontal(|ui| {
+      self.render_context_menu(ui, tabs, c, Some(f), None, event_tx);
+      ui.push_id(f.id.clone(), |ui| {
+        ui.collapsing(f.name.clone(), |ui| {
+          for f_item in &f.item {
+            match f_item {
+              CollectionItemOrFolder::Item(i) => {
+                self.render_request(ui, ctx, c, Some(f), i, tabs, event_tx);
               }
-              if let Some(headers) = item.request.header {
-                let constructed_headers: Vec<(bool, String, String)> = headers
-                  .into_iter()
-                  .map(|h| (true, h.key, h.value))
-                  .collect();
-                app.headers = Rc::new(RefCell::from(constructed_headers));
+              CollectionItemOrFolder::Folder(sub_folder) => {
+                self.render_collection_folder(ui, ctx, tabs, c, sub_folder, event_tx);
               }
             }
           }
-          CollectionItemOrFolder::Folder(folder) => {
-            render_folder(ui, app, c, folder);
-          }
-        };
-      }
-    })
-  })
-}
-
-fn render_folder(
-  ui: &mut egui::Ui,
-  app: &mut Gui,
-  c: &Collection,
-  f: CollectionFolder,
-) -> InnerResponse<()> {
-  ui.horizontal(|ui| {
-    if ui.button("X").clicked() {
-      let clicked_col_id = c.clone().info.id;
-      let refresh_clone = app.collections.clone();
-      let folder_for_worker = f.clone();
-      tokio::spawn(async move {
-        let _ = PostieApi::delete_collection_folder(clicked_col_id, folder_for_worker.name);
-        Gui::refresh_collections(refresh_clone).await;
+        });
       });
-    }
-    if ui
-      .collapsing(f.clone().name, |ui| {
-        for f_item in f.clone().item {
-          match f_item {
-            CollectionItemOrFolder::Item(i) => ui.horizontal(|ui| {
-              if ui.button("X").clicked() {
-                let clicked_col_id = c.clone().info.id;
-                let clicked_req_name = i.name.clone();
-                let refresh_clone = app.collections.clone();
-                let folder_for_worker = f.clone();
-                tokio::spawn(async move {
-                  let _ = PostieApi::delete_collection_request(
-                    clicked_col_id,
-                    folder_for_worker.name,
-                    clicked_req_name,
-                  )
-                  .await;
-                  Gui::refresh_collections(refresh_clone).await;
-                });
-              }
-              if ui
-                .selectable_value(
-                  &mut app.selected_request.clone(),
-                  Rc::new(RefCell::from(Some(i.clone().request))),
-                  i.name.to_string(),
-                )
-                .clicked()
-              {
-                app.url = i.request.url.raw;
-                app.selected_http_method = HttpMethod::from_str(&i.request.method.clone()).unwrap();
-                app.body_str = i.request.body.and_then(|b| b.raw).unwrap_or_default();
-                let constructed_headers: Vec<(bool, String, String)> = i
-                  .request
-                  .header
-                  .map(|headers| {
-                    headers
-                      .into_iter()
-                      .map(|h| (true, h.key, h.value))
-                      .collect()
-                  })
-                  .unwrap_or_default(); // default empty vec if none
-                app.headers = Rc::new(RefCell::from(constructed_headers));
-              }
-            }),
-            CollectionItemOrFolder::Folder(f) => render_folder(ui, app, c, f),
-          };
+    });
+  }
+
+  fn render_environments(
+    &mut self,
+    ui: &mut egui::Ui,
+    environments: &Arc<RwLock<Vec<EnvironmentFile>>>,
+  ) {
+    ScrollArea::vertical().show(ui, |ui| {
+      ui.label("Environments");
+      if let Ok(envs) = environments.try_read() {
+        for env in envs.iter() {
+          ui.selectable_value(
+            &mut self.selected_environment,
+            Some(env.clone()),
+            env.name.to_string(),
+          );
         }
-      })
-      .header_response
-      .clicked()
-    {}
-  })
-}
-
-fn render_environments(ui: &mut egui::Ui, app: &mut Gui) -> ScrollAreaOutput<()> {
-  ScrollArea::vertical().show(ui, |ui| {
-    ui.label("Environments");
-    let envs_clone = Arc::clone(&app.environments);
-    let envs = envs_clone.try_write().unwrap();
-    if let Some(env_vec) = &*envs {
-      for env in env_vec {
-        ui.selectable_value(
-          &mut app.selected_environment,
-          Rc::new(RefCell::from(env.clone())),
-          env.name.to_string(),
-        );
       }
-    }
-  })
-}
+    });
+  }
 
-fn render_history(ui: &mut egui::Ui, app: &mut Gui) -> ScrollAreaOutput<()> {
-  ScrollArea::vertical().show(ui, |ui| {
-    ui.label("History");
-    let history_items_clone = Arc::clone(&app.request_history_items);
-    let history_items = history_items_clone.try_write().unwrap();
-    let request_clone = app.saved_requests.try_write().unwrap();
-    if let Some(item_vec) = &*history_items {
+  fn render_history(
+    &mut self,
+    ui: &mut egui::Ui,
+    history_items: &Arc<RwLock<Vec<RequestHistoryItem>>>,
+    saved_requests: &Arc<RwLock<HashMap<String, DBRequest>>>,
+    saved_responses: &Arc<RwLock<HashMap<String, DBResponse>>>,
+    tabs: &Arc<RwLock<HashMap<String, tab::Tab>>>,
+    event_tx: &tokio::sync::mpsc::Sender<events::GuiEvent>,
+  ) {
+    ScrollArea::vertical().show(ui, |ui| {
+      ui.label("History");
+      let history_items = history_items.try_read().unwrap();
+      let request_clone = saved_requests.try_read().unwrap();
+      let response_clone = saved_responses.try_read().unwrap();
+      let item_vec = &*history_items;
       for item in item_vec {
-        let history_reqs = request_clone.as_ref().unwrap();
+        let history_reqs = &request_clone;
         let id = &item.clone().request_id;
         let req_name = history_reqs
           .get(id)
@@ -207,46 +209,140 @@ fn render_history(ui: &mut egui::Ui, app: &mut Gui) -> ScrollAreaOutput<()> {
           .clone();
         if ui
           .selectable_value(
-            &mut app.selected_history_item,
-            Rc::new(RefCell::from(Some(item.clone()))),
+            &mut self.selected_history_item,
+            Some(item.clone()),
             format!("{:?}", req_name), // TODO - create function to get name
           )
           .clicked()
         {
-          // TODO - replace url, method, request body, response body
-          let responses_clone = app.saved_responses.try_write().unwrap();
-          let requests = request_clone.as_ref().unwrap();
-          let responses = responses_clone.as_ref().unwrap();
-          let historical_request = requests.get(&item.request_id).unwrap();
-          let historical_response = responses.get(&item.response_id).unwrap();
-          app.url = historical_request.url.clone();
-          app.selected_http_method = HttpMethod::from_str(&historical_request.method).unwrap();
-          match &historical_request.body {
-            Some(body_json) => {
-              app.body_str = body_json.to_string();
+          /*
+          When clicked,
+          1. Check tabs for matching url
+          2. If match, set active tab to that id
+          3. If no match, create new tab and set as active
+           */
+          let historical_request = request_clone.get(&item.request_id).unwrap();
+          let historical_response = response_clone.get(&item.response_id);
+          let mut tabs_lock = tabs.try_write().unwrap();
+          let tab_match = tabs_lock.iter().find(|t| t.1.url == historical_request.url);
+
+          match tab_match {
+            Some(t) => {
+              println!("matching tab found, setting active");
+              event_tx
+                .try_send(events::GuiEvent::SetActiveTab(t.0.clone()))
+                .unwrap()
             }
-            None => app.body_str = String::from(""),
-          }
-          let ui_response_clone = app.response.clone();
-          let mut ui_response_guard = ui_response_clone.try_write().unwrap();
-          let response_body = &historical_response.body;
-          match response_body {
-            Some(body) => {
-              let json_val = serde_json::json!(&body);
-              println!("val: {}", json_val);
-              let parsed_body = match serde_json::from_str(body) {
-                Ok(b) => ResponseData::JSON(b),
-                Err(e) => {
-                  println!("{}", e);
-                  ResponseData::TEXT(body.clone())
-                }
+            None => {
+              println!("no matching tab found, creating new");
+              let id = uuid::Uuid::new_v4();
+              let new_tab = Tab {
+                id,
+                method: HttpMethod::from_str(&historical_request.method).unwrap(),
+                url: historical_request.url.clone(),
+                req_body: historical_request.body.clone().unwrap_or_default(),
+                req_headers: Headers(historical_request.headers.clone()),
+                res_status: None,
+                res_body: match historical_response {
+                  Some(r) => r.body.clone().unwrap_or_default(),
+                  None => String::new(),
+                },
+                res_headers: match historical_response {
+                  Some(r) => Headers(r.headers.clone()),
+                  None => {
+                    let headers: Vec<(String, String)> = vec![];
+                    Headers::from_iter(headers)
+                  }
+                },
               };
-              *ui_response_guard = Some(parsed_body)
+              tabs_lock.insert(new_tab.id.clone().to_string(), new_tab.clone());
+              event_tx
+                .try_send(events::GuiEvent::SetActiveTab(
+                  new_tab.id.clone().to_string(),
+                ))
+                .unwrap();
             }
-            None => *ui_response_guard = None,
           }
         }
       }
-    }
-  })
+    });
+  }
+
+  fn render_context_menu(
+    &mut self,
+    ui: &mut egui::Ui,
+    tabs: &Arc<RwLock<HashMap<String, tab::Tab>>>,
+    col: &Collection,
+    fol: Option<&CollectionFolder>,
+    req: Option<&CollectionItem>,
+    event_tx: &tokio::sync::mpsc::Sender<events::GuiEvent>,
+  ) -> InnerResponse<Option<()>> {
+    ui.menu_button("...", |ui| {
+      if req.is_none() {
+        ui.menu_button("New", |ui| {
+          if (ui.button("Request")).clicked() {
+            println!("adding blank request");
+            event_tx
+              .try_send(events::GuiEvent::AddRequestToCollection {
+                col_id: col.info.id.clone(),
+                folder: fol.cloned(),
+                req: None,
+                selected_env: self.selected_environment.clone(),
+              })
+              .unwrap();
+          }
+          if (ui.button("Folder")).clicked() {
+            println!("adding folder");
+            event_tx
+              .try_send(events::GuiEvent::AddFolderToCollection {
+                col_id: col.info.id.clone(),
+                sub_folder: fol.cloned(),
+                new_folder: CollectionFolder {
+                  id: uuid::Uuid::new_v4().to_string(),
+                  name: "New Folder".into(),
+                  item: vec![],
+                },
+              })
+              .unwrap();
+          }
+        });
+      }
+      if ui.button("Delete").clicked() {
+        match (fol, req) {
+          (Some(f), Some(r)) => {
+            event_tx
+              .try_send(events::GuiEvent::RemoveCollectionFolderRequest {
+                col_id: col.info.id.clone(),
+                folder_id: f.id.clone(),
+                req_id: r.id.clone(),
+              })
+              .unwrap();
+          }
+          (Some(f), None) => {
+            event_tx
+              .try_send(events::GuiEvent::RemoveCollectionFolder {
+                col_id: col.info.id.clone(),
+                id: f.id.clone(),
+              })
+              .unwrap();
+          }
+          // Remove root level request
+          (None, Some(r)) => {
+            event_tx
+              .try_send(events::GuiEvent::RemoveCollectionRequest {
+                col_id: col.info.id.clone(),
+                id: r.id.clone(),
+              })
+              .unwrap();
+          }
+          (None, None) => {
+            event_tx
+              .try_send(events::GuiEvent::RemoveCollection(col.info.id.clone()))
+              .unwrap();
+          }
+        }
+        ui.close();
+      }
+    })
+  }
 }

@@ -4,17 +4,17 @@ use crate::Gui;
 use api::domain::ui::ActiveWindow;
 
 pub fn side_panel(gui: &mut Gui, ctx: &egui::Context) {
-    SidePanel::left("nav_panel").show(ctx, |ui| {
-        if let Ok(mut active_window) = gui.active_window.try_write() {
-            if ui.button("Collections").clicked() {
-                *active_window = ActiveWindow::COLLECTIONS;
-            }
-            if ui.button("Environment").clicked() {
-                *active_window = ActiveWindow::ENVIRONMENT;
-            }
-            if ui.button("History").clicked() {
-                *active_window = ActiveWindow::HISTORY;
-            }
-        }
-    });
+  SidePanel::left("nav_panel").show(ctx, |ui| {
+    if let Ok(mut active_window) = gui.gui_state.active_window.try_write() {
+      if ui.button("Collections").clicked() {
+        *active_window = ActiveWindow::COLLECTIONS;
+      }
+      if ui.button("Environment").clicked() {
+        *active_window = ActiveWindow::ENVIRONMENT;
+      }
+      if ui.button("History").clicked() {
+        *active_window = ActiveWindow::HISTORY;
+      }
+    }
+  });
 }
