@@ -195,6 +195,7 @@ impl PostieApi {
     let collections = self.db.get_all_collections().await?;
     if let Some(mut collection) = collections.into_iter().find(|c| c.info.id == col_id) {
       if let Some(target_folder) = sub_folder {
+        println!("adding new folder to {}", target_folder.name);
         match self.add_folder_recursive(&mut collection.item, &target_folder.id, &folder) {
           true => {}
           false => anyhow::bail!("couldnt find matching subfolder to save new folder to"),
@@ -212,9 +213,10 @@ impl PostieApi {
     target_folder_id: &str, // Better to use ID than name if possible
     new_folder: &CollectionFolder,
   ) -> bool {
+    println!("add folder rescursive");
     for item in items.iter_mut() {
       if let CollectionItemOrFolder::Folder(ref mut current_folder) = item {
-        if current_folder.name == target_folder_id {
+        if current_folder.id == target_folder_id {
           current_folder
             .item
             .push(CollectionItemOrFolder::Folder(new_folder.clone()));

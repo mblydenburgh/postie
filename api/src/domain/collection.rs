@@ -114,7 +114,6 @@ impl<'de> Deserialize<'de> for CollectionItemOrFolder {
     // Check json structure to determine what enum variant it is
     if let Some(obj) = value.as_object() {
       if obj.contains_key("request") {
-        println!("{}", value);
         let item: CollectionItem = Deserialize::deserialize(value).unwrap();
         Ok(CollectionItemOrFolder::Item(item))
       } else {
