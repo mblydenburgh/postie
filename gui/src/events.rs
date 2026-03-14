@@ -12,27 +12,6 @@ use api::domain::{
 use uuid::Uuid;
 
 #[derive(Debug)]
-pub struct RefreshRequestDataPayload {
-  pub request_history: Arc<RwLock<Vec<RequestHistoryItem>>>,
-  pub responses: Arc<RwLock<HashMap<String, DBResponse>>>,
-  pub requests: Arc<RwLock<HashMap<String, DBRequest>>>,
-  pub tabs: Arc<RwLock<HashMap<Uuid, Tab>>>,
-}
-
-#[derive(Debug)]
-pub struct RemoveCollectionItemPayload {
-  pub col_id: String,
-  pub id: String,
-}
-
-#[derive(Debug)]
-pub struct RemoveCollectionRequestPayload {
-  pub col_id: String,
-  pub folder_id: String,
-  pub req_id: String,
-}
-
-#[derive(Debug)]
 pub enum GuiEvent {
   SelectRequest {
     col_id: String,
@@ -43,7 +22,12 @@ pub enum GuiEvent {
   SubmitOAuth2Request(OAuth2Request),
   RefreshCollections(Option<Vec<Collection>>),
   RefreshEnvironments(),
-  RefreshRequestData(RefreshRequestDataPayload),
+  RefreshRequestData {
+    request_history: Arc<RwLock<Vec<RequestHistoryItem>>>,
+    responses: Arc<RwLock<HashMap<String, DBResponse>>>,
+    requests: Arc<RwLock<HashMap<String, DBRequest>>>,
+    tabs: Arc<RwLock<HashMap<Uuid, Tab>>>,
+  },
   SetActiveTab(String),
   SaveCollection(Collection),
   SaveEnvironment(),
@@ -63,7 +47,17 @@ pub enum GuiEvent {
   },
   RemoveTab(Uuid),
   RemoveCollection(String),
-  RemoveCollectionFolder(RemoveCollectionItemPayload),
-  RemoveCollectionRequest(RemoveCollectionItemPayload),
-  RemoveCollectionFolderRequest(RemoveCollectionRequestPayload),
+  RemoveCollectionFolder {
+    col_id: String,
+    id: String,
+  },
+  RemoveCollectionRequest {
+    col_id: String,
+    id: String,
+  },
+  RemoveCollectionFolderRequest {
+    col_id: String,
+    folder_id: String,
+    req_id: String,
+  },
 }

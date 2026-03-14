@@ -259,52 +259,6 @@ impl ContentPanel {
     });
   }
 
-  //fn render_headers_tab(&mut self, _ctx: &egui::Context, gui: &mut Gui) {
-  //  CentralPanel::default().show(_ctx, |ui| {
-  //    TableBuilder::new(ui)
-  //      .striped(true)
-  //      .column(Column::auto())
-  //      .column(Column::remainder())
-  //      .column(Column::remainder())
-  //      .header(20.0, |mut header| {
-  //        header.col(|ui| {
-  //          ui.strong("Enabled");
-  //        });
-  //        header.col(|ui| {
-  //          ui.strong("Key");
-  //        });
-  //        header.col(|ui| {
-  //          ui.strong("Value");
-  //        });
-  //      })
-  //      .body(|mut body| {
-  //        let mut headers = gui.gui_state.headers.borrow_mut();
-  //        for (enabled, key, value) in headers.iter_mut() {
-  //          body.row(30.0, |mut row| {
-  //            row.col(|ui| {
-  //              ui.checkbox(enabled, "");
-  //            });
-  //            row.col(|ui| {
-  //              ui.text_edit_singleline(key);
-  //            });
-  //            row.col(|ui| {
-  //              ui.text_edit_singleline(value);
-  //            });
-  //          });
-  //        }
-  //        body.row(30.0, |mut row| {
-  //          row.col(|ui| {
-  //            if ui.button("Add").clicked() {
-  //              // Handled after the loop to avoid borrow checker issues
-  //            }
-  //          });
-  //        });
-  //      });
-  //    // Handle the "Add" click outside the table body if needed,
-  //    // or use a temporary flag.
-  //  });
-  //}
-
   fn render_environment_tab(&mut self, ctx: &egui::Context, env_rc: &Rc<RefCell<EnvironmentFile>>) {
     CentralPanel::default().show(ctx, |ui| {
       ui.heading("Environment Variables");

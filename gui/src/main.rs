@@ -411,7 +411,12 @@ impl Gui {
             }]);
           *environments.write().await = envs;
         }
-        events::GuiEvent::RefreshRequestData(data) => {
+        events::GuiEvent::RefreshRequestData {
+          request_history,
+          responses,
+          requests,
+          tabs,
+        } => {
           let request_history_items = api
             .write()
             .await
@@ -430,10 +435,10 @@ impl Gui {
             .map(|r| (r.id.clone(), r))
             .collect();
 
-          let mut request_history_item_write_guard = data.request_history.try_write().unwrap();
-          let mut saved_requests_write_guard = data.requests.try_write().unwrap();
-          let mut saved_responses_write_guard = data.responses.try_write().unwrap();
-          let mut tabs_write_guard = data.tabs.try_write().unwrap();
+          let mut request_history_item_write_guard = request_history.try_write().unwrap();
+          let mut saved_requests_write_guard = requests.try_write().unwrap();
+          let mut saved_responses_write_guard = responses.try_write().unwrap();
+          let mut tabs_write_guard = tabs.try_write().unwrap();
           *request_history_item_write_guard = request_history_items;
           *saved_requests_write_guard = requests_by_id;
           *saved_responses_write_guard = responses_by_id;
@@ -569,15 +574,11 @@ impl Gui {
             }
           });
         }
-        events::GuiEvent::RemoveCollectionRequest(data) => {
+        events::GuiEvent::RemoveCollectionRequest { col_id, id } => {
           println!("removing collection top level request");
           tokio::spawn(async move {
             let mut api = api_for_worker.write().await;
-            if api
-              .delete_collection_request(data.col_id, data.id)
-              .await
-              .is_ok()
-            {
+            if api.delete_collection_request(col_id, id).await.is_ok() {
               if let Ok(new_cols) = api.load_collections().await {
                 let _ =
                   res_tx_for_worker.try_send(events::GuiEvent::RefreshCollections(Some(new_cols)));
@@ -586,15 +587,11 @@ impl Gui {
             }
           });
         }
-        events::GuiEvent::RemoveCollectionFolder(data) => {
+        events::GuiEvent::RemoveCollectionFolder { col_id, id } => {
           println!("removing collection folder");
           tokio::spawn(async move {
             let mut api = api_for_worker.write().await;
-            if api
-              .delete_collection_folder(data.col_id, data.id)
-              .await
-              .is_ok()
-            {
+            if api.delete_collection_folder(col_id, id).await.is_ok() {
               if let Ok(new_cols) = api.load_collections().await {
                 let _ =
                   res_tx_for_worker.try_send(events::GuiEvent::RefreshCollections(Some(new_cols)));
@@ -603,12 +600,16 @@ impl Gui {
             }
           });
         }
-        events::GuiEvent::RemoveCollectionFolderRequest(data) => {
+        events::GuiEvent::RemoveCollectionFolderRequest {
+          col_id,
+          folder_id,
+          req_id,
+        } => {
           println!("removing collection folder request");
           tokio::spawn(async move {
             let mut api = api_for_worker.write().await;
             if api
-              .delete_folder_request(data.col_id, data.folder_id, data.req_id)
+              .delete_folder_request(col_id, folder_id, req_id)
               .await
               .is_ok()
             {

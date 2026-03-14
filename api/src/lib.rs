@@ -210,7 +210,7 @@ impl PostieApi {
   fn add_folder_recursive(
     &mut self,
     items: &mut Vec<CollectionItemOrFolder>,
-    target_folder_id: &str, // Better to use ID than name if possible
+    target_folder_id: &str,
     new_folder: &CollectionFolder,
   ) -> bool {
     println!("add folder rescursive");
@@ -320,7 +320,7 @@ impl PostieApi {
     id: String,
     request_id: String,
   ) -> anyhow::Result<()> {
-    // TODO - createa get collection by id
+    // TODO - create a get collection by id
     let collections = self.db.get_all_collections().await?;
     for mut col in collections {
       if col.info.id == id {
@@ -329,17 +329,12 @@ impl PostieApi {
         col.item.retain(|item| match item {
           CollectionItemOrFolder::Item(collection_item) => {
             if collection_item.id == request_id {
-              println!("removing request {}", request_id);
               false
             } else {
-              println!("keeping request");
               true
             }
           }
-          CollectionItemOrFolder::Folder(_) => {
-            println!("keeping folder");
-            true
-          }
+          CollectionItemOrFolder::Folder(_) => true,
         });
 
         let _ = self.db.save_collection(col).await;

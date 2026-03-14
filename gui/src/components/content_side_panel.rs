@@ -311,34 +311,28 @@ impl ContentSidePanel {
         match (fol, req) {
           (Some(f), Some(r)) => {
             event_tx
-              .try_send(events::GuiEvent::RemoveCollectionFolderRequest(
-                events::RemoveCollectionRequestPayload {
-                  col_id: col.info.id.clone(),
-                  folder_id: f.id.clone(),
-                  req_id: r.id.clone(),
-                },
-              ))
+              .try_send(events::GuiEvent::RemoveCollectionFolderRequest {
+                col_id: col.info.id.clone(),
+                folder_id: f.id.clone(),
+                req_id: r.id.clone(),
+              })
               .unwrap();
           }
           (Some(f), None) => {
             event_tx
-              .try_send(events::GuiEvent::RemoveCollectionFolder(
-                events::RemoveCollectionItemPayload {
-                  col_id: col.info.id.clone(),
-                  id: f.id.clone(),
-                },
-              ))
+              .try_send(events::GuiEvent::RemoveCollectionFolder {
+                col_id: col.info.id.clone(),
+                id: f.id.clone(),
+              })
               .unwrap();
           }
           // Remove root level request
           (None, Some(r)) => {
             event_tx
-              .try_send(events::GuiEvent::RemoveCollectionRequest(
-                events::RemoveCollectionItemPayload {
-                  col_id: col.info.id.clone(),
-                  id: r.id.clone(),
-                },
-              ))
+              .try_send(events::GuiEvent::RemoveCollectionRequest {
+                col_id: col.info.id.clone(),
+                id: r.id.clone(),
+              })
               .unwrap();
           }
           (None, None) => {
