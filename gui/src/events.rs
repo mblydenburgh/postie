@@ -21,15 +21,15 @@ pub struct RefreshRequestDataPayload {
 
 #[derive(Debug)]
 pub struct RemoveCollectionItemPayload {
+  pub col_id: String,
   pub id: String,
-  pub name: String,
 }
 
 #[derive(Debug)]
 pub struct RemoveCollectionRequestPayload {
   pub col_id: String,
-  pub folder_name: String,
-  pub req_name: String,
+  pub folder_id: String,
+  pub req_id: String,
 }
 
 #[derive(Debug)]

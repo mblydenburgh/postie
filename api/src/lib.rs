@@ -295,7 +295,7 @@ impl PostieApi {
   pub async fn delete_collection_folder(
     &mut self,
     id: String,
-    folder_name: String,
+    folder_id: String,
   ) -> anyhow::Result<()> {
     let collections = self.db.get_all_collections().await?;
     for mut col in collections {
@@ -304,7 +304,7 @@ impl PostieApi {
         let mut collection_items: Vec<CollectionItemOrFolder> = vec![];
         for item in &mut col.item {
           if let CollectionItemOrFolder::Folder(ref mut f) = item {
-            if f.name != folder_name {
+            if f.id != folder_id {
               collection_items.push(CollectionItemOrFolder::Folder(f.clone()));
             }
           }
@@ -318,7 +318,7 @@ impl PostieApi {
   pub async fn delete_collection_request(
     &mut self,
     id: String,
-    request_name: String,
+    request_id: String,
   ) -> anyhow::Result<()> {
     // TODO - createa get collection by id
     let collections = self.db.get_all_collections().await?;
@@ -328,8 +328,8 @@ impl PostieApi {
 
         col.item.retain(|item| match item {
           CollectionItemOrFolder::Item(collection_item) => {
-            if collection_item.name == request_name {
-              println!("removing request {}", request_name);
+            if collection_item.id == request_id {
+              println!("removing request {}", request_id);
               false
             } else {
               println!("keeping request");
@@ -351,8 +351,8 @@ impl PostieApi {
   pub async fn delete_folder_request(
     &mut self,
     id: String,
-    folder_name: String,
-    request_name: String,
+    folder_id: String,
+    request_id: String,
   ) -> anyhow::Result<()> {
     let collections = self.db.get_all_collections().await?;
     for mut col in collections {
@@ -365,7 +365,7 @@ impl PostieApi {
               collection_items.push(CollectionItemOrFolder::Folder(f.clone()));
               for (f_index, f_item) in &mut f.item.iter().enumerate() {
                 if let CollectionItemOrFolder::Item(i) = f_item {
-                  if i.name == request_name && f.name.clone() == folder_name.clone() {
+                  if i.id == request_id && f.id.clone() == folder_id.clone() {
                     if let CollectionItemOrFolder::Folder(ref mut cf) = collection_items[index] {
                       cf.item.remove(f_index);
                     }
@@ -373,7 +373,7 @@ impl PostieApi {
                 }
               }
             }
-            CollectionItemOrFolder::Item(i) => if i.name == request_name {},
+            CollectionItemOrFolder::Item(i) => if i.id == request_id {},
           }
         }
         col.item = collection_items;

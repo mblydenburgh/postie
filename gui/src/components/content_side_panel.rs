@@ -314,8 +314,8 @@ impl ContentSidePanel {
               .try_send(events::GuiEvent::RemoveCollectionFolderRequest(
                 events::RemoveCollectionRequestPayload {
                   col_id: col.info.id.clone(),
-                  folder_name: f.name.clone(),
-                  req_name: r.name.clone(),
+                  folder_id: f.id.clone(),
+                  req_id: r.id.clone(),
                 },
               ))
               .unwrap();
@@ -324,18 +324,19 @@ impl ContentSidePanel {
             event_tx
               .try_send(events::GuiEvent::RemoveCollectionFolder(
                 events::RemoveCollectionItemPayload {
-                  id: col.info.id.clone(),
-                  name: f.name.clone(),
+                  col_id: col.info.id.clone(),
+                  id: f.id.clone(),
                 },
               ))
               .unwrap();
           }
+          // Remove root level request
           (None, Some(r)) => {
             event_tx
               .try_send(events::GuiEvent::RemoveCollectionRequest(
                 events::RemoveCollectionItemPayload {
-                  id: col.info.id.clone(),
-                  name: r.name.clone(),
+                  col_id: col.info.id.clone(),
+                  id: r.id.clone(),
                 },
               ))
               .unwrap();

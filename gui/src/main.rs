@@ -4,7 +4,7 @@ mod events;
 use anyhow::Error;
 use api::{
   domain::{
-    collection::{Collection, CollectionFolder, CollectionItemOrFolder},
+    collection::Collection,
     environment::{EnvironmentFile, EnvironmentValue},
     header::Headers,
     request::{DBRequest, HttpMethod, HttpRequest, OAuth2Request, OAuthRequestBody, PostieRequest},
@@ -26,7 +26,6 @@ use std::{
   rc::Rc,
   str::FromStr,
   sync::{Arc, Mutex},
-  thread, time,
 };
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -575,7 +574,7 @@ impl Gui {
           tokio::spawn(async move {
             let mut api = api_for_worker.write().await;
             if api
-              .delete_collection_request(data.id, data.name)
+              .delete_collection_request(data.col_id, data.id)
               .await
               .is_ok()
             {
@@ -592,7 +591,7 @@ impl Gui {
           tokio::spawn(async move {
             let mut api = api_for_worker.write().await;
             if api
-              .delete_collection_folder(data.id, data.name)
+              .delete_collection_folder(data.col_id, data.id)
               .await
               .is_ok()
             {
@@ -609,7 +608,7 @@ impl Gui {
           tokio::spawn(async move {
             let mut api = api_for_worker.write().await;
             if api
-              .delete_folder_request(data.col_id, data.folder_name, data.req_name)
+              .delete_folder_request(data.col_id, data.folder_id, data.req_id)
               .await
               .is_ok()
             {
