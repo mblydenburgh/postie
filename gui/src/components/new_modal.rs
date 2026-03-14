@@ -112,6 +112,7 @@ impl NewWindow {
                       // `item` field as with no requests
                       let mut collection_items = collection_for_worker.item;
                       let new_folder = CollectionItemOrFolder::Folder(CollectionFolder {
+                        id: uuid::Uuid::new_v4().to_string(),
                         name: name_for_worker,
                         item: vec![],
                       });

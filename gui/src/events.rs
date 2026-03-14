@@ -56,6 +56,11 @@ pub enum GuiEvent {
     req: Option<HttpRequest>,
     selected_env: Option<EnvironmentFile>,
   },
+  AddFolderToCollection {
+    col_id: String,
+    sub_folder: Option<CollectionFolder>,
+    new_folder: CollectionFolder,
+  },
   RemoveTab(Uuid),
   RemoveCollection(String),
   RemoveCollectionFolder(RemoveCollectionItemPayload),

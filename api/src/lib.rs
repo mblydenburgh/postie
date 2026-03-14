@@ -23,6 +23,7 @@ use reqwest::{
 use std::{borrow::Borrow, fs};
 use uuid::Uuid;
 
+use crate::domain::collection::CollectionFolder;
 use crate::domain::header::Header;
 use crate::domain::{request::DBRequest, request_item::RequestHistoryItem, response::DBResponse};
 
@@ -100,6 +101,7 @@ impl PostieApi {
                 folder
                   .item
                   .push(CollectionItemOrFolder::Item(CollectionItem {
+                    id: uuid::Uuid::new_v4().to_string(),
                     name: if req.clone().name.is_some() {
                       req.name.clone().unwrap()
                     } else {
@@ -150,6 +152,7 @@ impl PostieApi {
             })
             .unwrap_or(vec![]);
           col_items.push(CollectionItemOrFolder::Item(CollectionItem {
+            id: uuid::Uuid::new_v4().to_string(),
             name: if req.name.is_some() {
               req.name.clone().unwrap()
             } else {
@@ -182,6 +185,50 @@ impl PostieApi {
     }
     Ok(())
   }
+
+  pub async fn add_folder_to_collection(
+    &mut self,
+    col_id: String,
+    sub_folder: Option<CollectionFolder>,
+    folder: CollectionFolder,
+  ) -> anyhow::Result<()> {
+    let collections = self.db.get_all_collections().await?;
+    if let Some(mut collection) = collections.into_iter().find(|c| c.info.id == col_id) {
+      if let Some(target_folder) = sub_folder {
+        match self.add_folder_recursive(&mut collection.item, &target_folder.id, &folder) {
+          true => {}
+          false => anyhow::bail!("couldnt find matching subfolder to save new folder to"),
+        }
+      } else {
+        collection.item.push(CollectionItemOrFolder::Folder(folder));
+      }
+      self.db.save_collection(collection).await?;
+    }
+    Ok(())
+  }
+  fn add_folder_recursive(
+    &mut self,
+    items: &mut Vec<CollectionItemOrFolder>,
+    target_folder_id: &str, // Better to use ID than name if possible
+    new_folder: &CollectionFolder,
+  ) -> bool {
+    for item in items.iter_mut() {
+      if let CollectionItemOrFolder::Folder(ref mut current_folder) = item {
+        if current_folder.name == target_folder_id {
+          current_folder
+            .item
+            .push(CollectionItemOrFolder::Folder(new_folder.clone()));
+          return true;
+        }
+
+        if self.add_folder_recursive(&mut current_folder.item, target_folder_id, new_folder) {
+          return true;
+        }
+      }
+    }
+    false
+  }
+
   // TODO - better error handling
   pub async fn import_environment(&mut self, path: &str) -> anyhow::Result<String> {
     let file_str = self.read_file(path)?;

@@ -24,14 +24,22 @@ pub enum CollectionItemOrFolder {
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
 pub struct CollectionFolder {
+  #[serde(default = "generate_uuid")]
+  pub id: String,
   pub name: String,
   pub item: Vec<CollectionItemOrFolder>,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
 pub struct CollectionItem {
+  #[serde(default = "generate_uuid")]
+  pub id: String,
   pub name: String,
   pub request: CollectionRequest,
+}
+
+fn generate_uuid() -> String {
+  uuid::Uuid::new_v4().to_string()
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
@@ -106,6 +114,7 @@ impl<'de> Deserialize<'de> for CollectionItemOrFolder {
     // Check json structure to determine what enum variant it is
     if let Some(obj) = value.as_object() {
       if obj.contains_key("request") {
+        println!("{}", value);
         let item: CollectionItem = Deserialize::deserialize(value).unwrap();
         Ok(CollectionItemOrFolder::Item(item))
       } else {

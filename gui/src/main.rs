@@ -4,7 +4,7 @@ mod events;
 use anyhow::Error;
 use api::{
   domain::{
-    collection::Collection,
+    collection::{Collection, CollectionFolder, CollectionItemOrFolder},
     environment::{EnvironmentFile, EnvironmentValue},
     header::Headers,
     request::{DBRequest, HttpMethod, HttpRequest, OAuth2Request, OAuthRequestBody, PostieRequest},
@@ -26,6 +26,7 @@ use std::{
   rc::Rc,
   str::FromStr,
   sync::{Arc, Mutex},
+  thread, time,
 };
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -529,9 +530,29 @@ impl Gui {
               }
             });
           } else {
-            // TODO
+            // TODO: handle Copy request event when implemented
             println!("copying existing request to specified collection");
           }
+        }
+        events::GuiEvent::AddFolderToCollection {
+          col_id,
+          sub_folder,
+          new_folder,
+        } => {
+          tokio::spawn(async move {
+            let mut api = api_for_worker.write().await;
+            if api
+              .add_folder_to_collection(col_id, sub_folder, new_folder)
+              .await
+              .is_ok()
+            {
+              if let Ok(new_cols) = api.load_collections().await {
+                let _ =
+                  res_tx_for_worker.try_send(events::GuiEvent::RefreshCollections(Some(new_cols)));
+                ctx_for_worker.request_repaint();
+              }
+            }
+          });
         }
         events::GuiEvent::RemoveTab(id) => {
           api.write().await.delete_tab(id).await.unwrap();

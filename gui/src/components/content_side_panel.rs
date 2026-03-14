@@ -141,18 +141,19 @@ impl ContentSidePanel {
   ) {
     ui.horizontal(|ui| {
       self.render_context_menu(ui, tabs, c, Some(f), None, event_tx);
-
-      ui.collapsing(f.name.clone(), |ui| {
-        for f_item in &f.item {
-          match f_item {
-            CollectionItemOrFolder::Item(i) => {
-              self.render_request(ui, ctx, c, Some(f), i, tabs, event_tx);
-            }
-            CollectionItemOrFolder::Folder(sub_folder) => {
-              self.render_collection_folder(ui, ctx, tabs, c, sub_folder, event_tx);
+      ui.push_id(f.id.clone(), |ui| {
+        ui.collapsing(f.name.clone(), |ui| {
+          for f_item in &f.item {
+            match f_item {
+              CollectionItemOrFolder::Item(i) => {
+                self.render_request(ui, ctx, c, Some(f), i, tabs, event_tx);
+              }
+              CollectionItemOrFolder::Folder(sub_folder) => {
+                self.render_collection_folder(ui, ctx, tabs, c, sub_folder, event_tx);
+              }
             }
           }
-        }
+        });
       });
     });
   }
@@ -292,6 +293,17 @@ impl ContentSidePanel {
           }
           if (ui.button("Folder")).clicked() {
             println!("adding folder");
+            event_tx
+              .try_send(events::GuiEvent::AddFolderToCollection {
+                col_id: col.info.id.clone(),
+                sub_folder: fol.cloned(),
+                new_folder: CollectionFolder {
+                  id: uuid::Uuid::new_v4().to_string(),
+                  name: "New Folder".into(),
+                  item: vec![],
+                },
+              })
+              .unwrap();
           }
         });
       }
