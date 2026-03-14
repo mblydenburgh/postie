@@ -298,23 +298,48 @@ impl PostieApi {
     folder_id: String,
   ) -> anyhow::Result<()> {
     let collections = self.db.get_all_collections().await?;
-    for mut col in collections {
-      if col.info.id == id {
-        println!("matching collection found, looking for folder to remove");
-        let mut collection_items: Vec<CollectionItemOrFolder> = vec![];
-        for item in &mut col.item {
-          if let CollectionItemOrFolder::Folder(ref mut f) = item {
-            if f.id != folder_id {
-              collection_items.push(CollectionItemOrFolder::Folder(f.clone()));
-            }
-          }
-        }
-        col.item = collection_items;
-        let _ = self.db.save_collection(col).await;
+    if let Some(mut collection) = collections.into_iter().find(|c| c.info.id == id) {
+      println!("removing folder {} from colleciton {}", folder_id, id);
+      let found = self.delete_folder_recursive(&mut collection.item, &folder_id);
+      if found {
+        self.db.save_collection(collection).await?;
+      } else {
+        println!("no matching folder found");
       }
     }
     Ok(())
   }
+
+  fn delete_folder_recursive(
+    &mut self,
+    items: &mut Vec<CollectionItemOrFolder>,
+    folder_id: &str,
+  ) -> bool {
+    let initial_len = items.len();
+    items.retain(|item| {
+      if let CollectionItemOrFolder::Folder(f) = item {
+        return f.id != folder_id; // keep items that do have matching id
+      }
+      true
+    });
+
+    // if the length changed, it has been removed
+    if items.len() != initial_len {
+      return true;
+    }
+
+    // if not found, call recursively
+    for item in items.iter_mut() {
+      if let CollectionItemOrFolder::Folder(ref mut f) = item {
+        if self.delete_folder_recursive(&mut f.item, folder_id) {
+          return true; // found, stop
+        }
+      }
+    }
+
+    false
+  }
+
   pub async fn delete_collection_request(
     &mut self,
     id: String,
