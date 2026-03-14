@@ -220,7 +220,6 @@ impl ContentSidePanel {
           2. If match, set active tab to that id
           3. If no match, create new tab and set as active
            */
-          // TODO - replace url, method
           let historical_request = request_clone.get(&item.request_id).unwrap();
           let historical_response = response_clone.get(&item.response_id);
           let mut tabs_lock = tabs.try_write().unwrap();
@@ -278,17 +277,24 @@ impl ContentSidePanel {
     event_tx: &tokio::sync::mpsc::Sender<events::GuiEvent>,
   ) -> InnerResponse<Option<()>> {
     ui.menu_button("...", |ui| {
-      ui.menu_button("New", |ui| {
-        if (ui.button("Request")).clicked() {
-          println!("adding request");
-          let mut tabs = tabs.try_write().unwrap();
-          let new_tab = Tab::default();
-          tabs.insert(new_tab.id.clone().to_string(), new_tab);
-        }
-        if (ui.button("Folder")).clicked() {
-          println!("adding folder");
-        }
-      });
+      if req.is_none() {
+        ui.menu_button("New", |ui| {
+          if (ui.button("Request")).clicked() {
+            println!("adding blank request");
+            event_tx
+              .try_send(events::GuiEvent::AddRequestToCollection {
+                col_id: col.info.id.clone(),
+                folder: fol.cloned(),
+                req: None,
+                selected_env: self.selected_environment.clone(),
+              })
+              .unwrap();
+          }
+          if (ui.button("Folder")).clicked() {
+            println!("adding folder");
+          }
+        });
+      }
       if ui.button("Delete").clicked() {
         match (fol, req) {
           (Some(f), Some(r)) => {

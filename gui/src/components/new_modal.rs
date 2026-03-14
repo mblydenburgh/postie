@@ -5,23 +5,41 @@ use api::{
   domain::ui::NewWindowMode,
 };
 
-use crate::events;
-use crate::Gui;
+use crate::{events, GuiState, ThreadSafeState};
 
-pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
-  if let Ok(mut new_window_open) = gui.gui_state.new_window_open.try_write() {
-    if *new_window_open {
-      egui::Window::new("Create new")
-        .open(&mut new_window_open)
-        .show(ctx, |ui| {
-          ui.horizontal(|ui| {
-            ui.label("Enter name: ");
-            ui.text_edit_singleline(&mut gui.gui_state.new_name);
-            if let Ok(new_window_mode) = gui.gui_state.new_window_mode.try_read() {
-              match *new_window_mode {
+pub struct NewWindow {
+  pub window_mode: NewWindowMode,
+  pub is_open: bool,
+  pub new_name: String,
+}
+impl NewWindow {
+  pub fn new() -> Self {
+    Self {
+      window_mode: NewWindowMode::COLLECTION,
+      is_open: false,
+      new_name: String::new(),
+    }
+  }
+
+  pub fn show(
+    &mut self,
+    ctx: &egui::Context,
+    gui_state: &GuiState,
+    worker_state: &ThreadSafeState,
+    event_tx: &tokio::sync::mpsc::Sender<events::GuiEvent>,
+  ) {
+    if let Ok(mut new_window_open) = gui_state.new_window_open.try_write() {
+      if *new_window_open {
+        egui::Window::new("Create new")
+          .open(&mut new_window_open)
+          .show(ctx, |ui| {
+            ui.horizontal(|ui| {
+              ui.label("Enter name: ");
+              ui.text_edit_singleline(&mut self.new_name);
+              match self.window_mode {
                 NewWindowMode::FOLDER => {
-                  let collections = &gui.worker_state.collections.try_read().unwrap().clone();
-                  let selected_collection = &mut gui.gui_state.selected_save_window_collection;
+                  let collections = &worker_state.collections.try_read().unwrap().clone();
+                  let selected_collection = &mut gui_state.selected_save_window_collection.clone();
                   egui::ComboBox::from_label("Collection to add folder to")
                     .selected_text(
                       selected_collection
@@ -43,12 +61,12 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                 _ => {}
               }
               if ui.button("Save").clicked() {
-                match *new_window_mode {
+                match self.window_mode {
                   NewWindowMode::COLLECTION => {
-                    let _collections_for_worker = gui.worker_state.collections.clone();
-                    let tx_clone = gui.event_tx.clone();
-                    let tx_clone2 = gui.event_tx.clone();
-                    let name_for_worker = gui.gui_state.new_name.clone();
+                    let _collections_for_worker = worker_state.collections.clone();
+                    let tx_clone = event_tx.clone();
+                    let tx_clone2 = event_tx.clone();
+                    let name_for_worker = self.new_name.clone();
                     let _ = tokio::spawn(async move {
                       tx_clone
                         .try_send(events::GuiEvent::NewCollection(Some(name_for_worker)))
@@ -63,10 +81,10 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                     });
                   }
                   NewWindowMode::ENVIRONMENT => {
-                    let _envs_for_worker = gui.worker_state.environments.clone();
-                    let tx_clone = gui.event_tx.clone();
-                    let tx_clone2 = gui.event_tx.clone();
-                    let name_clone2 = gui.gui_state.new_name.clone();
+                    let _envs_for_worker = worker_state.environments.clone();
+                    let tx_clone = event_tx.clone();
+                    let tx_clone2 = event_tx.clone();
+                    let name_clone2 = self.new_name.clone();
                     let _ = tokio::spawn(async move {
                       tx_clone
                         .try_send(events::GuiEvent::NewEnvironment(Some(name_clone2)))
@@ -83,15 +101,12 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                   }
                   NewWindowMode::FOLDER => {
                     //call to update collection with new folder
-                    let collection_for_worker = gui
-                      .gui_state
-                      .selected_save_window_collection
-                      .clone()
-                      .unwrap();
-                    let _collections_for_worker = gui.worker_state.collections.clone();
-                    let name_for_worker = gui.gui_state.new_name.clone();
+                    let collection_for_worker =
+                      gui_state.selected_save_window_collection.clone().unwrap();
+                    let _collections_for_worker = worker_state.collections.clone();
+                    let name_for_worker = self.new_name.clone();
 
-                    let tx_clone = gui.event_tx.clone();
+                    let tx_clone = event_tx.clone();
                     let _ = tokio::spawn(async move {
                       // take selected collection, add new folder to the top
                       // `item` field as with no requests
@@ -121,9 +136,9 @@ pub fn new_modal(gui: &mut Gui, ctx: &egui::Context) {
                   }
                 }
               }
-            }
-          })
-        });
+            })
+          });
+      }
     }
   }
 }

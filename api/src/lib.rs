@@ -70,62 +70,114 @@ impl PostieApi {
     &mut self,
     id: &str,
     req: HttpRequest,
-    folder_name: String,
+    folder_name: Option<String>,
   ) -> anyhow::Result<()> {
     println!("finding collection {id} to update");
     let collections = self.db.get_all_collections().await?;
     for mut collection in collections {
       if collection.info.id == id {
-        println!("adding request to {folder_name}");
-        for item in &mut collection.item {
-          if let CollectionItemOrFolder::Folder(ref mut folder) = item {
-            if folder.name == folder_name {
-              println!("found matching folder name, updating collection");
-              let mut res: Vec<CollectionRequestHeader> = vec![];
-              let headers: Vec<CollectionRequestHeader> = req
-                .headers
-                .clone()
-                .map(|headers| {
-                  for h in headers {
-                    res.push(CollectionRequestHeader {
-                      key: h.0,
-                      value: h.1,
-                      r#type: String::from(""),
-                    });
-                  }
-                  res
-                })
-                .unwrap();
-              folder
-                .item
-                .push(CollectionItemOrFolder::Item(CollectionItem {
-                  name: req.clone().url,
-                  request: CollectionRequest {
-                    auth: None,
-                    body: Some(domain::collection::RequestBody {
-                      mode: String::from(""),
-                      raw: None,
-                      options: None,
-                    }),
-                    header: Some(headers),
-                    method: req.method.to_string(),
-                    url: CollectionUrl {
-                      raw: req.clone().url,
-                      path: None,
-                      host: None,
+        if let Some(fol_name) = folder_name.clone() {
+          println!("adding request to {fol_name}");
+          for item in &mut collection.item {
+            if let CollectionItemOrFolder::Folder(ref mut folder) = item {
+              if folder.name == fol_name {
+                println!("found matching folder name, updating collection");
+                let mut res: Vec<CollectionRequestHeader> = vec![];
+                let headers: Vec<CollectionRequestHeader> = req
+                  .headers
+                  .clone()
+                  .map(|headers| {
+                    for h in headers {
+                      res.push(CollectionRequestHeader {
+                        key: h.0,
+                        value: h.1,
+                        r#type: String::from(""),
+                      });
+                    }
+                    res
+                  })
+                  .unwrap_or(vec![]);
+                folder
+                  .item
+                  .push(CollectionItemOrFolder::Item(CollectionItem {
+                    name: if req.clone().name.is_some() {
+                      req.name.clone().unwrap()
+                    } else {
+                      req.url.clone()
                     },
-                  },
-                }));
+                    request: CollectionRequest {
+                      auth: None,
+                      body: Some(domain::collection::RequestBody {
+                        mode: String::from(""),
+                        raw: None,
+                        options: None,
+                      }),
+                      header: Some(headers),
+                      method: req.method.to_string(),
+                      url: CollectionUrl {
+                        raw: req.clone().url,
+                        path: None,
+                        host: None,
+                      },
+                    },
+                  }));
+              }
             }
           }
+          let updated_items = collection.item;
+          let updated = Collection {
+            info: collection.info,
+            item: updated_items,
+            auth: collection.auth,
+          };
+          self.db.save_collection(updated).await?;
+        } else {
+          println!("saving to collection root");
+          let mut col_items = collection.item.clone();
+          let mut res: Vec<CollectionRequestHeader> = vec![];
+          let headers: Vec<CollectionRequestHeader> = req
+            .headers
+            .clone()
+            .map(|headers| {
+              for h in headers {
+                res.push(CollectionRequestHeader {
+                  key: h.0,
+                  value: h.1,
+                  r#type: String::from(""),
+                });
+              }
+              res
+            })
+            .unwrap_or(vec![]);
+          col_items.push(CollectionItemOrFolder::Item(CollectionItem {
+            name: if req.name.is_some() {
+              req.name.clone().unwrap()
+            } else {
+              req.url.clone()
+            },
+            request: CollectionRequest {
+              method: req.method.to_string(),
+              url: CollectionUrl {
+                raw: req.url.clone(),
+                host: None,
+                path: None,
+              },
+              auth: None,
+              header: Some(headers),
+              body: Some(domain::collection::RequestBody {
+                mode: String::from(""),
+                raw: None,
+                options: None,
+              }),
+            },
+          }));
+          let updated = Collection {
+            info: collection.info,
+            item: col_items,
+            auth: collection.auth,
+          };
+          self.db.save_collection(updated).await?;
         }
-        let updated_items = collection.item;
-        let updated = Collection {
-          info: collection.info,
-          item: updated_items,
-          auth: collection.auth,
-        };
-        self.db.save_collection(updated).await?;
       }
     }
     Ok(())

@@ -2,7 +2,8 @@ use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
 use api::domain::{
-  collection::{Collection, CollectionRequest},
+  collection::{Collection, CollectionFolder, CollectionRequest},
+  environment::EnvironmentFile,
   request::{DBRequest, HttpRequest, OAuth2Request},
   request_item::RequestHistoryItem,
   response::DBResponse,
@@ -49,6 +50,12 @@ pub enum GuiEvent {
   NewCollection(Option<String>),
   NewEnvironment(Option<String>),
   NewRequest(),
+  AddRequestToCollection {
+    col_id: String,
+    folder: Option<CollectionFolder>,
+    req: Option<HttpRequest>,
+    selected_env: Option<EnvironmentFile>,
+  },
   RemoveTab(Uuid),
   RemoveCollection(String),
   RemoveCollectionFolder(RemoveCollectionItemPayload),

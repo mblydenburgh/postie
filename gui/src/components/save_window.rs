@@ -106,7 +106,11 @@ pub fn save_window(gui: &mut Gui, ctx: &egui::Context) {
               let _ = api_for_worker
                 .write()
                 .await
-                .add_request_to_collection(&selected_collection_id, request, folder_name.unwrap())
+                .add_request_to_collection(
+                  &selected_collection_id,
+                  request,
+                  Some(folder_name.unwrap()),
+                )
                 .await;
               tx_clone
                 .try_send(crate::events::GuiEvent::RefreshCollections(None))

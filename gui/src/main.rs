@@ -7,7 +7,7 @@ use api::{
     collection::Collection,
     environment::{EnvironmentFile, EnvironmentValue},
     header::Headers,
-    request::{DBRequest, HttpMethod, OAuth2Request, OAuthRequestBody, PostieRequest},
+    request::{DBRequest, HttpMethod, HttpRequest, OAuth2Request, OAuthRequestBody, PostieRequest},
     request_item::RequestHistoryItem,
     response::{DBResponse, ResponseData},
     tab::Tab,
@@ -17,7 +17,7 @@ use api::{
 use components::{
   content_header_panel::ContentHeaderPanel, content_panel::ContentPanel,
   content_side_panel::ContentSidePanel, import_modal::import_modal, menu_panel::MenuPanel,
-  new_modal::new_modal, save_window::save_window, side_panel::side_panel,
+  new_modal::NewWindow, save_window::save_window, side_panel::side_panel,
 };
 use eframe::{egui, App, NativeOptions};
 use std::{
@@ -85,6 +85,7 @@ pub struct Gui {
   pub content_side_panel: ContentSidePanel,
   pub content_panel: ContentPanel,
   pub menu_panel: MenuPanel,
+  pub new_modal: NewWindow,
 }
 
 unsafe impl Send for Gui {}
@@ -251,6 +252,7 @@ impl Gui {
     let content_panel = ContentPanel::new();
     let content_side_panel = ContentSidePanel::new();
     let menu_panel = MenuPanel::new();
+    let new_modal = NewWindow::new();
     let gui = Gui {
       worker_state,
       event_tx,
@@ -260,6 +262,7 @@ impl Gui {
       content_panel,
       content_side_panel,
       menu_panel,
+      new_modal,
     };
     gui
   }
@@ -456,9 +459,81 @@ impl Gui {
             values: None,
           };
         }
+        events::GuiEvent::AddRequestToCollection {
+          col_id,
+          folder,
+          req,
+          selected_env,
+        } => {
+          if req.is_none() && folder.is_none() {
+            let new_tab = Tab::default();
+            println!("adding blank request to collection root");
+            let mut api = api_for_worker.write().await;
+            if api
+              .add_request_to_collection(
+                &col_id,
+                HttpRequest {
+                  tab_id: new_tab.id,
+                  id: uuid::Uuid::new_v4(),
+                  name: Some("New Request".into()),
+                  method: new_tab.method,
+                  url: new_tab.url,
+                  headers: None,
+                  body: None,
+                  environment: selected_env.clone().unwrap_or_default(),
+                },
+                None,
+              )
+              .await
+              .is_ok()
+            {
+              if let Ok(new_cols) = api.load_collections().await {
+                let _ =
+                  res_tx_for_worker.try_send(events::GuiEvent::RefreshCollections(Some(new_cols)));
+                ctx_for_worker.request_repaint();
+              }
+            }
+          }
+          if req.is_none() && folder.is_some() {
+            let new_tab = Tab::default();
+            println!("adding blank request to collection folder");
+            tokio::spawn(async move {
+              let mut api = api_for_worker.write().await;
+              let fol_name = match folder {
+                Some(f) => f.name,
+                None => String::new(),
+              };
+              if api
+                .add_request_to_collection(
+                  &col_id,
+                  HttpRequest {
+                    tab_id: new_tab.id,
+                    id: uuid::Uuid::new_v4(),
+                    name: Some("New Request".into()),
+                    method: new_tab.method,
+                    url: new_tab.url,
+                    headers: None,
+                    body: None,
+                    environment: selected_env.unwrap_or_default(),
+                  },
+                  Some(fol_name),
+                )
+                .await
+                .is_ok()
+              {
+                if let Ok(new_cols) = api.load_collections().await {
+                  let _ = res_tx_for_worker
+                    .try_send(events::GuiEvent::RefreshCollections(Some(new_cols)));
+                  ctx_for_worker.request_repaint();
+                }
+              }
+            });
+          } else {
+            // TODO
+            println!("copying existing request to specified collection");
+          }
+        }
         events::GuiEvent::RemoveTab(id) => {
-          println!("removing tab {id}");
-          // TODO - refresh request history after tab deletion
           api.write().await.delete_tab(id).await.unwrap();
         }
         events::GuiEvent::RemoveCollection(id) => {
@@ -598,7 +673,9 @@ impl App for Gui {
       .content_panel
       .show(ctx, &self.gui_state, &self.worker_state, &self.event_tx);
     import_modal(self, ctx);
-    new_modal(self, ctx);
+    self
+      .new_modal
+      .show(ctx, &self.gui_state, &self.worker_state, &self.event_tx);
     save_window(self, ctx);
   }
 }

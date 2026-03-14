@@ -36,7 +36,7 @@ impl MenuPanel {
       &worker_state.is_requesting,
       &worker_state.res_status,
     );
-    self.render_tabs_panel(ctx, event_tx, &worker_state.tabs);
+    self.render_tabs_panel(ctx, event_tx, &worker_state.tabs.clone());
   }
 
   fn render_menu_panel(
@@ -155,7 +155,7 @@ impl MenuPanel {
       ui.horizontal(|ui| {
         for tab in &*tabs {
           let name = if tab.1.url.is_empty() {
-            "Unsent Request".to_string()
+            "New Request".to_string()
           } else {
             tab.1.url.clone()
           };
