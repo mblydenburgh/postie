@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       is_prerelease:
-        description: "Check if this is a pre-release"
+        description: 'Check if this is a pre-release'
         required: true
         type: boolean
         default: true
@@ -16,19 +16,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: "macos-latest"
-            args: "--formats dmg,app"
-          - platform: "windows-latest"
-            args: "--formats msi,zip"
-          - platform: "ubuntu-22.04"
-            args: "--formats appimage,deb,rpm"
+          - platform: 'macos-latest'
+            args: '--formats dmg,app'
+          - platform: 'windows-latest'
+            args: '--formats msi,zip'
+          - platform: 'ubuntu-22.04'
+            args: '--formats appimage,deb,rpm'
 
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Linux Dependencies
-        if: matrix.platform == "ubuntu-22.04"
+        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwayland-dev libxkbcommon-dev libasound2-dev
