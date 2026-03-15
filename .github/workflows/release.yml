@@ -1,0 +1,28 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+jobs:
+  publish:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest"
+            args: "--formats dmg,app"
+          - platform: "ubuntu-22.04"
+            args: "--formats appimage,deb,rpm"
+          - platform: "windows-latest"
+            args: "formats msi,zip"
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: rustup update stable
+
+      - name: Install cargo packager
+        run: cargo install cargo-packager --locked
+
+      - name: Build and package
+        run: cargo packager --release ${{ matrix.args }}

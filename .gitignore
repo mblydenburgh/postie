@@ -1,4 +1,7 @@
 /target
+dist_windows/
+dist_linux/
+target/release/bundle/
 
 .env
 
