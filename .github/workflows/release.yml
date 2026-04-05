@@ -37,7 +37,7 @@ jobs:
         run: rustup update stable
 
       - name: Install Sqlx
-        uses: taiki-e/install@v2
+        uses: taiki-e/install-action@v2
         with:
           tool: sqlx
 
