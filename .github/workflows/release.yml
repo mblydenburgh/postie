@@ -36,11 +36,6 @@ jobs:
       - name: Install Rust
         run: rustup update stable
 
-      - name: Install Sqlx
-        uses: taiki-e/install-action@v2
-        with:
-          tool: sqlx
-
       - name: Install cargo-packager
         uses: taiki-e/install-action@v2
         with:
@@ -50,16 +45,17 @@ jobs:
         if: matrix.platform == 'windows-latest'
         run: choco install nsis
 
-      - name: Sqlx prepare
-        run: cargo sqlx prepare
-
       - name: Buikd and Package (Windows)
         if: matrix.platform == 'windows-latest'
-        run: cargo-packager --release -p gui ${{ matrix.args }}
+        run: |
+          export SQLX_OFFLINE=true
+          cargo-packager --release -p gui ${{ matrix.args }}
 
       - name: Build and Package
         if: matrix.platform != 'windows-latest'
-        run: NO_STRIP=1 cargo-packager --release -p gui ${{ matrix.args }}
+        run: |
+          export SQLX_OFFLINE=true
+          NO_STRIP=1 cargo-packager --release -p gui ${{ matrix.args }}
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4

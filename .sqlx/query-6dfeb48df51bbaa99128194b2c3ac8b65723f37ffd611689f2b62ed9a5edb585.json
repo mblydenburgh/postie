@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO tabs (id, method, url, req_body, req_headers, res_status, res_body, res_headers)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n            ON CONFLICT (id) DO UPDATE SET \n            method = $2, url = $3, req_body = $4, req_headers = $5, res_status = $6, res_body = $7, res_headers = $8\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "6dfeb48df51bbaa99128194b2c3ac8b65723f37ffd611689f2b62ed9a5edb585"
+}
