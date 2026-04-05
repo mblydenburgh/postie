@@ -20,3 +20,30 @@ serde_json = "1.0.113"
 tokio = { version = "1", features = ["full"] }
 uuid = { version = "1.7.0", features = ["v4", "fast-rng"] }
 anyhow = "1.0.86"
+
+[package.metadata.packager]
+product_name = "Postie"
+version = "0.0.12"
+description = "Lightweight HTTP GUI client for API testing"
+authors = ["Michael Blydenburgh"]
+identifier = "com.mblydenburgh.postie"
+before_packaging_command = "cargo build --release"
+out_dir = "../target/release/bundle"
+resources = [
+  "postie.sqlite",
+  "scripts/resources/**/*"
+]
+icons = ["../scripts/resources/postie.png"]
+
+[[package.metadata.packager.binaries]]
+path = "gui"
+main = true
+
+[package.metadata.packager.macos]
+minimum_system_version = "10.13"
+
+[package.metadata.packager.linux]
+generate_desktop_entry = true
+
+#[package.metadata.packager.windows]
+#formats = ["msi", "zip"]

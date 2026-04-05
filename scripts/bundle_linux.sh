@@ -1,2 +1,2 @@
 #!/bin/bash
-cargo packager --release --formats appimage,deb,rpm
+NO_STRIP=1 cargo packager --release --formats appimage,deb
