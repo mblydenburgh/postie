@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO request_history (id, request_id, response_id, sent_at, response_time_ms)\n            VALUES ($1, $2, $3, $4, $5)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "56c68755bc306da5faac8e04da205df9bb48a1fc342955af69b23a0bf3d84e9c"
+}

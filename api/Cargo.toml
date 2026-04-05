@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 base64 = "0.22.0"
 chrono = "0.4.34"
+directories = "6.0"
 reqwest = { version = "0.11.24", features = ["blocking", "json"] }
 serde = "1.0.196"
 serde_json = "1.0.113"
@@ -17,6 +18,7 @@ sqlx = { version = "0.7.3", features = [ "runtime-tokio", "sqlite", "uuid" ] }
 tokio = { version = "1", features = ["full"] }
 url = "2.5.0"
 anyhow = "1.0.86"
+cargo-packager-resource-resolver = "0.1.2"
 
 [dev-dependencies]
 wiremock = "0.6.0"

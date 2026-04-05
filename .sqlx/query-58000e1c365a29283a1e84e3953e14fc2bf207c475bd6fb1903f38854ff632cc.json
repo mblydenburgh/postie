@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT OR REPLACE INTO collections (id, name, description, item, auth)\n            VALUES ($1, $2, $3, $4, $5)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "58000e1c365a29283a1e84e3953e14fc2bf207c475bd6fb1903f38854ff632cc"
+}

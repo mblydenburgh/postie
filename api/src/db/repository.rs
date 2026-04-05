@@ -1,3 +1,6 @@
+use std::path::PathBuf;
+
+use cargo_packager_resource_resolver::{resources_dir, PackageFormat};
 use chrono::{DateTime, Utc};
 use serde_json::from_str;
 use sqlx::{
@@ -16,26 +19,67 @@ use crate::domain::{
   tab::Tab,
 };
 
+/*
+ * Steps:
+ * 1. Determine the path (Priority: CLI Arg -> Persistent Folder -> Local)
+ * 2. Ensure the directory exists (e.g., ~/.local/share/postie/)
+ * 3. Connect to the pool, (sqlx will create file if it doesn't exist)
+ */
 pub async fn initialize_db() -> anyhow::Result<SqlitePool> {
-  println!("acquiring for reals sqlite connection");
-  let args: Vec<String> = std::env::args().collect();
-  if args.len() != 2 {
-    println!("Usage: {} <sqlite db file>", args[0]);
-    std::process::exit(1);
-  }
-  let db_path = &args[1];
-  // if path does not exist, assume running locally and default to local copy
-  if !std::path::Path::new(db_path).exists() {
-    return Ok(
-      SqlitePoolOptions::new()
-        .connect("sqlite:postie.sqlite")
-        .await?,
-    );
-  }
-  let connection = SqlitePoolOptions::new().connect(db_path).await?;
-  println!("{:?} sqlite connection established", connection);
+  println!("Acquiring sqlite connection...");
 
+  let args: Vec<String> = std::env::args().collect();
+  let db_path = if args.len() == 2 {
+    PathBuf::from(&args[1])
+  } else {
+    get_persistent_db_path()
+  };
+
+  if let Some(parent) = db_path.parent() {
+    if !parent.exists() {
+      println!("Creating database directory: {:?}", parent);
+      std::fs::create_dir_all(parent)?;
+    }
+  }
+
+  // If persistent db isn't found, copy from app bundle
+  if !db_path.exists() {
+    if let Some(bundled_db) = get_bundled_db_path() {
+      if bundled_db.exists() {
+        println!("Seeding empty database to ~/.local/postie from app bundle");
+        std::fs::copy(&bundled_db, &db_path)?;
+      }
+    } else {
+      println!("could not find bundled db");
+    }
+  }
+
+  let db_url = format!("sqlite:{}", db_path.to_string_lossy());
+  let connection = SqlitePoolOptions::new()
+    .max_connections(5)
+    .connect(&db_url)
+    .await?;
+
+  println!("Sqlite connection established at: {:?}", db_path);
   Ok(connection)
+}
+
+fn get_bundled_db_path() -> Option<PathBuf> {
+  println!("checking for empty bundled db");
+  match resources_dir(PackageFormat::AppImage) {
+    Ok(p) => Some(p.join("postie.sqlite")),
+    Err(_) => None,
+  }
+}
+
+// Linux:   /home/alice/.local/share/postie/postie.sqlite
+// Windows: C:\Users\Alice\AppData\Roaming\mblydenburgh\postie\data\postie.sqlite
+// macOS:   /Users/Alice/Library/Application Support/com.mblydenburgh.postie/postie.sqlite
+fn get_persistent_db_path() -> PathBuf {
+  if let Some(proj_dirs) = directories::ProjectDirs::from("com", "mblydenburgh", "postie") {
+    return proj_dirs.data_dir().join("postie.sqlite");
+  }
+  PathBuf::from("postie.sqlite")
 }
 
 pub struct PostieDb {

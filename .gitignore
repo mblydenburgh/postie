@@ -1,4 +1,8 @@
 /target
+dist_windows/
+dist_linux/
+target/release/bundle/
+squashfs-root/
 
 .env
 
@@ -11,3 +15,4 @@ postie.sqlite
 *.DS_Store
 
 test_collection.json
+

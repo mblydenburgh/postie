@@ -9,11 +9,8 @@ save collections and environments.
 
 ## Current State
 When there is a new update available there will be a release published that can be downloaded from the releases page.
-Note: currently when you update a version of the app, all data will be lost since a fresh db is packaged in each release. 
-This will be improved in the future but if you wish to persist your saved data, first save a backup copy of the .sqlite file 
-in your currently used .app.
 ### Supported
-- Native mac application
+- Native Linux, MacOS, Windows applications (packaging with Cargo Packager)
 - Submitting GET, POST, PUT, PATCH, DELETE requests
   - POST and PUT requests only support application/json body
 - Response Types:
@@ -42,7 +39,6 @@ in your currently used .app.
 - Exporting saved colellections
 - Exporting saved environments
 - Deletion of imported collections and environments
-- Deletion of collection folders
 - File upload request bodies
 - Other Response Types not listed above
 - Render XML responses in an interactive way similar to json
@@ -52,19 +48,25 @@ in your currently used .app.
 ## Building and running
 If you wish to run the application source locally, ensure that have a sqlite database set up (see Database Utils) and run the following command:
 ```shell
-cargo run DATABASE_URL=postie.sqlite
+cargo run -- postie.sqlite
 ```
 
+Build and bundling for specific OS targets is now handled via Cargo Packager, configured in Packager.toml.
 To build and bundle the application from source, run the following commands:
 
 #### MacOS
 ```shell
-cargo build --release
-./scripts/bundle_darwin.sh
+./scripts/bundle_macos.sh
 ```
-This will create a .dmg file in the `target/release` directory that can be run on a mac using the version specified in the bundle script.
-Note: a fresh database is bundled with each new app so all data will be lost when updating. For now you can restore request history by
-overriding the sqlite file that in packaged in the final `.app`.
+#### Linux
+```shell
+./scripts/bundle_linux.sh
+```
+
+#### Windows
+```shell
+./scripts/bundle_windows.sh
+```
 
 ## Database Utils
 
