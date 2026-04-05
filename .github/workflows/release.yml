@@ -48,7 +48,7 @@ jobs:
       - name: Buikd and Package (Windows)
         if: matrix.platform == 'windows-latest'
         run: |
-          export SQLX_OFFLINE=true
+          set SQLX_OFFLINE=true
           cargo-packager --release -p gui ${{ matrix.args }}
 
       - name: Build and Package

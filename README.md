@@ -10,7 +10,7 @@ save collections and environments.
 ## Current State
 When there is a new update available there will be a release published that can be downloaded from the releases page.
 ### Supported
-- Native Linux & MacOS application (packaging with Cargo Packager, Windows to follow)
+- Native Linux, MacOS, Windows applications (packaging with Cargo Packager)
 - Submitting GET, POST, PUT, PATCH, DELETE requests
   - POST and PUT requests only support application/json body
 - Response Types:
