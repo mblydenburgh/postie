@@ -18,6 +18,7 @@ sqlx = { version = "0.7.3", features = [ "runtime-tokio", "sqlite", "uuid" ] }
 tokio = { version = "1", features = ["full"] }
 url = "2.5.0"
 anyhow = "1.0.86"
+cargo-packager-resource-resolver = "0.1.2"
 
 [dev-dependencies]
 wiremock = "0.6.0"

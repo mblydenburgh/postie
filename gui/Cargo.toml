@@ -20,6 +20,7 @@ serde_json = "1.0.113"
 tokio = { version = "1", features = ["full"] }
 uuid = { version = "1.7.0", features = ["v4", "fast-rng"] }
 anyhow = "1.0.86"
+cargo-packager-resource-resolver = "0.1.2"
 
 [package.metadata.packager]
 product_name = "Postie"
@@ -30,8 +31,7 @@ identifier = "com.mblydenburgh.postie"
 before_packaging_command = "cargo build --release"
 out_dir = "../target/release/bundle"
 resources = [
-  "postie.sqlite",
-  "scripts/resources/**/*"
+  "../scripts/resources/**/*"
 ]
 icons = ["../scripts/resources/postie.png"]
 

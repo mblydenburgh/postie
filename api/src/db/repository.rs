@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use cargo_packager_resource_resolver::{resources_dir, Error, PackageFormat};
 use chrono::{DateTime, Utc};
 use serde_json::from_str;
 use sqlx::{
@@ -41,11 +42,37 @@ pub async fn initialize_db() -> anyhow::Result<SqlitePool> {
     }
   }
 
+  // If persistent db isn't found, copy from app bundle
+  if !db_path.exists() {
+    if let Some(bundled_db) = get_bundled_db_path() {
+      if bundled_db.exists() {
+        println!("Seeding empty database from bundle");
+        std::fs::copy(&bundled_db, &db_path)?;
+      }
+    } else {
+      println!("could not find bundled db");
+    }
+  }
+
   let db_url = format!("sqlite:{}", db_path.to_string_lossy());
-  let connection = SqlitePoolOptions::new().connect(&db_url).await?;
+  let connection = SqlitePoolOptions::new()
+    .max_connections(5)
+    .connect(&db_url)
+    .await?;
 
   println!("Sqlite connection established at: {:?}", db_path);
   Ok(connection)
+}
+
+fn get_bundled_db_path() -> Option<PathBuf> {
+  println!("checking for empty bundled db");
+  match resources_dir(PackageFormat::AppImage) {
+    Ok(p) => {
+      println!("found path");
+      Some(p.join("postie.sqlite"))
+    }
+    Err(_) => None,
+  }
 }
 
 // Linux:   /home/alice/.local/share/postie/postie.sqlite
