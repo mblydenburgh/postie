@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use cargo_packager_resource_resolver::{resources_dir, Error, PackageFormat};
+use cargo_packager_resource_resolver::{resources_dir, PackageFormat};
 use chrono::{DateTime, Utc};
 use serde_json::from_str;
 use sqlx::{
@@ -46,7 +46,7 @@ pub async fn initialize_db() -> anyhow::Result<SqlitePool> {
   if !db_path.exists() {
     if let Some(bundled_db) = get_bundled_db_path() {
       if bundled_db.exists() {
-        println!("Seeding empty database from bundle");
+        println!("Seeding empty database to ~/.local/postie from app bundle");
         std::fs::copy(&bundled_db, &db_path)?;
       }
     } else {
@@ -67,10 +67,7 @@ pub async fn initialize_db() -> anyhow::Result<SqlitePool> {
 fn get_bundled_db_path() -> Option<PathBuf> {
   println!("checking for empty bundled db");
   match resources_dir(PackageFormat::AppImage) {
-    Ok(p) => {
-      println!("found path");
-      Some(p.join("postie.sqlite"))
-    }
+    Ok(p) => Some(p.join("postie.sqlite")),
     Err(_) => None,
   }
 }
