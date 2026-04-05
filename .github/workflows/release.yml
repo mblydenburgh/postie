@@ -36,18 +36,42 @@ jobs:
       - name: Install Rust
         run: rustup update stable
 
+      # download prebuilt OS-specific binary instead of building from scratch with cargo install
       - name: Install cargo-packager
-        run: cargo install cargo-packager --locked
+        shell: bash
+        run: |
+          VERSION="latest"
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            URL="https://github.com/crabnebula-dev/cargo-packager/releases/latest/download/cargo-packager-x86_64-unknown-linux-gnu.tar.gz"
+            curl -L "$URL" | tar xz
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            URL="https://github.com/crabnebula-dev/cargo-packager/releases/latest/download/cargo-packager-x86_64-apple-darwin.tar.gz"
+            curl -L "$URL" | tar xz
+          elif [[ "$RUNNER_OS" == "Windows" ]]; then
+            URL="https://github.com/crabnebula-dev/cargo-packager/releases/latest/download/cargo-packager-x86_64-pc-windows-msvc.zip"
+            curl -L "$URL" -o packager.zip
+            unzip -o packager.zip
+          fi
+          chmod +x cargo-packager*
+          # Move it to a place in the PATH
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            mv cargo-packager.exe /usr/bin/
+          else
+            sudo mv cargo-packager /usr/local/bin/
+          fi
+
+      - name: Install NSIS (Windows)
+        if: matrix.platform == 'windows-latest'
+        run: choco install nsis
 
       - name: Build and Package
-        run: cargo packager --release ${{ matrix.args }}
+        run: NO_STRIP=1 cargo-packager --release -p gui ${{ matrix.args }}
 
-      # Upload the files so the 'release' job can find them
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: postie-binaries-${{ matrix.platform }}
-          path: target/release/bundle/
+          path: target/**/release/bundle/*
 
   create-release:
     needs: publish
