@@ -45,5 +45,4 @@ minimum_system_version = "10.13"
 [package.metadata.packager.linux]
 generate_desktop_entry = true
 
-#[package.metadata.packager.windows]
-#formats = ["msi", "zip"]
+[package.metadata.packager.windows]

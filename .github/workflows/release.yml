@@ -19,9 +19,9 @@ jobs:
           - platform: 'macos-latest'
             args: '--formats dmg,app'
           - platform: 'windows-latest'
-            args: '--formats msi,zip'
+            args: '--formats nsis'
           - platform: 'ubuntu-22.04'
-            args: '--formats appimage,deb,rpm'
+            args: '--formats appimage,deb'
 
     runs-on: ${{ matrix.platform }}
     steps:

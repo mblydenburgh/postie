@@ -1,2 +1,2 @@
 #!/bin/bash
-cargo packager --release --formats dmg,app
+NO_STRIP=1 cargo packager --release --formats dmg,app
